@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -10,6 +10,8 @@ import {
   Award, 
   Tv, 
   LogOut, 
+  LogIn,
+  Sparkles,
   ShieldCheck,
   User
 } from 'lucide-react';
@@ -26,6 +28,7 @@ export const SidebarNav = ({
   onSelectTab,
   onOpenEditProfile,
   onLogout,
+  onSignIn,
   onLaunchBigScreen
 }) => {
   // Persist sidebar collapsed state (default collapsed)
@@ -133,7 +136,7 @@ export const SidebarNav = ({
           )}
         </div>
 
-        {/* Collapse / Expand Toggle Button */}
+        {/* Collapse Toggle Button (when expanded) */}
         {!isCollapsed && (
           <button
             onClick={toggleCollapse}
@@ -172,6 +175,7 @@ export const SidebarNav = ({
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
                 title={isCollapsed ? item.label : undefined}
+                aria-label={item.label}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                   isCollapsed ? 'justify-center' : 'justify-between'
                 } ${
@@ -203,7 +207,8 @@ export const SidebarNav = ({
           <div className="pt-2">
             <button
               onClick={() => onLaunchBigScreen('hall')}
-              title={isCollapsed ? 'Launch Projector Big Screen' : undefined}
+              title={isCollapsed ? "Projector Big Screen" : undefined}
+              aria-label="Launch Projector Big Screen"
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
                 isCollapsed ? 'justify-center' : 'justify-start'
               } bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-xs`}
@@ -215,7 +220,7 @@ export const SidebarNav = ({
         )}
       </nav>
 
-      {/* 3. Bottom Left Profile Section */}
+      {/* 3. Bottom Left Profile Section OR Sign In / Sign Up Button */}
       <div className="p-3 border-t border-slate-800 bg-slate-950/40">
         {user ? (
           <div>
@@ -224,7 +229,7 @@ export const SidebarNav = ({
               <div 
                 onClick={onOpenEditProfile}
                 className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
-                title="Profile Settings (Click to edit)"
+                title={isCollapsed ? `${profile?.name || user.displayName || 'Participant'}${isAdmin || isCoordinator || isJudge ? ` (${roleLabel})` : ''}` : "Profile Settings (Click to edit)"}
               >
                 {/* Avatar with Role Bubble in Bottom Right Corner (Only for Staff roles) */}
                 <div className="relative shrink-0">
@@ -273,7 +278,7 @@ export const SidebarNav = ({
                 )}
               </div>
 
-              {/* Logout Button (when expanded, neatly placed on the right) */}
+              {/* Logout Button (when expanded) */}
               {!isCollapsed && (
                 <button
                   type="button"
@@ -303,9 +308,38 @@ export const SidebarNav = ({
             )}
           </div>
         ) : (
-          /* When not signed in */
-          <div className="text-center text-[10px] text-slate-500 font-medium">
-            {!isCollapsed && <span>Cognisphere Club Games</span>}
+          /* When NOT signed in: Sign In / Sign Up Button in place of profile */
+          <div>
+            {!isCollapsed ? (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={onSignIn}
+                  className="w-full py-2.5 px-3 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 group active:scale-95"
+                  title="Sign In / Sign Up with Google"
+                >
+                  <LogIn className="w-4 h-4 text-slate-950 group-hover:scale-110 transition-transform" />
+                  <span>Sign In / Sign Up</span>
+                </button>
+                <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                  <Sparkles className="w-3 h-3 text-cyan-400" />
+                  <span>Get your event QR pass</span>
+                </div>
+              </div>
+            ) : (
+              /* When collapsed: Glowing Sign In Button with compact native hover like direct message icons */
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={onSignIn}
+                  className="w-10 h-10 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 flex items-center justify-center shadow-lg active:scale-95 transition-all group"
+                  title="Sign In / Sign Up"
+                  aria-label="Sign In or Sign Up"
+                >
+                  <LogIn className="w-5 h-5 text-slate-950 group-hover:scale-110 transition-transform" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

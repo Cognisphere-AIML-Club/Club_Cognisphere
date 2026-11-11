@@ -20,7 +20,8 @@ import {
   Plus,
   Trash2,
   Pin,
-  PinOff
+  PinOff,
+  LogIn
 } from 'lucide-react';
 import AdminEditActivityModal from './AdminEditActivityModal';
 import AdminAnnouncementModal from './AdminAnnouncementModal';
@@ -34,7 +35,8 @@ export default function EventLandingPage({
   profile = null, 
   onViewPass, 
   onSelectGame,
-  onUpdateActivity 
+  onUpdateActivity,
+  onSignIn
 }) {
   const [editingActivity, setEditingActivity] = useState(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
@@ -147,6 +149,49 @@ export default function EventLandingPage({
               5 single-player technical and non-technical activities across classrooms. Select any game below to view dedicated rules and request your participation pass.
             </p>
           </div>
+
+          {/* New User Callout: Quick Registration / Sign Up Button */}
+          {!user && (
+            <div className="bg-gradient-to-r from-cyan-950/60 via-slate-900 to-blue-950/60 border border-cyan-500/30 rounded-2xl p-4 sm:p-6 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-cyan-400" />
+                      <span>New Participant?</span>
+                    </span>
+                    <span className="text-xs text-slate-400">&bull; 1-Tap Google Sign-In</span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-white">
+                    Sign Up to Join & Get Your Event Pass
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-lg leading-relaxed">
+                    Sign up with your college Google account to claim your unique attendance QR pass, enter classrooms, and view live timers and leaderboards.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    onClick={onSignIn}
+                    className="py-3 px-5 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 active:scale-95 whitespace-nowrap"
+                  >
+                    <LogIn className="w-4 h-4 text-slate-950" />
+                    <span>Sign Up / Register</span>
+                  </button>
+
+                  <button
+                    onClick={scrollToCompetitions}
+                    className="py-3 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium rounded-xl text-xs transition-all flex items-center gap-1"
+                    title="Browse Competitions"
+                  >
+                    <span>Browse</span>
+                    <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Personalized "Where You Should Be Right Now" Spotlight Card */}
           {user && (

@@ -17,7 +17,8 @@ import {
   Lock,
   CalendarDays,
   Play,
-  Tv
+  Tv,
+  LogIn
 } from 'lucide-react';
 import AdminEditActivityModal from './AdminEditActivityModal';
 import PassApprovalManager from './PassApprovalManager';
@@ -37,7 +38,8 @@ export default function GameDetailPage({
   onBack, 
   onOpenPass, 
   onUpdateActivity,
-  onOpenBigScreen
+  onOpenBigScreen,
+  onSignIn
 }) {
   const [editing, setEditing] = useState(false);
   const [userRequests, setUserRequests] = useState({});
@@ -192,6 +194,19 @@ export default function GameDetailPage({
                   )}
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Prompt when not signed in */}
+          {!user && (
+            <div className="pt-2">
+              <button
+                onClick={onSignIn}
+                className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-bold rounded-2xl text-xs sm:text-sm transition-all shadow-lg active:scale-[0.99]"
+              >
+                <LogIn className="w-4 h-4 text-slate-950" />
+                <span>Sign Up / Sign In to Join Competition</span>
+              </button>
             </div>
           )}
         </div>

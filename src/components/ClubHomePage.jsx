@@ -20,7 +20,8 @@ import {
   Linkedin,
   Instagram,
   Mail,
-  HeartHandshake
+  HeartHandshake,
+  LogIn
 } from 'lucide-react';
 
 // Direct message deep-links for instant communication
@@ -31,7 +32,7 @@ export const DIRECT_MESSAGE_LINKS = {
   github: 'https://github.com'
 };
 
-export default function ClubHomePage({ onExploreGames, onOpenPass, user }) {
+export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, user }) {
   const domains = [
     {
       title: 'Generative AI & LLMs',
@@ -171,13 +172,21 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, user }) {
               <ArrowRight className="w-4 h-4" />
             </button>
 
-            {user && (
+            {user ? (
               <button
                 onClick={onOpenPass}
                 className="py-3 px-5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 active:scale-95"
               >
                 <QrCode className="w-4 h-4 text-emerald-400" />
                 <span>My Attendance Pass</span>
+              </button>
+            ) : onSignIn && (
+              <button
+                onClick={onSignIn}
+                className="py-3 px-5 bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-cyan-300 font-semibold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 active:scale-95 shadow-sm"
+              >
+                <LogIn className="w-4 h-4 text-cyan-400" />
+                <span>Sign Up / Sign In</span>
               </button>
             )}
           </div>

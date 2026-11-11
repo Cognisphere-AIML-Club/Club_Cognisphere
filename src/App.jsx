@@ -111,6 +111,7 @@ export default function App() {
         }}
         onOpenEditProfile={() => setShowEditProfile(true)}
         onLogout={() => setShowLogoutConfirm(true)}
+        onSignIn={signInWithGoogle}
         onLaunchBigScreen={(mode, actId) => handleOpenBigScreen(mode, actId)}
       />
 
@@ -336,6 +337,7 @@ export default function App() {
           {activeTab === 'home' && (
             <ClubHomePage
               user={user}
+              onSignIn={signInWithGoogle}
               onExploreGames={() => {
                 setSelectedGame(null);
                 setActiveTab('events');
@@ -362,6 +364,7 @@ export default function App() {
                 onOpenPass={handleOpenPassForGame}
                 onUpdateActivity={updateActivity}
                 onOpenBigScreen={(actId) => handleOpenBigScreen('room', actId)}
+                onSignIn={signInWithGoogle}
               />
             ) : (
               <EventLandingPage
@@ -372,6 +375,7 @@ export default function App() {
                 onViewPass={handleOpenPassForGame}
                 onSelectGame={(act) => setSelectedGame(act)}
                 onUpdateActivity={updateActivity}
+                onSignIn={signInWithGoogle}
               />
             )
           )}
