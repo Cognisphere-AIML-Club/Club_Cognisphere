@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // === HELPER FUNCTIONS ===
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function userEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    // Role check: email must exist in the 'roles' collection with role == 'admin'
+    function isAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/roles/$(userEmail())) &&
+        get(/databases/$(database)/documents/roles/$(userEmail())).data.role == 'admin';
+    }
+
+    // Coordinator check: role is 'coordinator' or user is admin
+    function isCoordinator() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/roles/$(userEmail())) &&
+        (get(/databases/$(database)/documents/roles/$(userEmail())).data.role == 'coordinator' || isAdmin());
+    }
+
+    // Judge check: role is 'judge' assigned to this activityId, or user is admin
+    function isJudge(activityId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/roles/$(userEmail())) &&
+        ((get(/databases/$(database)/documents/roles/$(userEmail())).data.role == 'judge' &&
+          get(/databases/$(database)/documents/roles/$(userEmail())).data.activityId == activityId) || isAdmin());
+    }
+
+    // === ROLES COLLECTION ===
+    // Any authenticated user can read only their own role doc to resolve permissions; only admins can write roles.
+    match /roles/{email} {
+      allow read: if isAuthenticated() && (request.auth.token.email.lower() == email.lower() || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // === PARTICIPANTS COLLECTION ===
+    // Sensitive data (email, mobile, uid).
+    // Participant can read and write only their own profile doc.
+    // Only admins can query or read everyone's profile.
+    match /participants/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isAdmin();
+    }
+
+    // === QR PASSES COLLECTION (Privacy-Preserving Attendance Index) ===
+    // Contains ONLY non-sensitive pass information: participantId, name, usn, qrId.
+    // NO email, NO phone number.
+    // Coordinators and admins can read to verify passes at the door.
+    // Participants can create/update only their own pass doc.
+    match /qrPasses/{qrId} {
+      allow read: if isCoordinator() || isAdmin();
+      allow write: if isAuthenticated() && request.resource.data.participantId == request.auth.uid;
+    }
+
+    // === PASS REQUESTS & APPROVALS COLLECTION ===
+    // Doc ID: {activityId}_{participantId}
+    // Students can request access for a game; only coordinators and admins can approve or reject.
+    match /passRequests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.participantId == request.auth.uid;
+      allow update: if isCoordinator() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // === ACTIVITIES & SCHEDULE COLLECTION ===
+    // All participants can view event activities, room numbers, descriptions, and times.
+    // Only admins can edit or update activity information.
+    match /activities/{activityId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // === ATTENDANCE COLLECTION ===
+    // Format doc ID: {activityId}_{participantId}
+    // Any authenticated user can read attendance (e.g. to check their own certificates).
+    // Only coordinators or admins can mark attendance.
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create: if isCoordinator() || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // === TIMERS COLLECTION ===
+    // Format doc ID: {activityId}
+    // Timers are readable by everyone.
+    // Controlled by Room Coordinators or Admins.
+    match /timers/{activityId} {
+      allow read: if isAuthenticated();
+      allow write: if isCoordinator() || isJudge(activityId) || isAdmin();
+    }
+
+    // === SCORES & LEADERBOARDS COLLECTION ===
+    // Readable by all authenticated participants.
+    // Only admins can write or publish scores.
+    match /scores/{scoreId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // === ANNOUNCEMENTS COLLECTION ===
+    // Readable by all authenticated users.
+    // Only admins can post or edit announcements.
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // === SETTINGS (CERTIFICATES SWITCH) ===
+    // All authenticated users can read settings to check if certificates are enabled.
+    // Only admins can modify the switch.
+    match /settings/certificates {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // === DENY BY DEFAULT ===
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
