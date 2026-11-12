@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
+import {
+  ChevronLeft,
+  ChevronRight,
   Home,
-  CalendarDays, 
-  QrCode, 
-  Timer, 
-  ScanLine, 
-  Award, 
-  Tv, 
-  LogOut, 
+  CalendarDays,
+  QrCode,
+  Timer,
+  ScanLine,
+  Award,
+  Tv,
+  LogOut,
   LogIn,
   Sparkles,
   ShieldCheck,
@@ -46,7 +46,7 @@ export const SidebarNav = ({
       const next = !prev;
       try {
         localStorage.setItem('club_games_sidebar_collapsed', String(next));
-      } catch (e) {}
+      } catch (e) { }
       return next;
     });
   };
@@ -100,25 +100,23 @@ export const SidebarNav = ({
 
   return (
     <aside
-      className={`hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-300 z-30 select-none border-r ${
-        isCollapsed ? 'w-20' : 'w-64'
-      } bg-slate-900 border-slate-800 text-slate-100 shadow-xl`}
+      className={`hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-300 z-30 select-none border-r ${isCollapsed ? 'w-20' : 'w-64'
+        } bg-slate-900 border-slate-800 text-slate-100 shadow-xl`}
     >
       {/* 1. Header with Logo & Brand */}
-      <div className={`h-16 flex items-center border-b border-slate-800 px-3.5 transition-all ${
-        isCollapsed ? 'justify-center' : 'justify-between'
-      }`}>
-        <div 
+      <div className={`h-16 flex items-center border-b border-slate-800 px-3.5 transition-all ${isCollapsed ? 'justify-center' : 'justify-between'
+        }`}>
+        <div
           onClick={() => onSelectTab('home')}
           className="flex items-center gap-3 cursor-pointer overflow-hidden group"
           title="Cognisphere - AI & Machine Learning Club"
         >
           {/* Logo Squircle Badge */}
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white p-0.5 border border-slate-700 shadow-sm shrink-0 group-hover:scale-105 transition-transform">
-            <img 
-              src="/Cognisphere-logo.jpeg" 
-              alt="Cognisphere Logo" 
-              className="w-full h-full object-contain"
+          <div className="w-10 h-10 rounded-xl overflow-hidden border border-surface-container-high shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+            <img
+              src="/Cognisphere-logo.jpeg"
+              alt="Cognisphere Logo"
+              className="w-full h-full object-cover"
             />
           </div>
 
@@ -176,13 +174,11 @@ export const SidebarNav = ({
                 onClick={() => onSelectTab(item.id)}
                 title={isCollapsed ? item.label : undefined}
                 aria-label={item.label}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                  isCollapsed ? 'justify-center' : 'justify-between'
-                } ${
-                  isActive
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${isCollapsed ? 'justify-center' : 'justify-between'
+                  } ${isActive
                     ? 'bg-slate-800/90 text-cyan-400 border-l-4 border-cyan-400 shadow-sm'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
@@ -190,11 +186,10 @@ export const SidebarNav = ({
                 </div>
 
                 {!isCollapsed && item.badge && (
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                    isActive 
-                      ? 'bg-cyan-500/20 text-cyan-300' 
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isActive
+                      ? 'bg-cyan-500/20 text-cyan-300'
                       : 'bg-slate-800 text-slate-400'
-                  }`}>
+                    }`}>
                     {item.badge}
                   </span>
                 )}
@@ -209,9 +204,8 @@ export const SidebarNav = ({
               onClick={() => onLaunchBigScreen('hall')}
               title={isCollapsed ? "Projector Big Screen" : undefined}
               aria-label="Launch Projector Big Screen"
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                isCollapsed ? 'justify-center' : 'justify-start'
-              } bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-xs`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${isCollapsed ? 'justify-center' : 'justify-start'
+                } bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-xs`}
             >
               <Tv className="w-4 h-4 text-emerald-400 shrink-0" />
               {!isCollapsed && <span>Projector Screen</span>}
@@ -224,47 +218,148 @@ export const SidebarNav = ({
       <div className="p-3 border-t border-slate-800 bg-slate-950/40">
         {user ? (
           <div>
-            {/* User Profile Overview: Avatar directly triggers Profile Settings */}
-            <div className={`flex items-center gap-2.5 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-              <div 
-                onClick={onOpenEditProfile}
-                className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
-                title={isCollapsed ? `${profile?.name || user.displayName || 'Participant'}${isAdmin || isCoordinator || isJudge ? ` (${roleLabel})` : ''}` : "Profile Settings (Click to edit)"}
-              >
-                {/* Avatar with Role Bubble in Bottom Right Corner (Only for Staff roles) */}
-                <div className="relative shrink-0">
-                  {user.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      alt={user.displayName || 'User'}
-                      className="w-9 h-9 rounded-xl object-cover border border-slate-700 group-hover:border-cyan-400 group-hover:ring-2 group-hover:ring-cyan-500/20 transition-all shadow-xs"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm group-hover:ring-2 group-hover:ring-cyan-400 transition-all">
-                      {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
-                    </div>
-                  )}
-
-                  {/* Role bubble in bottom right corner (only for Admin, Coordinator, Judge; NEVER for participants) */}
-                  {(isAdmin || isCoordinator || isJudge) && (
-                    <span 
-                      className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-md border-2 border-slate-900 ${
-                        isAdmin 
-                          ? 'bg-amber-500 text-slate-950' 
-                          : isCoordinator 
-                          ? 'bg-blue-500 text-white' 
-                          : 'bg-purple-500 text-white'
+            {/* Admin Theme Toggle Switch (Only visible for Admin) */}
+            {isAdmin && onToggleAdminTheme && (
+              !isCollapsed ? (
+                <div
+                  onClick={onToggleAdminTheme}
+                  className="mb-2.5 p-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-high flex items-center justify-between cursor-pointer transition-all select-none group"
+                  title={`Switch to ${adminTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onToggleAdminTheme();
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-2 text-xs font-semibold text-on-surface">
+                    {adminTheme === 'dark' ? (
+                      <Moon className="w-3.5 h-3.5 text-primary" />
+                    ) : (
+                      <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    )}
+                    <span>{adminTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+                  </div>
+                  <div
+                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${adminTheme === 'dark' ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
                       }`}
-                      title={roleLabel}
-                    >
-                      {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
-                    </span>
-                  )}
+                  >
+                    <span className="w-4 h-4 rounded-full bg-white shadow-xs block" />
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-2.5 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={onToggleAdminTheme}
+                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center transition-colors shadow-xs"
+                    title={`Toggle Admin Theme (${adminTheme === 'dark' ? 'Dark' : 'Light'})`}
+                    aria-label="Toggle Admin Theme"
+                  >
+                    {adminTheme === 'dark' ? (
+                      <Moon className="w-4 h-4 text-primary" />
+                    ) : (
+                      <Sun className="w-4 h-4 text-amber-500" />
+                    )}
+                  </button>
+                </div>
+              )
+            )}
+
+            {/* User Profile Overview */}
+            {isCollapsed ? (
+              <div className="flex flex-col items-center justify-center w-full">
+                <div
+                  onClick={onOpenEditProfile}
+                  className="cursor-pointer group flex items-center justify-center"
+                  title={`${profile?.name || user.displayName || 'Participant'}${isAdmin || isCoordinator || isJudge ? ` (${roleLabel})` : ''}`}
+                >
+                  {/* Avatar with Role Bubble */}
+                  <div className="relative shrink-0 flex items-center justify-center">
+                    {user.photoURL ? (
+                      <img
+                        src={user.photoURL}
+                        alt={user.displayName || 'User'}
+                        className="w-9 h-9 rounded-xl object-cover border border-surface-container-high group-hover:border-primary group-hover:ring-2 group-hover:ring-primary/20 transition-all shadow-xs"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold text-xs shrink-0 shadow-xs group-hover:ring-2 group-hover:ring-primary transition-all">
+                        {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                    )}
+
+                    {/* Role bubble */}
+                    {(isAdmin || isCoordinator || isJudge) && (
+                      <span
+                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${isAdmin
+                            ? 'bg-amber-600 text-white'
+                            : isCoordinator
+                              ? 'bg-primary text-on-primary'
+                              : 'bg-purple-600 text-white'
+                          }`}
+                        title={roleLabel}
+                      >
+                        {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* User Name & USN (Expanded only) */}
-                {!isCollapsed && (
+                {/* Logout Button centered below avatar */}
+                <div className="mt-2.5 flex justify-center w-full">
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="p-2 rounded-xl text-secondary hover:text-error hover:bg-error-container/30 transition-colors"
+                    title="Sign Out"
+                    aria-label="Sign Out"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2.5">
+                <div
+                  onClick={onOpenEditProfile}
+                  className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
+                  title="Profile Settings (Click to edit)"
+                >
+                  {/* Avatar with Role Bubble */}
+                  <div className="relative shrink-0">
+                    {user.photoURL ? (
+                      <img
+                        src={user.photoURL}
+                        alt={user.displayName || 'User'}
+                        className="w-9 h-9 rounded-xl object-cover border border-surface-container-high group-hover:border-primary group-hover:ring-2 group-hover:ring-primary/20 transition-all shadow-xs"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold text-xs shrink-0 shadow-xs group-hover:ring-2 group-hover:ring-primary transition-all">
+                        {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                    )}
+
+                    {/* Role bubble */}
+                    {(isAdmin || isCoordinator || isJudge) && (
+                      <span
+                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${isAdmin
+                            ? 'bg-amber-600 text-white'
+                            : isCoordinator
+                              ? 'bg-primary text-on-primary'
+                              : 'bg-purple-600 text-white'
+                          }`}
+                        title={roleLabel}
+                      >
+                        {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* User Name & USN */}
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold text-white truncate group-hover:text-cyan-400 transition-colors">
                       {profile?.name || user.displayName || 'Participant'}
@@ -275,30 +370,13 @@ export const SidebarNav = ({
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* Logout Button (when expanded) */}
-              {!isCollapsed && (
+                {/* Logout Button (when expanded) */}
                 <button
                   type="button"
                   onClick={onLogout}
                   className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
-                  title="Sign Out"
-                  aria-label="Sign Out"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* When collapsed, render Logout button centered below avatar */}
-            {isCollapsed && (
-              <div className="mt-2.5 flex justify-center">
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                   title="Sign Out"
                   aria-label="Sign Out"
                 >

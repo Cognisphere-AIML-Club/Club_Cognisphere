@@ -128,11 +128,11 @@ export default function App() {
               }}
               className="flex items-center gap-2.5 cursor-pointer"
             >
-              <div className="w-8 h-8 rounded-lg overflow-hidden bg-white p-0.5 border border-slate-700 shadow-xs shrink-0">
+              <div className="w-8 h-8 rounded-lg overflow-hidden border border-surface-container shadow-xs shrink-0">
                 <img
                   src="/Cognisphere-logo.jpeg"
                   alt="Cognisphere Logo"
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover"
                 />
               </div>
               <div className="flex flex-col">
@@ -171,13 +171,12 @@ export default function App() {
                     {/* Role bubble in bottom-right corner for Staff (Admin, Coordinator, Judge; NEVER for participants) */}
                     {(isAdmin || isCoordinator || isJudge) && (
                       <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-black uppercase shadow-xs border border-slate-900 ${
-                          isAdmin
+                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-black uppercase shadow-xs border border-slate-900 ${isAdmin
                             ? 'bg-amber-500 text-slate-950'
                             : isCoordinator
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-purple-500 text-white'
-                        }`}
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-purple-500 text-white'
+                          }`}
                         title={isAdmin ? 'Admin' : isCoordinator ? 'Coordinator' : 'Judge'}
                       >
                         {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
@@ -212,8 +211,8 @@ export default function App() {
                 setActiveTab('home');
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'home'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-white'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               <Home className="w-3.5 h-3.5" />
@@ -226,8 +225,8 @@ export default function App() {
                 setActiveTab('events');
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'events'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-white'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               <CalendarDays className="w-3.5 h-3.5" />
@@ -241,8 +240,8 @@ export default function App() {
                   setActiveTab('pass');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'pass'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-white'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-white'
                   }`}
               >
                 <QrCode className="w-3.5 h-3.5" />
@@ -257,8 +256,8 @@ export default function App() {
                   setActiveTab('certificates');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'certificates'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-white'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-white'
                   }`}
               >
                 <Award className="w-3.5 h-3.5" />
@@ -273,8 +272,8 @@ export default function App() {
                   setActiveTab('timers');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'timers'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-white'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-white'
                   }`}
               >
                 <Timer className="w-3.5 h-3.5" />
@@ -289,8 +288,8 @@ export default function App() {
                   setActiveTab('scan');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'scan'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-white'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-white'
                   }`}
               >
                 <ScanLine className="w-3.5 h-3.5" />

@@ -1,19 +1,19 @@
 import React from 'react';
-import { 
-  Sparkles, 
-  Brain, 
-  Cpu, 
-  Layers, 
-  Globe, 
-  Users, 
-  Award, 
-  BookOpen, 
-  Terminal, 
-  ArrowRight, 
-  ShieldCheck, 
-  Zap, 
-  Target, 
-  Rocket, 
+import {
+  Sparkles,
+  Brain,
+  Cpu,
+  Layers,
+  Globe,
+  Users,
+  Award,
+  BookOpen,
+  Terminal,
+  ArrowRight,
+  ShieldCheck,
+  Zap,
+  Target,
+  Rocket,
   CalendarDays,
   QrCode,
   Github,
@@ -127,11 +127,11 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
         <div className="relative z-10 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-white p-1 border border-slate-700 shadow-lg shrink-0">
-                <img 
-                  src="/Cognisphere-logo.jpeg" 
-                  alt="Cognisphere Club Logo" 
-                  className="w-full h-full object-contain"
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border border-surface-container-high shadow-xs shrink-0">
+                <img
+                  src="/Cognisphere-logo.jpeg"
+                  alt="Cognisphere Club Logo"
+                  className="w-full h-full object-cover"
                 />
               </div>
               <div>
@@ -269,7 +269,7 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
           {domains.map((item, idx) => {
             const Icon = item.icon;
             return (
-              <div 
+              <div
                 key={idx}
                 className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 space-y-3 transition-all hover:-translate-y-1 shadow-md"
               >
@@ -297,8 +297,8 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {milestones.map((milestone, idx) => (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 space-y-2 relative"
             >
               <div className="flex items-center justify-between">
@@ -357,7 +357,7 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {leadership.map((lead, idx) => (
-            <div 
+            <div
               key={idx}
               className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2"
             >
@@ -431,14 +431,14 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
 // Simple fallback icon for Vision
 function EyeIcon(props) {
   return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       {...props}
     >
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
