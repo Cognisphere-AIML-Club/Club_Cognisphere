@@ -67,40 +67,36 @@ function CertificateCard({ item, participantName, participantUsn }) {
   };
 
   return (
-    <div className={`rounded-3xl border p-5 sm:p-7 shadow-2xl transition-all space-y-5 relative overflow-hidden ${
-      isWinner 
-        ? 'bg-gradient-to-b from-amber-950/20 via-slate-900 to-slate-900 border-amber-500/40 shadow-amber-950/30' 
-        : 'bg-slate-900 border-slate-800'
-    }`}>
+    <div className="rounded-3xl border border-surface-container bg-surface-container-lowest p-5 sm:p-7 shadow-xs transition-all space-y-5 relative overflow-hidden">
       {/* Top Banner Accent */}
       <div className={`absolute top-0 inset-x-0 h-1.5 ${
-        isWinner ? 'bg-gradient-to-r from-amber-400 to-amber-600' : 'bg-emerald-500'
+        isWinner ? 'bg-primary' : 'bg-tertiary'
       }`} />
 
       {/* Header Info */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-surface-container">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border flex items-center gap-1 ${
               isWinner
-                ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                ? 'bg-surface-container border-surface-container-high text-primary'
+                : 'bg-tertiary-container border-tertiary/30 text-on-tertiary-container'
             }`}>
-              {isWinner ? <Trophy className="w-3 h-3 text-amber-400" /> : <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+              {isWinner ? <Trophy className="w-3 h-3 text-primary" /> : <CheckCircle2 className="w-3 h-3 text-on-tertiary-container" />}
               <span>{isWinner ? `Winner • ${rankLabel}` : 'Verified Participation'}</span>
             </span>
 
-            <span className="text-[11px] font-mono text-slate-500">
+            <span className="text-[11px] font-mono text-secondary">
               {certId}
             </span>
           </div>
 
-          <h3 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+          <h3 className="text-lg sm:text-xl font-extrabold text-on-surface tracking-tight">
             {item.activity.name}
           </h3>
-          <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-            <MapPin className="w-3 h-3 text-emerald-400" />
-            <span className="text-slate-300">{item.activity.room}</span>
+          <p className="text-xs text-secondary flex items-center gap-2 mt-0.5">
+            <MapPin className="w-3 h-3 text-primary" />
+            <span className="text-on-surface">{item.activity.room}</span>
             <span>&bull;</span>
             <span>Attended on {item.attendance.timestamp.toLocaleDateString()}</span>
           </p>
@@ -111,7 +107,7 @@ function CertificateCard({ item, participantName, participantUsn }) {
           <button
             onClick={handleDownload}
             disabled={!dataUrl || downloading}
-            className="py-2 px-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+            className="py-2 px-3.5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
             title="Download high-resolution certificate image (PNG)"
           >
             {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -121,7 +117,7 @@ function CertificateCard({ item, participantName, participantUsn }) {
           <button
             onClick={handlePrint}
             disabled={!dataUrl}
-            className="py-2 px-3.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 font-semibold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-sm"
+            className="py-2 px-3.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest text-on-surface font-semibold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-xs"
             title="Print or Save directly as PDF"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -132,21 +128,21 @@ function CertificateCard({ item, participantName, participantUsn }) {
 
       {/* Visual Canvas Preview Frame */}
       {dataUrl ? (
-        <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-inner group">
+        <div className="relative rounded-2xl overflow-hidden border border-surface-container bg-surface-container-low shadow-inner group">
           <img 
             src={dataUrl} 
             alt="Certificate Preview" 
             className="w-full h-auto object-contain transition-transform duration-300 group-hover:scale-[1.01]" 
           />
-          <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-slate-950/80 backdrop-blur-md border border-slate-800 text-[10px] font-mono text-slate-400 flex items-center gap-1 shadow-sm">
-            <Sparkles className="w-3 h-3 text-amber-400" />
+          <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-surface-container-lowest/90 backdrop-blur-md border border-surface-container text-[10px] font-mono text-secondary flex items-center gap-1 shadow-xs">
+            <Sparkles className="w-3 h-3 text-primary" />
             <span>1920x1280 Retina Master</span>
           </div>
         </div>
       ) : (
-        <div className="w-full aspect-[16/10] bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+        <div className="w-full aspect-[16/10] bg-surface-container-low rounded-2xl border border-surface-container flex items-center justify-center">
+          <div className="flex items-center gap-2 text-xs text-secondary">
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
             <span>Generating high-resolution certificate...</span>
           </div>
         </div>
@@ -234,34 +230,26 @@ export default function CertificatesView({ user, profile, isAdmin = false }) {
     <div className="space-y-6 max-w-4xl mx-auto w-full animate-fadeIn">
       {/* Admin Master Switch Control Banner */}
       {isAdmin && (
-        <div className={`rounded-3xl border p-5 sm:p-6 shadow-xl transition-all ${
-          isEnabled
-            ? 'bg-emerald-950/20 border-emerald-500/40'
-            : 'bg-amber-950/20 border-amber-500/40'
-        }`}>
+        <div className="rounded-3xl border border-surface-container bg-surface-container-lowest p-5 sm:p-6 shadow-xs transition-all">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-sm ${
-                isEnabled
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                  : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-              }`}>
-                {isEnabled ? <Unlock className="w-6 h-6 text-emerald-400" /> : <Lock className="w-6 h-6 text-amber-400" />}
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center border shadow-xs bg-surface-container border-surface-container-high text-primary">
+                {isEnabled ? <Unlock className="w-6 h-6 text-primary" /> : <Lock className="w-6 h-6 text-secondary" />}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-400">
+                  <span className="text-xs font-mono font-extrabold uppercase tracking-wider text-secondary">
                     Admin Master Switch
                   </span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                     isEnabled
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      ? 'bg-tertiary-container text-on-tertiary-container border-tertiary/30'
+                      : 'bg-surface-container text-secondary border-surface-container-high'
                   }`}>
                     {isEnabled ? 'CERTIFICATES RELEASED' : 'CERTIFICATES LOCKED'}
                   </span>
                 </div>
-                <h3 className="text-base font-bold text-white mt-0.5">
+                <h3 className="text-base font-bold text-on-surface mt-0.5">
                   {isEnabled 
                     ? 'Participants can currently download their credentials' 
                     : 'Certificates are hidden behind the locked holding banner'}
@@ -272,17 +260,17 @@ export default function CertificatesView({ user, profile, isAdmin = false }) {
             <button
               onClick={handleToggle}
               disabled={toggling}
-              className={`py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 self-start sm:self-auto active:scale-95 ${
+              className={`py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 self-start sm:self-auto active:scale-95 ${
                 isEnabled
-                  ? 'bg-slate-800 hover:bg-slate-750 text-rose-300 border border-slate-700'
-                  : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+                  ? 'bg-surface-container hover:bg-surface-container-high text-error border border-surface-container-high'
+                  : 'bg-primary hover:bg-primary-container text-on-primary'
               }`}
             >
               {toggling ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : isEnabled ? (
                 <>
-                  <Lock className="w-4 h-4 text-rose-400" />
+                  <Lock className="w-4 h-4 text-error" />
                   <span>Lock Certificates</span>
                 </>
               ) : (
@@ -299,22 +287,22 @@ export default function CertificatesView({ user, profile, isAdmin = false }) {
       {/* Main Content: Locked Banner vs Released Certificates */}
       {!isEnabled && !isAdmin ? (
         /* State 1: Locked Vault Banner for Participants */
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-2xl">
-          <div className="w-16 h-16 rounded-3xl bg-slate-800/80 border border-slate-700/80 text-amber-400 flex items-center justify-center mx-auto shadow-xl shadow-amber-500/5">
+        <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs">
+          <div className="w-16 h-16 rounded-3xl bg-surface-container border border-surface-container-high text-primary flex items-center justify-center mx-auto shadow-xs">
             <Lock className="w-8 h-8" />
           </div>
 
           <div className="space-y-2 max-w-md mx-auto">
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight">
               Certificates Will Be Available After Event
             </h2>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+            <p className="text-xs sm:text-sm text-secondary leading-relaxed">
               Official certificates of merit and participation are generated automatically based on coordinator room attendance scans. The organizers will release access immediately once competition evaluations conclude.
             </p>
           </div>
 
-          <div className="pt-4 flex items-center justify-center gap-2 text-xs font-mono text-slate-500">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <div className="pt-4 flex items-center justify-center gap-2 text-xs font-mono text-secondary">
+            <ShieldCheck className="w-4 h-4 text-primary" />
             <span>Attendance records are securely recorded &bull; Check back soon</span>
           </div>
         </div>
@@ -322,28 +310,28 @@ export default function CertificatesView({ user, profile, isAdmin = false }) {
         /* State 2: Released Certificates or Admin View */
         <div className="space-y-6">
           {/* Section Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-container-lowest border border-surface-container rounded-3xl p-5 shadow-xs">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-2xl bg-surface-container border border-surface-container-high text-primary flex items-center justify-center">
                 <Award className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white tracking-tight">My Event Credentials</h2>
-                <p className="text-xs text-slate-400">
+                <h2 className="text-base font-bold text-on-surface tracking-tight">My Event Credentials</h2>
+                <p className="text-xs text-secondary">
                   {participantName} {participantUsn && `• ${participantUsn}`}
                 </p>
               </div>
             </div>
 
-            <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-xl self-start sm:self-auto font-bold">
+            <span className="text-xs font-mono text-primary bg-surface-container border border-surface-container-high px-3 py-1 rounded-xl self-start sm:self-auto font-bold">
               {attendedItems.length} {attendedItems.length === 1 ? 'Credential Earned' : 'Credentials Earned'}
             </span>
           </div>
 
           {/* Cards List */}
           {loadingRecords ? (
-            <div className="py-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+            <div className="py-12 text-center text-xs text-secondary flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
               <span>Checking attendance and score logs...</span>
             </div>
           ) : attendedItems.length > 0 ? (
@@ -359,12 +347,12 @@ export default function CertificatesView({ user, profile, isAdmin = false }) {
             </div>
           ) : (
             /* No Attendance Logged */
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-3 shadow-xl">
-              <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-500 flex items-center justify-center mx-auto">
+            <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-8 text-center space-y-3 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-surface-container text-secondary flex items-center justify-center mx-auto">
                 <Award className="w-6 h-6" />
               </div>
-              <h3 className="text-base font-bold text-white">No Attendance Records Found</h3>
-              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+              <h3 className="text-base font-bold text-on-surface">No Attendance Records Found</h3>
+              <p className="text-xs text-secondary max-w-md mx-auto leading-relaxed">
                 You must have your QR pass scanned by a room coordinator at the door to receive a participation or winner certificate for that competition.
               </p>
             </div>

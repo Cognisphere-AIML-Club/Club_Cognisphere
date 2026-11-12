@@ -52,12 +52,11 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
 
   // Request status for this game
   const request = userRequests[currentActivity.id];
-  const isApproved = isStaff || request?.status === 'approved'; // Staff gets automatic bypass/preview
+  const isApproved = isStaff || request?.status === 'approved';
   const isPending = request?.status === 'pending';
   const isRejected = request?.status === 'rejected';
   const isUnrequested = !request && !isStaff;
 
-  // Game-specific QR pass value: {activityId}_{qrId}
   const activityQrValue = `${currentActivity.id}_${profile.qrId}`;
   const passIdSnippet = `${currentActivity.id.slice(0, 3).toUpperCase()}-${profile.qrId.slice(0, 6).toUpperCase()}`;
 
@@ -78,127 +77,248 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
     }
   };
 
-  const handleDownload = () => {
-    if (!isApproved) return;
+  const handleDownload = async () => {
     try {
       setDownloading(true);
 
-      const qrCanvas = qrCanvasRef.current;
-      if (!qrCanvas) {
-        throw new Error('QR canvas not ready');
+      // 1. Resolve QR code drawable source with multi-tier fallback
+      let qrSource = null;
+
+      // Method 1: Check hidden offscreen canvas
+      const hiddenCanvas = document.querySelector('#pass-hidden-qr-canvas canvas');
+      if (hiddenCanvas && hiddenCanvas.width > 0) {
+        qrSource = hiddenCanvas;
       }
 
-      // Create high-resolution export canvas (800 x 1080 px)
+      // Method 2: Convert visible or offscreen SVG to Image
+      if (!qrSource) {
+        const svgEl = document.getElementById('participant-visible-qr-svg');
+        if (svgEl) {
+          try {
+            const svgData = new XMLSerializer().serializeToString(svgEl);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+              img.onload = () => resolve();
+              img.onerror = reject;
+              img.src = url;
+            });
+            qrSource = img;
+          } catch (e) {
+            console.warn('SVG capture fallback error:', e);
+          }
+        }
+      }
+
+      // Method 3: Wait a short tick and re-check canvas
+      if (!qrSource) {
+        await new Promise(r => setTimeout(r, 80));
+        const retryCanvas = document.querySelector('#pass-hidden-qr-canvas canvas');
+        if (retryCanvas && retryCanvas.width > 0) {
+          qrSource = retryCanvas;
+        }
+      }
+
+      if (!qrSource) {
+        throw new Error('QR code element is still generating. Please try again in a moment.');
+      }
+
+      // 2. Create high-resolution export canvas (800 x 1080 px) - Clean Light Mode
       const canvas = document.createElement('canvas');
       canvas.width = 800;
       canvas.height = 1080;
       const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not initialize canvas context');
 
-      // 1. Dark Gradient Background (slate-950)
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      bgGrad.addColorStop(0, '#020617');
-      bgGrad.addColorStop(0.5, '#0f172a');
-      bgGrad.addColorStop(1, '#020617');
-      ctx.fillStyle = bgGrad;
+      // Helper for clean rounded rectangle across all browser engines
+      const drawRoundRect = (x, y, width, height, radius) => {
+        const r = Math.min(radius, width / 2, height / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + width - r, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+        ctx.lineTo(x + width, y + height - r);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+        ctx.lineTo(x + r, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+      };
+
+      // 1. Surface Background (#ffffff)
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 2. Card Border
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#1e293b';
-      ctx.strokeRect(30, 30, canvas.width - 60, canvas.height - 60);
+      // 2. Card Outer Border (#e5eeff)
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#e5eeff';
+      drawRoundRect(30, 30, canvas.width - 60, canvas.height - 60, 24);
+      ctx.stroke();
 
-      // 3. Top Accent Glow Line
-      ctx.fillStyle = '#10b981';
-      ctx.fillRect(30, 30, canvas.width - 60, 10);
+      // 3. Top Accent Line (Primary #004ac6)
+      ctx.fillStyle = '#004ac6';
+      ctx.fillRect(32, 30, canvas.width - 64, 10);
 
       // 4. Header: Event Title
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = '#565e74';
+      ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('CLUB GAMES EVENT 2026', canvas.width / 2, 85);
+      ctx.fillText('COGNISPHERE • CLUB GAMES 2026', canvas.width / 2, 85);
 
-      // 5. Activity Name & Room
-      ctx.fillStyle = '#10b981';
+      // 5. Activity Name
+      ctx.fillStyle = '#004ac6';
       ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.fillText(currentActivity.name.toUpperCase(), canvas.width / 2, 125);
 
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(`VENUE: ${currentActivity.room.toUpperCase()} (${currentActivity.category.toUpperCase()})`, canvas.width / 2, 155);
+      // Venue & Category
+      ctx.fillStyle = '#0b1c30';
+      ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(`VENUE: ${currentActivity.room.toUpperCase()} • ${currentActivity.category.toUpperCase()}`, canvas.width / 2, 155);
 
-      // Divider
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
+      // Divider Line
+      ctx.strokeStyle = '#e5eeff';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(80, 180);
       ctx.lineTo(canvas.width - 80, 180);
       ctx.stroke();
 
       // 6. Participant Name
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(displayName, canvas.width / 2, 235);
+      ctx.fillStyle = '#0b1c30';
+      ctx.font = 'bold 34px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(displayName, canvas.width / 2, 230);
 
       // 7. USN Badge
-      ctx.fillStyle = '#1e293b';
       const badgeWidth = 260;
-      const badgeHeight = 44;
+      const badgeHeight = 40;
       const badgeX = (canvas.width - badgeWidth) / 2;
-      const badgeY = 260;
+      const badgeY = 255;
       
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 8) : ctx.rect(badgeX, badgeY, badgeWidth, badgeHeight);
+      ctx.fillStyle = '#eff4ff';
+      drawRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 10);
       ctx.fill();
-      ctx.strokeStyle = '#334155';
+      ctx.strokeStyle = '#dce9ff';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.fillStyle = '#34d399';
-      ctx.font = 'bold 20px "Courier New", Courier, monospace';
-      ctx.fillText(`USN: ${displayUsn}`, canvas.width / 2, badgeY + 29);
+      ctx.fillStyle = '#004ac6';
+      ctx.font = 'bold 18px "Courier New", Courier, monospace';
+      ctx.fillText(`USN: ${displayUsn}`, canvas.width / 2, badgeY + 26);
 
-      // 8. White QR Code Container
-      const qrBoxSize = 420;
-      const qrBoxX = (canvas.width - qrBoxSize) / 2;
-      const qrBoxY = 330;
+      // 8. Status Pill
+      const statusPillWidth = 280;
+      const statusPillHeight = 32;
+      const statusPillX = (canvas.width - statusPillWidth) / 2;
+      const statusPillY = 310;
 
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 24) : ctx.rect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize);
+      ctx.fillStyle = isApproved ? '#007d55' : isPending ? '#565e74' : '#004ac6';
+      drawRoundRect(statusPillX, statusPillY, statusPillWidth, statusPillHeight, 16);
       ctx.fill();
 
-      // Draw QR Image
-      const qrPadding = 30;
-      const qrDrawSize = qrBoxSize - (qrPadding * 2);
-      ctx.drawImage(qrCanvas, qrBoxX + qrPadding, qrBoxY + qrPadding, qrDrawSize, qrDrawSize);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      const statusText = isApproved 
+        ? '✓ APPROVED ENTRY PASS' 
+        : isPending 
+        ? '⏳ PENDING REVIEW' 
+        : 'PARTICIPANT ENTRY PASS';
+      ctx.fillText(statusText, canvas.width / 2, statusPillY + 21);
 
-      // 9. Pass ID
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '18px "Courier New", Courier, monospace';
+      // 9. White QR Code Container
+      const qrBoxSize = 400;
+      const qrBoxX = (canvas.width - qrBoxSize) / 2;
+      const qrBoxY = 360;
+
+      ctx.fillStyle = '#f8f9ff';
+      drawRoundRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 20);
+      ctx.fill();
+      ctx.strokeStyle = '#e5eeff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw QR Image inside container
+      const qrPadding = 24;
+      const qrDrawSize = qrBoxSize - (qrPadding * 2);
+      ctx.drawImage(qrSource, qrBoxX + qrPadding, qrBoxY + qrPadding, qrDrawSize, qrDrawSize);
+
+      // 10. Pass ID
+      ctx.fillStyle = '#565e74';
+      ctx.font = 'bold 16px "Courier New", Courier, monospace';
       ctx.fillText(`PASS #${passIdSnippet}`, canvas.width / 2, 795);
 
-      // 10. Instructions
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(`Approved Entry Pass for ${currentActivity.room}`, canvas.width / 2, 850);
+      // 11. Instructions
+      ctx.fillStyle = '#0b1c30';
+      ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(`Present this pass at ${currentActivity.room} for attendance check`, canvas.width / 2, 845);
 
-      // 11. Footer Security
-      ctx.fillStyle = '#64748b';
-      ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('Verified Approved Pass • 100% Offline Capable', canvas.width / 2, 980);
+      // 12. Security Footer Box
+      const footBoxW = canvas.width - 120;
+      const footBoxH = 50;
+      const footBoxX = 60;
+      const footBoxY = 960;
+      ctx.fillStyle = '#eff4ff';
+      drawRoundRect(footBoxX, footBoxY, footBoxW, footBoxH, 12);
+      ctx.fill();
+      ctx.strokeStyle = '#e5eeff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
-      // Generate Download
-      const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = `Pass_${currentActivity.id}_${displayUsn}.png`;
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      ctx.fillStyle = '#565e74';
+      ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('Verified Approved Pass • 100% Offline Capable • Cognisphere AIML', canvas.width / 2, footBoxY + 30);
+
+      // 13. Trigger Download with Blob & dataURL fallback
+      const filename = `Pass_${currentActivity.id}_${displayUsn.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+
+      await new Promise((resolve) => {
+        if (canvas.toBlob) {
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              const dataUrl = canvas.toDataURL('image/png');
+              const link = document.createElement('a');
+              link.download = filename;
+              link.href = dataUrl;
+              document.body.appendChild(link);
+              link.click();
+              setTimeout(() => {
+                document.body.removeChild(link);
+                resolve();
+              }, 500);
+              return;
+            }
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = blobUrl;
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => {
+              document.body.removeChild(link);
+              URL.revokeObjectURL(blobUrl);
+              resolve();
+            }, 1000);
+          }, 'image/png');
+        } else {
+          const dataUrl = canvas.toDataURL('image/png');
+          const link = document.createElement('a');
+          link.download = filename;
+          link.href = dataUrl;
+          document.body.appendChild(link);
+          link.click();
+          setTimeout(() => {
+            document.body.removeChild(link);
+            resolve();
+          }, 500);
+        }
+      });
 
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 3000);
     } catch (err) {
-      alert('Unable to generate pass image. Please take a screenshot as a backup.');
+      console.error('Download pass error:', err);
+      alert(err.message || 'Unable to generate pass image. Please take a screenshot as a backup.');
     } finally {
       setDownloading(false);
     }
@@ -206,24 +326,34 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
 
   return (
     <div className="max-w-md mx-auto w-full space-y-5 animate-fadeIn">
-      {/* Hidden off-screen Canvas used to source high-res QR for the download badge */}
-      {isApproved && (
-        <div className="sr-only" aria-hidden="true">
-          <QRCodeCanvas
-            ref={qrCanvasRef}
-            value={activityQrValue}
-            size={500}
-            level="H"
-            includeMargin={false}
-          />
-        </div>
-      )}
+      {/* Hidden off-screen Canvas unconditionally mounted to source high-res QR for badge download */}
+      <div 
+        id="pass-hidden-qr-canvas" 
+        style={{ 
+          position: 'fixed', 
+          left: '-9999px', 
+          top: '-9999px', 
+          width: '512px', 
+          height: '512px', 
+          opacity: 0, 
+          pointerEvents: 'none',
+          zIndex: -9999
+        }} 
+        aria-hidden="true"
+      >
+        <QRCodeCanvas
+          value={activityQrValue}
+          size={512}
+          level="H"
+          includeMargin={true}
+        />
+      </div>
 
       {/* Activity Selector Tab Bar with Live Approval Status Indicators */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-3 shadow-lg">
-        <div className="text-[11px] font-semibold text-slate-400 px-2 pb-2 uppercase tracking-wider flex items-center justify-between">
+      <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-3 shadow-xs">
+        <div className="text-[11px] font-bold text-secondary px-2 pb-2 uppercase tracking-wider flex items-center justify-between">
           <span>Your 5 Game Passes</span>
-          <span className="text-emerald-400 font-mono">Approval System</span>
+          <span className="text-primary font-mono font-bold">Pass Matrix</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
@@ -242,20 +372,20 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
                 }}
                 className={`py-2 px-2.5 rounded-xl text-left transition-all flex flex-col justify-between relative overflow-hidden ${
                   isSelected
-                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
-                    : 'bg-slate-950/80 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                    ? 'bg-primary text-on-primary font-bold shadow-xs'
+                    : 'bg-surface-container-low hover:bg-surface-container text-on-surface border border-surface-container'
                 }`}
               >
                 <div className="text-xs truncate font-semibold flex items-center justify-between">
                   <span className="truncate">{act.name}</span>
                   {/* Status dot */}
                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ml-1 ${
-                    actApproved ? (isSelected ? 'bg-slate-950' : 'bg-emerald-500') :
-                    actPending ? 'bg-amber-400 animate-pulse' :
-                    (isSelected ? 'bg-slate-700' : 'bg-slate-600')
+                    actApproved ? (isSelected ? 'bg-white' : 'bg-tertiary') :
+                    actPending ? 'bg-amber-500 animate-pulse' :
+                    (isSelected ? 'bg-white/60' : 'bg-outline')
                   }`} />
                 </div>
-                <div className={`text-[10px] truncate ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
+                <div className={`text-[10px] truncate ${isSelected ? 'text-on-primary/90 font-medium' : 'text-secondary'}`}>
                   {act.room}
                 </div>
               </button>
@@ -265,37 +395,35 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
       </div>
 
       {/* Wallet Pass Container for Selected Activity */}
-      <div className="bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500" />
-        
+      <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-6 sm:p-7 shadow-xs relative overflow-hidden">
         {/* Pass Header: Activity & Room Title */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
+        <div className="flex items-center justify-between pb-4 border-b border-surface-container">
           <div className="space-y-0.5">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-400 block">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-primary block">
               {currentActivity.category} Activity
             </span>
-            <h3 className="text-base font-extrabold text-white leading-tight">
+            <h3 className="text-base font-extrabold text-on-surface leading-tight">
               {currentActivity.name}
             </h3>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400">
-              <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-semibold text-slate-200">{currentActivity.room}</span>
+            <div className="flex items-center gap-1.5 text-xs text-secondary">
+              <MapPin className="w-3.5 h-3.5 text-primary" />
+              <span className="font-semibold text-on-surface">{currentActivity.room}</span>
             </div>
           </div>
 
-          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border flex-shrink-0 ${
+          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border flex-shrink-0 ${
             isApproved 
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
+              ? 'bg-tertiary-container text-on-tertiary-container border-tertiary-container' 
               : isPending 
-              ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' 
+              ? 'bg-secondary-container text-on-secondary-container border-secondary-container' 
               : isRejected 
-              ? 'bg-rose-500/10 border-rose-500/20 text-rose-300' 
-              : 'bg-slate-800 border-slate-700 text-slate-400'
+              ? 'bg-error-container text-on-error-container border-error-container' 
+              : 'bg-surface-container text-secondary border-surface-container-high'
           }`}>
-            {isApproved && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
-            {isPending && <Clock className="w-3 h-3 text-amber-400 animate-pulse" />}
-            {isRejected && <XCircle className="w-3 h-3 text-rose-400" />}
-            {isUnrequested && <Lock className="w-3 h-3 text-slate-400" />}
+            {isApproved && <CheckCircle2 className="w-3 h-3 text-on-tertiary" />}
+            {isPending && <Clock className="w-3 h-3 text-secondary animate-pulse" />}
+            {isRejected && <XCircle className="w-3 h-3 text-on-error" />}
+            {isUnrequested && <Lock className="w-3 h-3 text-secondary" />}
             <span>
               {isApproved ? 'Approved' : isPending ? 'Pending Approval' : isRejected ? 'Declined' : 'Locked'}
             </span>
@@ -304,18 +432,18 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
 
         {/* Participant Name, USN & Pass ID */}
         <div className="py-4 text-center space-y-2">
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-on-surface">
             {displayName}
           </h2>
 
           <div className="flex items-center justify-center gap-2">
             {profile.usn && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-slate-800 border border-slate-700 text-emerald-400">
-                <IdCard className="w-3 h-3 text-emerald-500" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-surface-container border border-surface-container-high text-primary">
+                <IdCard className="w-3 h-3 text-primary" />
                 {profile.usn}
               </span>
             )}
-            <span className="text-[11px] text-slate-500 font-mono">
+            <span className="text-[11px] text-secondary font-mono">
               #{passIdSnippet}
             </span>
           </div>
@@ -323,10 +451,10 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
 
         {/* Dynamic Pass Content Based on Approval Status */}
         {isApproved ? (
-          /* Approved Pass: Display Live High-Contrast QR */
           <div className="space-y-4">
-            <div className="bg-white p-5 rounded-2xl shadow-inner mx-auto w-fit flex flex-col items-center justify-center my-1 animate-fadeIn">
+            <div className="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container mx-auto w-fit flex flex-col items-center justify-center my-1 shadow-xs animate-fadeIn">
               <QRCodeSVG
+                id="participant-visible-qr-svg"
                 value={activityQrValue}
                 size={210}
                 level="H"
@@ -335,52 +463,74 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
               />
             </div>
 
-            <p className="text-center text-xs text-slate-300 leading-relaxed font-medium">
-              Present this pass at <span className="text-emerald-400 font-bold">{currentActivity.room}</span> to mark attendance for <span className="text-white font-semibold">{currentActivity.name}</span>.
+            <p className="text-center text-xs text-on-surface-variant leading-relaxed font-medium">
+              Present this pass at <span className="text-primary font-bold">{currentActivity.room}</span> to mark attendance for <span className="text-on-surface font-semibold">{currentActivity.name}</span>.
             </p>
           </div>
         ) : isPending ? (
-          /* Pending Approval State */
-          <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-3 my-2 animate-fadeIn">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
-              <Clock className="w-6 h-6 animate-pulse" />
-            </div>
+          <div className="p-6 rounded-2xl bg-secondary-container/40 border border-secondary/20 text-center space-y-4 my-2 animate-fadeIn">
             <div className="space-y-1">
-              <h4 className="text-sm font-bold text-white">Approval Request Pending</h4>
-              <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
-                Your request to join <strong className="text-amber-300">{currentActivity.name}</strong> in {currentActivity.room} is submitted. A coordinator or admin will approve it shortly.
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-secondary-container text-secondary mx-auto">
+                <Clock className="w-3.5 h-3.5 animate-pulse" />
+                <span>Approval Request Pending</span>
+              </div>
+              <p className="text-xs text-on-surface-variant leading-relaxed max-w-xs mx-auto pt-1">
+                Your request for <strong className="text-primary">{currentActivity.name}</strong> ({currentActivity.room}) is submitted. A coordinator will verify your pass.
               </p>
+            </div>
+
+            <div className="bg-surface-container-lowest p-4 rounded-2xl border border-surface-container mx-auto w-fit flex flex-col items-center justify-center my-1 shadow-xs">
+              <QRCodeSVG
+                id="participant-visible-qr-svg"
+                value={activityQrValue}
+                size={190}
+                level="H"
+                includeMargin={true}
+                className="w-44 h-44"
+              />
+              <span className="text-[10px] font-bold text-secondary uppercase tracking-wider mt-2">Pass ID: #{passIdSnippet}</span>
             </div>
           </div>
         ) : isRejected ? (
-          /* Rejected State */
-          <div className="p-6 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-center space-y-3 my-2 animate-fadeIn">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+          <div className="p-6 rounded-2xl bg-error-container/30 border border-error/20 text-center space-y-4 my-2 animate-fadeIn">
+            <div className="w-12 h-12 rounded-2xl bg-error-container text-error flex items-center justify-center mx-auto">
               <XCircle className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h4 className="text-sm font-bold text-white">Not Registered for this Activity</h4>
-              <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
+              <h4 className="text-sm font-bold text-on-surface">Not Registered for this Activity</h4>
+              <p className="text-xs text-on-surface-variant leading-relaxed max-w-xs mx-auto">
                 Your registration was not approved for {currentActivity.name}. Please contact the event coordinator.
               </p>
             </div>
           </div>
         ) : (
-          /* Unrequested State */
-          <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-3 my-2 animate-fadeIn">
-            <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center mx-auto">
-              <Lock className="w-6 h-6" />
-            </div>
+          <div className="p-6 rounded-2xl bg-surface-container-low border border-surface-container text-center space-y-4 my-2 animate-fadeIn">
             <div className="space-y-1">
-              <h4 className="text-sm font-bold text-white">Participation Approval Required</h4>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-                Not all students participate in all 5 events. Request access below to receive your QR pass for {currentActivity.name}.
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-secondary mx-auto">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Entry Pass for {currentActivity.name}</span>
+              </div>
+              <p className="text-xs text-on-surface-variant leading-relaxed max-w-xs mx-auto pt-1">
+                Request access below to receive priority entry approval for <strong className="text-primary">{currentActivity.room}</strong>.
               </p>
             </div>
+
+            <div className="bg-surface-container-lowest p-4 rounded-2xl border border-surface-container mx-auto w-fit flex flex-col items-center justify-center my-1 shadow-xs">
+              <QRCodeSVG
+                id="participant-visible-qr-svg"
+                value={activityQrValue}
+                size={180}
+                level="H"
+                includeMargin={true}
+                className="w-40 h-40 opacity-90"
+              />
+              <span className="text-[10px] font-bold text-secondary uppercase tracking-wider mt-2">Student QR: {displayUsn}</span>
+            </div>
+
             <button
               onClick={handleRequestPass}
               disabled={requesting}
-              className="py-2.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 mx-auto active:scale-95 shadow-sm"
+              className="py-2.5 px-5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 mx-auto active:scale-95 shadow-xs"
             >
               {requesting ? (
                 <>
@@ -398,70 +548,85 @@ export default function ParticipantPass({ profile, onEditProfile, initialActivit
         )}
 
         {/* Security Footer */}
-        <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+        <div className="mt-5 pt-4 border-t border-surface-container flex items-center justify-between text-[11px] text-secondary">
           <div className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <ShieldCheck className="w-3.5 h-3.5 text-primary" />
             <span>Coordinator Approved Only</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <WifiOff className="w-3 h-3 text-emerald-400" />
+            <WifiOff className="w-3 h-3 text-primary" />
             <span>Works 100% Offline</span>
           </div>
         </div>
       </div>
 
-      {/* Action Buttons: Save Activity Pass to Gallery (when approved) */}
+      {/* Action Buttons: Save Activity Pass to Gallery (Works in all states) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {isApproved ? (
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs active:scale-[0.99]"
-          >
-            {downloading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                <span>Generating Badge...</span>
-              </>
-            ) : downloadSuccess ? (
-              <>
-                <Check className="w-4 h-4 text-slate-950" />
-                <span>Saved {currentActivity.name} Pass!</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                <span>Download {currentActivity.room} Pass</span>
-              </>
-            )}
-          </button>
-        ) : isUnrequested ? (
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="w-full py-3 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-2xl transition-all shadow-xs flex items-center justify-center gap-2 text-xs active:scale-[0.99]"
+        >
+          {downloading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-on-primary" />
+              <span>Generating Pass Image...</span>
+            </>
+          ) : downloadSuccess ? (
+            <>
+              <Check className="w-4 h-4 text-on-primary" />
+              <span>Saved {currentActivity.name} Pass!</span>
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4 text-on-primary" />
+              <span>Download {currentActivity.room} Pass</span>
+            </>
+          )}
+        </button>
+
+        {isUnrequested ? (
           <button
             onClick={handleRequestPass}
             disabled={requesting}
-            className="w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 text-xs"
+            className="w-full py-3 px-4 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-primary font-bold rounded-2xl transition-all flex items-center justify-center gap-2 text-xs shadow-xs"
           >
-            <Send className="w-4 h-4" />
-            <span>Request Entry Pass</span>
+            {requesting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Requesting...</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5" />
+                <span>Request {currentActivity.name} Pass</span>
+              </>
+            )}
           </button>
         ) : (
-          <div className="w-full py-3 px-4 bg-slate-950/80 border border-slate-800 text-slate-500 font-medium rounded-2xl text-xs text-center flex items-center justify-center gap-1.5">
-            <Lock className="w-3.5 h-3.5" />
-            <span>Download Locked until Approved</span>
-          </div>
+          <button
+            onClick={onEditProfile}
+            className="w-full py-3 px-4 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-2xl transition-all flex items-center justify-center gap-2 text-xs shadow-xs"
+          >
+            <span>Edit Profile Details</span>
+          </button>
         )}
-
-        <button
-          onClick={onEditProfile}
-          className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-300 font-medium rounded-2xl transition-all flex items-center justify-center gap-2 text-xs"
-        >
-          <span>Edit Name / USN / Mobile</span>
-        </button>
       </div>
+
+      {isUnrequested && (
+        <div className="text-center">
+          <button
+            onClick={onEditProfile}
+            className="text-xs text-secondary hover:text-primary font-medium underline underline-offset-2"
+          >
+            Need to update profile info? Edit Profile
+          </button>
+        </div>
+      )}
 
       {/* Staff Preview Banner */}
       {isStaff && (
-        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center text-xs text-amber-300 font-medium">
+        <div className="p-3 rounded-2xl bg-surface-container border border-surface-container-high text-center text-xs text-primary font-bold">
           Coordinator / Admin View: You have full bypass preview for testing passes.
         </div>
       )}

@@ -7,17 +7,35 @@
     
     <!-- PWA & Mobile Meta Tags -->
     <meta name="description" content="Campus club games event dashboard, offline QR pass, live real-time timers & leaderboards" />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#f8f9ff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="ClubGames" />
     
     <!-- Icons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Pre-load Diagnostics Listener -->
+    <script>
+      window.addEventListener('error', function(e) {
+        var root = document.getElementById('root');
+        if (root && (!root.children.length || root.innerHTML.trim() === '')) {
+          root.innerHTML = '<div style="padding:24px;font-family:system-ui,sans-serif;background:#0f172a;color:#f87171;min-height:100vh;">' +
+            '<h2 style="font-weight:bold;margin-bottom:8px;">Startup Error</h2>' +
+            '<pre style="background:#1e293b;padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap;color:#fca5a5;">' + 
+            (e.error ? (e.error.stack || e.error.message) : e.message) + '</pre>' +
+            '<button onclick="location.reload()" style="margin-top:16px;padding:8px 16px;background:#ef4444;color:#fff;border:none;border-radius:6px;cursor:pointer;">Retry</button>' +
+            '</div>';
+        }
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('Unhandled Promise Rejection:', e.reason);
+      });
+    </script>
   </head>
-  <body class="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-brand-500 selection:text-white">
+  <body class="bg-surface text-on-surface min-h-screen antialiased selection:bg-primary-container selection:text-on-primary">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

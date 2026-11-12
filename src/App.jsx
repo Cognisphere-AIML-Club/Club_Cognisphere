@@ -27,7 +27,9 @@ import {
   Timer,
   Tv,
   Award,
-  Home
+  Home,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 export default function App() {
@@ -60,6 +62,55 @@ export default function App() {
   const isCoordinator = role === 'coordinator';
   const isJudge = role === 'judge';
   const isStaff = isAdmin || isCoordinator;
+
+  // Admin-only Dark Theme preference (light by default for all users, toggleable exclusively for Admin)
+  const [adminTheme, setAdminTheme] = useState(() => {
+    try {
+      return localStorage.getItem('cognisphere_admin_theme') || 'light';
+    } catch (e) {
+      return 'light';
+    }
+  });
+
+  // Apply theme to DOM elements:
+  // If user is NOT admin, dark mode is NEVER active (strictly forced to Light Mode).
+  // Only if isAdmin is true and adminTheme is 'dark', apply .dark class and attributes.
+  const applyThemeToDOM = (theme, adminStatus) => {
+    const root = document.documentElement;
+    const body = document.body;
+    const isDark = adminStatus && theme === 'dark';
+
+    if (isDark) {
+      root.classList.add('dark');
+      root.setAttribute('data-theme', 'dark');
+      root.style.colorScheme = 'dark';
+      if (body) {
+        body.classList.add('dark');
+        body.setAttribute('data-theme', 'dark');
+      }
+    } else {
+      root.classList.remove('dark');
+      root.removeAttribute('data-theme');
+      root.style.colorScheme = 'light';
+      if (body) {
+        body.classList.remove('dark');
+        body.removeAttribute('data-theme');
+      }
+    }
+  };
+
+  useEffect(() => {
+    applyThemeToDOM(adminTheme, isAdmin);
+  }, [isAdmin, adminTheme]);
+
+  const toggleAdminTheme = () => {
+    const next = adminTheme === 'dark' ? 'light' : 'dark';
+    setAdminTheme(next);
+    try {
+      localStorage.setItem('cognisphere_admin_theme', next);
+    } catch (e) {}
+    applyThemeToDOM(next, isAdmin);
+  };
 
   const handleOpenBigScreen = (mode = 'hall', activityId = null) => {
     setBigScreenMode(mode);
@@ -94,7 +145,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row transition-colors duration-200">
+    <div className="min-h-screen bg-surface text-on-surface flex flex-col md:flex-row transition-colors duration-200">
       {/* 1. Desktop & Laptop Expandable / Contractable Sidebar with Profile at Bottom-Left */}
       <SidebarNav
         user={user}
@@ -113,12 +164,14 @@ export default function App() {
         onLogout={() => setShowLogoutConfirm(true)}
         onSignIn={signInWithGoogle}
         onLaunchBigScreen={(mode, actId) => handleOpenBigScreen(mode, actId)}
+        adminTheme={adminTheme}
+        onToggleAdminTheme={toggleAdminTheme}
       />
 
       {/* 2. Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         {/* Mobile-Only Header */}
-        <header className="md:hidden border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 transition-colors">
+        <header className="md:hidden border-b border-surface-container bg-surface-container-lowest sticky top-0 z-40 transition-colors">
           <div className="px-4 h-16 flex items-center justify-between">
             {/* Mobile Logo & Club Name */}
             <div
@@ -128,7 +181,7 @@ export default function App() {
               }}
               className="flex items-center gap-2.5 cursor-pointer"
             >
-              <div className="w-8 h-8 rounded-lg overflow-hidden bg-white p-0.5 border border-slate-700 shadow-xs shrink-0">
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-white p-0.5 border border-surface-container shadow-xs shrink-0">
                 <img
                   src="/Cognisphere-logo.jpeg"
                   alt="Cognisphere Logo"
@@ -137,10 +190,10 @@ export default function App() {
               </div>
               <div className="flex flex-col">
                 <span className="font-bold text-sm tracking-wider leading-none">
-                  <span className="text-white">COGNI</span>
-                  <span className="text-cyan-400">SPHERE</span>
+                  <span className="text-on-surface">COGNI</span>
+                  <span className="text-primary">SPHERE</span>
                 </span>
-                <span className="text-[8px] font-bold text-slate-400 tracking-widest uppercase mt-0.5 leading-none">
+                <span className="text-[8px] font-bold text-secondary tracking-widest uppercase mt-0.5 leading-none">
                   AI & ML CLUB
                 </span>
               </div>
@@ -159,11 +212,11 @@ export default function App() {
                       <img
                         src={user.photoURL}
                         alt="avatar"
-                        className="w-7 h-7 rounded-full border border-slate-700 object-cover group-hover:border-cyan-400 transition-colors"
+                        className="w-7 h-7 rounded-full border border-surface-container object-cover group-hover:border-primary transition-colors"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300 group-hover:ring-1 group-hover:ring-cyan-400 transition-all">
+                      <div className="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-xs font-bold text-on-surface group-hover:ring-1 group-hover:ring-primary transition-all">
                         {user.displayName ? user.displayName.charAt(0) : 'U'}
                       </div>
                     )}
@@ -171,12 +224,12 @@ export default function App() {
                     {/* Role bubble in bottom-right corner for Staff (Admin, Coordinator, Judge; NEVER for participants) */}
                     {(isAdmin || isCoordinator || isJudge) && (
                       <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-black uppercase shadow-xs border border-slate-900 ${
+                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-black uppercase shadow-xs border border-surface-container-lowest ${
                           isAdmin
-                            ? 'bg-amber-500 text-slate-950'
+                            ? 'bg-primary text-on-primary'
                             : isCoordinator
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-purple-500 text-white'
+                            ? 'bg-tertiary text-on-tertiary'
+                            : 'bg-secondary text-on-secondary'
                         }`}
                         title={isAdmin ? 'Admin' : isCoordinator ? 'Coordinator' : 'Judge'}
                       >
@@ -184,10 +237,25 @@ export default function App() {
                       </span>
                     )}
                   </div>
+                  {/* Admin-only Theme Toggle in mobile header */}
+                  {isAdmin && (
+                    <button
+                      onClick={toggleAdminTheme}
+                      title={`Switch to ${adminTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                      className="p-1.5 text-secondary hover:text-on-surface rounded-lg hover:bg-surface-container transition-colors"
+                      aria-label="Toggle Admin Theme"
+                    >
+                      {adminTheme === 'dark' ? (
+                        <Moon className="w-4 h-4 text-primary" />
+                      ) : (
+                        <Sun className="w-4 h-4 text-amber-500" />
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowLogoutConfirm(true)}
                     title="Sign out"
-                    className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors"
+                    className="p-1.5 text-secondary hover:text-error rounded-lg transition-colors"
                   >
                     <LogOut className="w-4 h-4" />
                   </button>
@@ -195,7 +263,7 @@ export default function App() {
               ) : (
                 <button
                   onClick={signInWithGoogle}
-                  className="py-1.5 px-3 bg-white hover:bg-slate-100 text-slate-900 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-sm"
+                  className="py-1.5 px-3 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-sm"
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>Sign In</span>
@@ -205,15 +273,15 @@ export default function App() {
           </div>
 
           {/* Mobile Sub-navigation Tabs */}
-          <div className="border-t border-slate-800/80 bg-slate-900/40 px-3 py-1.5 overflow-x-auto flex items-center gap-1.5 no-scrollbar">
+          <div className="border-t border-surface-container bg-surface-container-lowest px-3 py-1.5 overflow-x-auto flex items-center gap-1.5 no-scrollbar">
             <button
               onClick={() => {
                 setSelectedGame(null);
                 setActiveTab('home');
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'home'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
+                  : 'text-secondary hover:text-on-surface'
                 }`}
             >
               <Home className="w-3.5 h-3.5" />
@@ -226,8 +294,8 @@ export default function App() {
                 setActiveTab('events');
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'events'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
+                  : 'text-secondary hover:text-on-surface'
                 }`}
             >
               <CalendarDays className="w-3.5 h-3.5" />
@@ -241,8 +309,8 @@ export default function App() {
                   setActiveTab('pass');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'pass'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
+                    : 'text-secondary hover:text-on-surface'
                   }`}
               >
                 <QrCode className="w-3.5 h-3.5" />
@@ -257,8 +325,8 @@ export default function App() {
                   setActiveTab('certificates');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'certificates'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
+                    : 'text-secondary hover:text-on-surface'
                   }`}
               >
                 <Award className="w-3.5 h-3.5" />
@@ -273,8 +341,8 @@ export default function App() {
                   setActiveTab('timers');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'timers'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
+                    : 'text-secondary hover:text-on-surface'
                   }`}
               >
                 <Timer className="w-3.5 h-3.5" />
@@ -289,8 +357,8 @@ export default function App() {
                   setActiveTab('scan');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'scan'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
+                    : 'text-secondary hover:text-on-surface'
                   }`}
               >
                 <ScanLine className="w-3.5 h-3.5" />
@@ -301,7 +369,7 @@ export default function App() {
             {isStaff && (
               <button
                 onClick={() => handleOpenBigScreen('hall')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap bg-tertiary-container text-on-tertiary-container border border-tertiary"
               >
                 <Tv className="w-3.5 h-3.5" />
                 <span>Projector</span>
@@ -314,12 +382,12 @@ export default function App() {
         <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8">
           {/* Banner if Firebase is not yet configured */}
           {!isConfigured && (
-            <div className="bg-amber-950/40 border border-amber-800/80 rounded-2xl p-4 text-xs text-amber-200 flex items-start gap-3 shadow-sm mb-6">
-              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="bg-error-container text-on-error-container border border-error/20 rounded-2xl p-4 text-xs flex items-start gap-3 shadow-xs mb-6">
+              <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <span className="font-bold">Setup Required: Firebase Credentials Missing</span>
-                <p className="text-amber-300/80">
-                  Please configure your Firebase credentials in your <code className="bg-amber-900/60 px-1 py-0.5 rounded text-amber-200">.env</code> file.
+                <p className="text-on-error-container/80">
+                  Please configure your Firebase credentials in your <code className="bg-surface-container px-1 py-0.5 rounded text-on-surface">.env</code> file.
                 </p>
               </div>
             </div>
@@ -327,9 +395,9 @@ export default function App() {
 
           {/* Authentication or Profile Load Errors */}
           {(authError || profileError) && (
-            <div className="bg-rose-950/40 border border-rose-800/80 rounded-2xl p-4 text-xs text-rose-200 flex items-start gap-3 shadow-sm mb-6">
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-              <div className="flex-1">{authError || profileError}</div>
+            <div className="bg-error-container text-on-error-container border border-error/20 rounded-2xl p-4 text-xs flex items-start gap-3 shadow-xs mb-6">
+              <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium">{authError || profileError}</div>
             </div>
           )}
 
@@ -443,19 +511,19 @@ export default function App() {
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-slate-900 py-6 text-center text-xs text-slate-500 space-y-1.5 bg-slate-950/50 mt-auto">
-          <div className="font-semibold text-slate-300 tracking-wide">
+        <footer className="border-t border-surface-container py-6 text-center text-xs text-secondary space-y-1.5 bg-surface-container-lowest mt-auto">
+          <div className="font-semibold text-on-surface tracking-wide">
             Cognisphere &bull; AI & Machine Learning Club
           </div>
-          <div className="text-xs text-slate-400 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-            <span className="text-slate-500">Contact info:</span>
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors">LinkedIn</a>
-            <span className="text-slate-700">&bull;</span>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors">GitHub</a>
-            <span className="text-slate-700">&bull;</span>
-            <a href="mailto:cognisphere.club@gmail.com" className="hover:text-cyan-400 transition-colors">Mail</a>
-            <span className="text-slate-700">&bull;</span>
-            <a href="https://instagram.com/cognisphereaiml" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors">Instagram</a>
+          <div className="text-xs text-secondary flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+            <span className="text-secondary">Contact info:</span>
+            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">LinkedIn</a>
+            <span className="text-outline-variant">&bull;</span>
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">GitHub</a>
+            <span className="text-outline-variant">&bull;</span>
+            <a href="mailto:cognisphere.club@gmail.com" className="hover:text-primary transition-colors">Mail</a>
+            <span className="text-outline-variant">&bull;</span>
+            <a href="https://instagram.com/cognisphereaiml" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Instagram</a>
           </div>
         </footer>
       </div>

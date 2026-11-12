@@ -19,7 +19,8 @@ import {
   WifiOff, 
   RefreshCw, 
   ChevronRight,
-  Info
+  Info,
+  SwitchCamera
 } from 'lucide-react';
 
 export default function CoordinatorScanner({ user }) {
@@ -28,6 +29,9 @@ export default function CoordinatorScanner({ user }) {
   });
 
   const [scanning, setScanning] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [cameras, setCameras] = useState([]);
+  const [selectedCameraId, setSelectedCameraId] = useState(null);
   const [scanResult, setScanResult] = useState(null); // { type: 'success' | 'already' | 'error', title, subtitle, detail, warning }
   const [isProcessing, setIsProcessing] = useState(false);
   const [cameraError, setCameraError] = useState(null);
@@ -92,31 +96,117 @@ export default function CoordinatorScanner({ user }) {
     setSyncing(false);
   };
 
-  const startScanner = async () => {
+  const startScanner = async (targetCameraId = null) => {
     setCameraError(null);
     setScanResult(null);
+    setIsStarting(true);
 
     try {
+      // 1. Ensure any existing scanner instance is completely stopped & cleared
+      if (scannerRef.current) {
+        try {
+          await scannerRef.current.stop();
+          scannerRef.current.clear();
+        } catch (e) {}
+        scannerRef.current = null;
+      }
+
+      // Check if container element exists in DOM
+      const container = document.getElementById('qr-reader-container');
+      if (!container) {
+        throw new Error('Scanner container element not found in DOM.');
+      }
+
+      // 2. Discover available cameras
+      let chosenCamId = targetCameraId || selectedCameraId;
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          setCameras(devices);
+          if (!chosenCamId) {
+            // Prefer back/rear environment camera if available on mobile
+            const backCam = devices.find((d) => /back|rear|environment/i.test(d.label));
+            chosenCamId = backCam ? backCam.id : devices[0].id;
+            setSelectedCameraId(chosenCamId);
+          }
+        }
+      } catch (listErr) {
+        console.warn('Could not enumerate cameras:', listErr);
+      }
+
+      // 3. Initialize scanner on the visible container
       const html5QrCode = new Html5Qrcode('qr-reader-container');
       scannerRef.current = html5QrCode;
 
       const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
+        fps: 15,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const size = Math.floor(minEdge * 0.72);
+          return {
+            width: Math.max(size, 180),
+            height: Math.max(size, 180),
+          };
+        },
       };
 
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        config,
-        onQrCodeSuccess,
-        () => {}
-      );
+      // 4. Start camera stream with multi-tier fallback
+      let started = false;
+
+      // Tier 1: If specific camera ID chosen, try that
+      if (chosenCamId) {
+        try {
+          await html5QrCode.start(chosenCamId, config, onQrCodeSuccess, () => {});
+          started = true;
+        } catch (camErr) {
+          console.warn('Failed with chosen camera ID, attempting ideal environment constraint:', camErr);
+        }
+      }
+
+      // Tier 2: Try ideal environment (back camera on mobile, doesn't throw OverconstrainedError on Mac)
+      if (!started) {
+        try {
+          await html5QrCode.start({ facingMode: { ideal: 'environment' } }, config, onQrCodeSuccess, () => {});
+          started = true;
+        } catch (envErr) {
+          console.warn('Ideal environment camera failed, attempting user camera fallback:', envErr);
+        }
+      }
+
+      // Tier 3: Try front / user camera (macOS FaceTime HD / laptop webcams)
+      if (!started) {
+        try {
+          await html5QrCode.start({ facingMode: 'user' }, config, onQrCodeSuccess, () => {});
+          started = true;
+        } catch (userErr) {
+          console.warn('User camera fallback failed, attempting basic stream:', userErr);
+        }
+      }
+
+      // Tier 4: Fallback to exact environment as final try
+      if (!started) {
+        await html5QrCode.start({ facingMode: 'environment' }, config, onQrCodeSuccess, () => {});
+      }
+
+      // Ensure video element plays and has correct attributes
+      setTimeout(() => {
+        const videoEl = container.querySelector('video');
+        if (videoEl) {
+          videoEl.setAttribute('playsinline', 'true');
+          videoEl.setAttribute('muted', 'true');
+          if (videoEl.paused) {
+            videoEl.play().catch((e) => console.warn('Video play catch:', e));
+          }
+        }
+      }, 300);
 
       setScanning(true);
+      setIsStarting(false);
     } catch (err) {
-      setCameraError('Unable to open camera. Please grant camera permissions or use the manual search below.');
+      console.error('Camera startup error:', err);
+      setCameraError('Unable to open camera feed. Please check camera permissions in your browser or use the manual search below.');
       setScanning(false);
+      setIsStarting(false);
     }
   };
 
@@ -129,6 +219,18 @@ export default function CoordinatorScanner({ user }) {
       scannerRef.current = null;
     }
     setScanning(false);
+    setIsStarting(false);
+  };
+
+  const handleFlipCamera = async () => {
+    if (cameras.length < 2) return;
+    const currentIndex = cameras.findIndex(c => c.id === selectedCameraId);
+    const nextIndex = (currentIndex + 1) % cameras.length;
+    const nextCamera = cameras[nextIndex];
+    setSelectedCameraId(nextCamera.id);
+    if (scanning) {
+      await startScanner(nextCamera.id);
+    }
   };
 
   const onQrCodeSuccess = async (decodedText) => {
@@ -227,7 +329,7 @@ export default function CoordinatorScanner({ user }) {
     return () => {
       if (scannerRef.current) {
         try {
-          scannerRef.current.stop();
+          scannerRef.current.stop().catch(() => {});
         } catch (e) {}
       }
     };
@@ -236,15 +338,15 @@ export default function CoordinatorScanner({ user }) {
   return (
     <div className="max-w-md mx-auto w-full space-y-5 animate-fadeIn">
       {/* Top Header Card: Activity Selection */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+      <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-5 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <Camera className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-surface-container text-primary flex items-center justify-center">
+              <Camera className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white tracking-tight">Attendance Scanner</h2>
-              <p className="text-[11px] text-slate-400">Coordinator Check-in Desk</p>
+              <h2 className="text-sm font-bold text-on-surface tracking-tight">Attendance Scanner</h2>
+              <p className="text-[11px] text-secondary">Coordinator Check-in Desk</p>
             </div>
           </div>
 
@@ -254,7 +356,7 @@ export default function CoordinatorScanner({ user }) {
               <button
                 onClick={triggerSync}
                 disabled={syncing || !isOnline}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 transition-all"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-all"
                 title="Click to sync offline records"
               >
                 <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
@@ -262,10 +364,10 @@ export default function CoordinatorScanner({ user }) {
               </button>
             )}
 
-            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
               isOnline 
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                ? 'bg-tertiary-container text-on-tertiary-container border-tertiary-container' 
+                : 'bg-error-container text-on-error-container border-error-container'
             }`}>
               {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
               <span>{isOnline ? 'Online' : 'Offline'}</span>
@@ -275,13 +377,13 @@ export default function CoordinatorScanner({ user }) {
 
         {/* Activity Selector */}
         <div>
-          <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
-            Active Room & Activity
+          <label className="block text-[11px] font-bold text-secondary mb-1.5 uppercase tracking-wider">
+            Active Room &amp; Activity
           </label>
           <select
             value={selectedActivityId}
             onChange={handleActivityChange}
-            className="w-full bg-slate-950 border border-slate-700 text-white font-medium rounded-xl p-3 text-xs focus:outline-none focus:border-emerald-500"
+            className="w-full bg-surface-container-low border border-surface-container text-on-surface font-semibold rounded-xl p-3 text-xs focus:outline-none focus:border-primary cursor-pointer"
           >
             {ACTIVITIES.map((act) => (
               <option key={act.id} value={act.id}>
@@ -293,75 +395,118 @@ export default function CoordinatorScanner({ user }) {
       </div>
 
       {/* Camera Viewport Container */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 overflow-hidden relative">
-        <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 flex flex-col items-center justify-center min-h-[280px]">
+      <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-5 shadow-xs space-y-4 overflow-hidden relative">
+        <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-surface-container-high flex flex-col items-center justify-center min-h-[300px]">
+          {/* Always rendered in DOM with non-zero dimensions so Html5Qrcode calculates true width & height */}
           <div 
             id="qr-reader-container" 
-            className={`w-full ${scanning ? 'block' : 'hidden'}`}
+            className="w-full min-h-[300px]"
           />
 
-          {!scanning && (
-            <div className="text-center p-6 space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 text-slate-500 flex items-center justify-center mx-auto shadow-sm">
-                <Camera className="w-8 h-8" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">Camera is Idle</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                  Click below to scan participant passes for <span className="text-emerald-400 font-medium">{currentActivity.name}</span>
-                </p>
-              </div>
+          {/* Idle / Loading State Overlay */}
+          {(!scanning || isStarting) && (
+            <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-3">
+              {isStarting ? (
+                <>
+                  <div className="w-14 h-14 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mx-auto shadow-xs">
+                    <RefreshCw className="w-7 h-7 animate-spin" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">Opening Camera...</p>
+                    <p className="text-xs text-slate-300 mt-1 max-w-xs mx-auto">
+                      Please allow camera permission in your browser if prompted.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center mx-auto shadow-xs">
+                    <Camera className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">Camera is Idle</p>
+                    <p className="text-xs text-slate-300 mt-1 max-w-xs mx-auto">
+                      Click below to scan participant passes for <span className="text-primary-fixed font-bold">{currentActivity.name}</span>
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
+          {/* Live Scanner Active Indicator */}
+          {scanning && !isStarting && (
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700 text-[10px] font-bold text-white">
+              <span className="w-2 h-2 rounded-full bg-tertiary-fixed animate-ping" />
+              <span>Scanning Active</span>
+            </div>
+          )}
+
+          {/* Camera Error Banner */}
           {cameraError && (
-            <div className="absolute inset-x-4 bottom-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs text-center">
+            <div className="absolute inset-x-4 bottom-4 z-20 p-3 rounded-xl bg-error-container text-on-error-container text-xs text-center font-bold">
               {cameraError}
             </div>
           )}
         </div>
 
-        <button
-          onClick={scanning ? stopScanner : startScanner}
-          className={`w-full py-3.5 px-4 font-semibold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs active:scale-[0.99] ${
-            scanning
-              ? 'bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300'
-              : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/10'
-          }`}
-        >
-          {scanning ? (
-            <>
-              <CameraOff className="w-4 h-4" />
-              <span>Stop Scanner</span>
-            </>
-          ) : (
-            <>
-              <Camera className="w-4 h-4" />
-              <span>Start Camera Scanner</span>
-            </>
+        {/* Controls: Start/Stop & Camera Flip */}
+        <div className="flex gap-2">
+          <button
+            onClick={scanning ? stopScanner : () => startScanner()}
+            disabled={isStarting}
+            className={`flex-1 py-3.5 px-4 font-bold rounded-2xl transition-all shadow-xs flex items-center justify-center gap-2 text-xs active:scale-[0.99] ${
+              scanning
+                ? 'bg-error-container hover:bg-error-container/80 text-on-error-container border border-error/30'
+                : 'bg-primary hover:bg-primary-container text-on-primary'
+            }`}
+          >
+            {scanning ? (
+              <>
+                <CameraOff className="w-4 h-4" />
+                <span>Stop Scanner</span>
+              </>
+            ) : (
+              <>
+                <Camera className="w-4 h-4" />
+                <span>{isStarting ? 'Starting Camera...' : 'Start Camera Scanner'}</span>
+              </>
+            )}
+          </button>
+
+          {/* Camera Flip Button */}
+          {cameras.length > 1 && scanning && (
+            <button
+              onClick={handleFlipCamera}
+              className="p-3.5 rounded-2xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container transition-colors"
+              title="Flip Camera (Front/Back)"
+              aria-label="Flip Camera"
+            >
+              <SwitchCamera className="w-4 h-4" />
+            </button>
           )}
-        </button>
+        </div>
       </div>
 
       {/* Real-time Scan Result Banner */}
       {scanResult && (
-        <div className={`p-4 rounded-2xl border shadow-xl animate-fadeIn space-y-2 ${
+        <div className={`p-4 rounded-2xl border shadow-xs animate-fadeIn space-y-2 ${
           scanResult.type === 'success' 
-            ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
+            ? 'bg-tertiary-container text-on-tertiary-container border-tertiary-container' 
             : scanResult.type === 'already'
-            ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
-            : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+            ? 'bg-secondary-container text-on-secondary-container border-secondary-container' 
+            : 'bg-error-container text-on-error-container border-error-container'
         }`}>
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex-shrink-0">
-              {scanResult.type === 'success' && <CheckCircle2 className="w-6 h-6 text-emerald-400" />}
-              {scanResult.type === 'already' && <AlertTriangle className="w-6 h-6 text-amber-400" />}
-              {scanResult.type === 'error' && <XCircle className="w-6 h-6 text-rose-400" />}
+              {scanResult.type === 'success' && <CheckCircle2 className="w-6 h-6 text-on-tertiary" />}
+              {scanResult.type === 'already' && <AlertTriangle className="w-6 h-6 text-on-secondary" />}
+              {scanResult.type === 'error' && <XCircle className="w-6 h-6 text-on-error" />}
             </div>
             <div className="flex-1 space-y-0.5">
-              <h3 className="font-bold text-sm tracking-tight">{scanResult.title}</h3>
+              <h3 className="font-extrabold text-sm tracking-tight">{scanResult.title}</h3>
               {scanResult.subtitle && (
-                <p className="font-semibold text-white text-sm">{scanResult.subtitle}</p>
+                <p className="font-bold text-sm">{scanResult.subtitle}</p>
               )}
               {scanResult.detail && (
                 <p className="text-xs opacity-90">{scanResult.detail}</p>
@@ -370,8 +515,8 @@ export default function CoordinatorScanner({ user }) {
           </div>
 
           {scanResult.warning && (
-            <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-2">
-              <Info className="w-3.5 h-3.5 flex-shrink-0" />
+            <div className="p-2.5 rounded-xl bg-surface-container text-on-surface text-[11px] font-semibold flex items-center gap-2">
+              <Info className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
               <span>{scanResult.warning}</span>
             </div>
           )}
@@ -379,10 +524,10 @@ export default function CoordinatorScanner({ user }) {
       )}
 
       {/* Manual Fallback Search */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+      <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-5 shadow-xs space-y-4">
         <div className="flex items-center gap-2">
-          <Search className="w-4 h-4 text-slate-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+          <Search className="w-4 h-4 text-primary" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-secondary">
             Manual Search Fallback
           </h3>
         </div>
@@ -393,36 +538,36 @@ export default function CoordinatorScanner({ user }) {
             placeholder="Search USN or Name (e.g. 1ST24 or Srujan)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+            className="flex-1 bg-surface-container-low border border-surface-container focus:border-primary rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-outline focus:outline-none"
           />
           <button
             type="submit"
             disabled={searching || !searchQuery.trim()}
-            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl text-xs transition-colors"
+            className="px-4 py-2.5 bg-surface-container hover:bg-surface-container-high text-on-surface font-bold rounded-xl text-xs transition-colors"
           >
             {searching ? '...' : 'Search'}
           </button>
         </form>
 
         {searchResults.length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-slate-800">
+          <div className="space-y-2 pt-2 border-t border-surface-container">
             {searchResults.map((p) => (
               <div 
                 key={p.participantId} 
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                className="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-surface-container hover:bg-surface-container transition-colors"
               >
                 <div>
-                  <div className="text-xs font-semibold text-white">{p.name}</div>
-                  <div className="text-[11px] font-mono text-emerald-400">USN: {p.usn || 'N/A'}</div>
+                  <div className="text-xs font-bold text-on-surface">{p.name}</div>
+                  <div className="text-[11px] font-mono text-primary font-bold">USN: {p.usn || 'N/A'}</div>
                 </div>
 
                 <button
                   onClick={() => processAttendanceScan(p.qrId, p)}
                   disabled={isProcessing}
-                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                  className="px-3 py-1.5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-lg text-xs flex items-center gap-1 transition-all active:scale-95 shadow-xs"
                 >
                   <span>Mark Present</span>
-                  <ChevronRight className="w-3 h-3" />
+                  <ChevronRight className="w-3 h-3 text-on-primary" />
                 </button>
               </div>
             ))}

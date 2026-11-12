@@ -32,7 +32,7 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
     if (!activity?.id) return;
 
     const q = query(
-      collection(db, 'pass_requests'),
+      collection(db, 'passRequests'),
       where('activityId', '==', activity.id)
     );
 
@@ -62,7 +62,7 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
   const handleReview = async (requestId, newStatus) => {
     try {
       setProcessingId(requestId);
-      const ref = doc(db, 'pass_requests', requestId);
+      const ref = doc(db, 'passRequests', requestId);
       await updateDoc(ref, {
         status: newStatus,
         reviewedAt: serverTimestamp(),
@@ -87,31 +87,31 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
   const approvedCount = requests.filter(r => r.status === 'approved').length;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+    <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-surface-container border border-surface-container-high text-primary flex items-center justify-center">
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white tracking-tight">Participant Approvals</h3>
-            <p className="text-[11px] text-slate-400">Coordinators & Admins can approve entry to {activity.name}</p>
+            <h3 className="text-sm font-bold text-on-surface tracking-tight">Participant Approvals</h3>
+            <p className="text-[11px] text-secondary">Coordinators & Admins can approve entry to {activity.name}</p>
           </div>
         </div>
 
         {/* Status Filter Buttons */}
-        <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl text-xs self-start sm:self-auto">
+        <div className="flex items-center gap-1 bg-surface-container-low border border-surface-container p-1 rounded-xl text-xs self-start sm:self-auto">
           <button
             onClick={() => setFilter('pending')}
             className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
               filter === 'pending' 
-                ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40' 
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-surface-container text-primary font-bold border border-surface-container-high' 
+                : 'text-secondary hover:text-on-surface'
             }`}
           >
             <span>Pending</span>
-            <span className="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 text-[10px] flex items-center justify-center font-mono">
+            <span className="w-4 h-4 rounded-full bg-surface-container-high text-primary text-[10px] flex items-center justify-center font-mono">
               {pendingCount}
             </span>
           </button>
@@ -120,12 +120,12 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
             onClick={() => setFilter('approved')}
             className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
               filter === 'approved' 
-                ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40' 
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-tertiary-container text-on-tertiary-container font-bold border border-tertiary/30' 
+                : 'text-secondary hover:text-on-surface'
             }`}
           >
             <span>Approved</span>
-            <span className="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-300 text-[10px] flex items-center justify-center font-mono">
+            <span className="w-4 h-4 rounded-full bg-tertiary text-on-tertiary text-[10px] flex items-center justify-center font-mono">
               {approvedCount}
             </span>
           </button>
@@ -134,8 +134,8 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
             onClick={() => setFilter('all')}
             className={`px-2.5 py-1 rounded-lg transition-all ${
               filter === 'all' 
-                ? 'bg-slate-800 text-white font-bold' 
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-surface-container text-on-surface font-bold border border-surface-container-high' 
+                : 'text-secondary hover:text-on-surface'
             }`}
           >
             <span>All ({requests.length})</span>
@@ -150,14 +150,14 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
           placeholder="Filter by student name or USN..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-slate-950 border border-slate-800 focus:border-slate-700 rounded-xl py-2 px-3 pl-9 text-xs text-white placeholder-slate-500 focus:outline-none"
+          className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 pl-9 text-xs text-on-surface placeholder-secondary focus:outline-none"
         />
-        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+        <Search className="w-3.5 h-3.5 text-secondary absolute left-3 top-2.5" />
       </div>
 
       {/* Requests List */}
       {filteredRequests.length === 0 ? (
-        <div className="py-8 text-center text-xs text-slate-500 bg-slate-950/40 rounded-2xl border border-slate-800/60">
+        <div className="py-8 text-center text-xs text-secondary bg-surface-container-low rounded-2xl border border-surface-container">
           No {filter} pass requests found for {activity.name}.
         </div>
       ) : (
@@ -167,17 +167,17 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
             return (
               <div
                 key={req.id}
-                className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/80 flex items-center justify-between gap-3 text-xs hover:border-slate-700 transition-colors"
+                className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container flex items-center justify-between gap-3 text-xs hover:border-surface-container-high transition-colors"
               >
                 <div className="space-y-0.5">
-                  <div className="font-semibold text-white">{req.participantName}</div>
+                  <div className="font-semibold text-on-surface">{req.participantName}</div>
                   <div className="flex items-center gap-2 text-[11px] font-mono">
-                    <span className="text-emerald-400 font-bold">{req.participantUsn || 'N/A'}</span>
-                    <span className="text-slate-600">&bull;</span>
+                    <span className="text-primary font-bold">{req.participantUsn || 'N/A'}</span>
+                    <span className="text-outline-variant">&bull;</span>
                     <span className={`capitalize font-sans font-medium ${
-                      req.status === 'approved' ? 'text-emerald-400' :
-                      req.status === 'rejected' ? 'text-rose-400' :
-                      'text-amber-400'
+                      req.status === 'approved' ? 'text-tertiary font-bold' :
+                      req.status === 'rejected' ? 'text-error font-bold' :
+                      'text-primary font-semibold'
                     }`}>
                       {req.status}
                     </span>
@@ -191,7 +191,7 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
                       onClick={() => handleReview(req.id, 'approved')}
                       disabled={isProcessing}
                       title="Approve Pass"
-                      className="p-2 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 rounded-xl font-bold transition-all flex items-center gap-1 active:scale-95"
+                      className="p-2 bg-tertiary hover:bg-tertiary/90 text-on-tertiary rounded-xl font-bold transition-all flex items-center gap-1 active:scale-95 shadow-xs"
                     >
                       {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                       <span className="text-[11px] hidden sm:inline">Approve</span>
@@ -203,7 +203,7 @@ export default function PassApprovalManager({ activity, reviewerEmail = 'admin' 
                       onClick={() => handleReview(req.id, 'rejected')}
                       disabled={isProcessing}
                       title="Reject Pass"
-                      className="p-2 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 rounded-xl transition-all flex items-center gap-1 active:scale-95"
+                      className="p-2 bg-error hover:bg-error/90 text-on-error rounded-xl font-semibold transition-all flex items-center gap-1 active:scale-95 shadow-xs"
                     >
                       <X className="w-3.5 h-3.5" />
                       <span className="text-[11px] hidden sm:inline">Reject</span>
