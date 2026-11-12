@@ -124,11 +124,11 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-surface-container p-1 border border-surface-container-high shadow-xs shrink-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border border-surface-container-high shadow-xs shrink-0">
                 <img 
                   src="/Cognisphere-logo.jpeg" 
                   alt="Cognisphere Club Logo" 
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover"
                 />
               </div>
               <div>

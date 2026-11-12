@@ -181,11 +181,11 @@ export default function App() {
               }}
               className="flex items-center gap-2.5 cursor-pointer"
             >
-              <div className="w-8 h-8 rounded-lg overflow-hidden bg-white p-0.5 border border-surface-container shadow-xs shrink-0">
+              <div className="w-8 h-8 rounded-lg overflow-hidden border border-surface-container shadow-xs shrink-0">
                 <img
                   src="/Cognisphere-logo.jpeg"
                   alt="Cognisphere Logo"
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover"
                 />
               </div>
               <div className="flex flex-col">

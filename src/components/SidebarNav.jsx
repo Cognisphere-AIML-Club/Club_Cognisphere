@@ -118,11 +118,11 @@ export const SidebarNav = ({
           title="Cognisphere - AI & Machine Learning Club"
         >
           {/* Logo Squircle Badge */}
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-surface-container p-0.5 border border-surface-container-high shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+          <div className="w-10 h-10 rounded-xl overflow-hidden border border-surface-container-high shadow-xs shrink-0 group-hover:scale-105 transition-transform">
             <img 
               src="/Cognisphere-logo.jpeg" 
               alt="Cognisphere Logo" 
-              className="w-full h-full object-contain"
+              className="w-full h-full object-cover"
             />
           </div>
 
@@ -280,46 +280,99 @@ export const SidebarNav = ({
             )}
 
             {/* User Profile Overview */}
-            <div className={`flex items-center gap-2.5 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-              <div 
-                onClick={onOpenEditProfile}
-                className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
-                title={isCollapsed ? `${profile?.name || user.displayName || 'Participant'}${isAdmin || isCoordinator || isJudge ? ` (${roleLabel})` : ''}` : "Profile Settings (Click to edit)"}
-              >
-                {/* Avatar with Role Bubble */}
-                <div className="relative shrink-0">
-                  {user.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      alt={user.displayName || 'User'}
-                      className="w-9 h-9 rounded-xl object-cover border border-surface-container-high group-hover:border-primary group-hover:ring-2 group-hover:ring-primary/20 transition-all shadow-xs"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold text-xs shrink-0 shadow-xs group-hover:ring-2 group-hover:ring-primary transition-all">
-                      {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
-                    </div>
-                  )}
+            {isCollapsed ? (
+              <div className="flex flex-col items-center justify-center w-full">
+                <div 
+                  onClick={onOpenEditProfile}
+                  className="cursor-pointer group flex items-center justify-center"
+                  title={`${profile?.name || user.displayName || 'Participant'}${isAdmin || isCoordinator || isJudge ? ` (${roleLabel})` : ''}`}
+                >
+                  {/* Avatar with Role Bubble */}
+                  <div className="relative shrink-0 flex items-center justify-center">
+                    {user.photoURL ? (
+                      <img
+                        src={user.photoURL}
+                        alt={user.displayName || 'User'}
+                        className="w-9 h-9 rounded-xl object-cover border border-surface-container-high group-hover:border-primary group-hover:ring-2 group-hover:ring-primary/20 transition-all shadow-xs"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold text-xs shrink-0 shadow-xs group-hover:ring-2 group-hover:ring-primary transition-all">
+                        {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                    )}
 
-                  {/* Role bubble */}
-                  {(isAdmin || isCoordinator || isJudge) && (
-                    <span 
-                      className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${
-                        isAdmin 
-                          ? 'bg-amber-600 text-white' 
-                          : isCoordinator 
-                          ? 'bg-primary text-on-primary' 
-                          : 'bg-purple-600 text-white'
-                      }`}
-                      title={roleLabel}
-                    >
-                      {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
-                    </span>
-                  )}
+                    {/* Role bubble */}
+                    {(isAdmin || isCoordinator || isJudge) && (
+                      <span 
+                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${
+                          isAdmin 
+                            ? 'bg-amber-600 text-white' 
+                            : isCoordinator 
+                            ? 'bg-primary text-on-primary' 
+                            : 'bg-purple-600 text-white'
+                        }`}
+                        title={roleLabel}
+                      >
+                        {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* User Name & USN (Expanded only) */}
-                {!isCollapsed && (
+                {/* Logout Button centered below avatar */}
+                <div className="mt-2.5 flex justify-center w-full">
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="p-2 rounded-xl text-secondary hover:text-error hover:bg-error-container/30 transition-colors"
+                    title="Sign Out"
+                    aria-label="Sign Out"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2.5">
+                <div 
+                  onClick={onOpenEditProfile}
+                  className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
+                  title="Profile Settings (Click to edit)"
+                >
+                  {/* Avatar with Role Bubble */}
+                  <div className="relative shrink-0">
+                    {user.photoURL ? (
+                      <img
+                        src={user.photoURL}
+                        alt={user.displayName || 'User'}
+                        className="w-9 h-9 rounded-xl object-cover border border-surface-container-high group-hover:border-primary group-hover:ring-2 group-hover:ring-primary/20 transition-all shadow-xs"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold text-xs shrink-0 shadow-xs group-hover:ring-2 group-hover:ring-primary transition-all">
+                        {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                    )}
+
+                    {/* Role bubble */}
+                    {(isAdmin || isCoordinator || isJudge) && (
+                      <span 
+                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${
+                          isAdmin 
+                            ? 'bg-amber-600 text-white' 
+                            : isCoordinator 
+                            ? 'bg-primary text-on-primary' 
+                            : 'bg-purple-600 text-white'
+                        }`}
+                        title={roleLabel}
+                      >
+                        {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* User Name & USN */}
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold text-on-surface truncate group-hover:text-primary transition-colors">
                       {profile?.name || user.displayName || 'Participant'}
@@ -330,30 +383,13 @@ export const SidebarNav = ({
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* Logout Button (when expanded) */}
-              {!isCollapsed && (
+                {/* Logout Button (when expanded) */}
                 <button
                   type="button"
                   onClick={onLogout}
                   className="p-2 rounded-xl text-secondary hover:text-error hover:bg-error-container/30 transition-colors shrink-0"
-                  title="Sign Out"
-                  aria-label="Sign Out"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* When collapsed, render Logout button centered below avatar */}
-            {isCollapsed && (
-              <div className="mt-2.5 flex justify-center">
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="p-2 rounded-xl text-secondary hover:text-error hover:bg-error-container/30 transition-colors"
                   title="Sign Out"
                   aria-label="Sign Out"
                 >
