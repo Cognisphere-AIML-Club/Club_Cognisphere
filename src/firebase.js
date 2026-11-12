@@ -3,12 +3,12 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyB5m2YUUitGtOaA-8elOlhqSuBy-hndFlQ',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'cognisphere-56148.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'cognisphere-56148',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'cognisphere-56148.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '325611672186',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:325611672186:web:95458a4ae0821e456c21c3',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 // Check if Firebase config is populated with valid values
