@@ -14,12 +14,10 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   XCircle, 
+  MapPinOff,
   Search, 
-  Wifi, 
-  WifiOff, 
   RefreshCw, 
   ChevronRight,
-  Info,
   SwitchCamera
 } from 'lucide-react';
 
@@ -32,7 +30,7 @@ export default function CoordinatorScanner({ user }) {
   const [isStarting, setIsStarting] = useState(false);
   const [cameras, setCameras] = useState([]);
   const [selectedCameraId, setSelectedCameraId] = useState(null);
-  const [scanResult, setScanResult] = useState(null); // { type: 'success' | 'already' | 'error', title, subtitle, detail, warning }
+  const [lastScanned, setLastScanned] = useState(null); // { type: 'approved' | 'expired' | 'warning' | 'mismatch', title, name, usn, detail, reason, timestamp }
   const [isProcessing, setIsProcessing] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
@@ -47,14 +45,21 @@ export default function CoordinatorScanner({ user }) {
   const [syncing, setSyncing] = useState(false);
 
   const scannerRef = useRef(null);
+  const observerRef = useRef(null);
   const lastScannedQrRef = useRef(null);
   const lastScanTimeRef = useRef(0);
+
+  const recordScanResult = (resultData) => {
+    setLastScanned({
+      ...resultData,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    });
+  };
 
   const handleActivityChange = (e) => {
     const val = e.target.value;
     setSelectedActivityId(val);
     localStorage.setItem('club_games_selected_activity', val);
-    setScanResult(null);
   };
 
   const currentActivity = ACTIVITIES.find(a => a.id === selectedActivityId) || ACTIVITIES[0];
@@ -86,10 +91,13 @@ export default function CoordinatorScanner({ user }) {
       const res = await syncOfflineQueue();
       setOfflineCount(res.remaining);
       if (res.synced > 0) {
-        setScanResult({
-          type: 'success',
-          title: `Synced ${res.synced} Scans`,
-          subtitle: 'All offline attendance records saved to database.',
+        recordScanResult({
+          type: 'approved',
+          title: 'Synced Offline Records',
+          name: `${res.synced} Record(s) Synced`,
+          usn: '',
+          detail: 'All offline attendance records saved to database.',
+          reason: 'Sync complete.',
         });
       }
     } catch (e) {}
@@ -98,7 +106,6 @@ export default function CoordinatorScanner({ user }) {
 
   const startScanner = async (targetCameraId = null) => {
     setCameraError(null);
-    setScanResult(null);
     setIsStarting(true);
 
     try {
@@ -139,13 +146,13 @@ export default function CoordinatorScanner({ user }) {
       scannerRef.current = html5QrCode;
 
       const config = {
-        fps: 15,
+        fps: 20,
         qrbox: (viewfinderWidth, viewfinderHeight) => {
           const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const size = Math.floor(minEdge * 0.72);
+          const size = Math.floor(minEdge * 0.75);
           return {
-            width: Math.max(size, 180),
-            height: Math.max(size, 180),
+            width: size,
+            height: size,
           };
         },
       };
@@ -200,6 +207,38 @@ export default function CoordinatorScanner({ user }) {
         }
       }, 300);
 
+      // Permanently suppress and destroy any "Scanner paused" element created by html5-qrcode
+      const purgePausedBanner = () => {
+        const c = document.getElementById('qr-reader-container');
+        if (!c) return;
+        const children = c.children;
+        for (let i = 0; i < children.length; i++) {
+          const el = children[i];
+          if (el && el.tagName === 'DIV' && el.id !== 'qr-shaded-region') {
+            const txt = (el.innerText || '').toLowerCase();
+            const bg = (el.style && el.style.background) || '';
+            const col = (el.style && el.style.color) || '';
+            if (
+              txt.includes('scanner paused') ||
+              bg.includes('rgba(9, 9, 9') ||
+              col.includes('FFECEC') ||
+              col.includes('255, 236, 236')
+            ) {
+              el.style.setProperty('display', 'none', 'important');
+              el.style.setProperty('visibility', 'hidden', 'important');
+              try { el.remove(); } catch (_) {}
+            }
+          }
+        }
+      };
+
+      purgePausedBanner();
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+      observerRef.current = new MutationObserver(purgePausedBanner);
+      observerRef.current.observe(container, { childList: true, subtree: true, characterData: true });
+
       setScanning(true);
       setIsStarting(false);
     } catch (err) {
@@ -211,6 +250,10 @@ export default function CoordinatorScanner({ user }) {
   };
 
   const stopScanner = async () => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
     if (scannerRef.current) {
       try {
         await scannerRef.current.stop();
@@ -234,22 +277,21 @@ export default function CoordinatorScanner({ user }) {
   };
 
   const onQrCodeSuccess = async (decodedText) => {
+    if (isProcessing) return;
+
     const now = Date.now();
-    if (lastScannedQrRef.current === decodedText && now - lastScanTimeRef.current < 3000) {
+    if (lastScannedQrRef.current === decodedText && now - lastScanTimeRef.current < 2500) {
       return;
     }
 
     lastScannedQrRef.current = decodedText;
     lastScanTimeRef.current = now;
 
-    if (navigator.vibrate) {
-      navigator.vibrate(80);
-    }
-
     await processAttendanceScan(decodedText);
   };
 
   const processAttendanceScan = async (rawQrText, directParticipant = null) => {
+    if (isProcessing) return;
     setIsProcessing(true);
     try {
       let participant = directParticipant;
@@ -258,11 +300,45 @@ export default function CoordinatorScanner({ user }) {
         participant = await resolveParticipantByQr(rawQrText);
       }
 
-      // Check if scanned pass was generated for a different activity
+      if (!participant) {
+        throw new Error('Unrecognized pass QR code.');
+      }
+
+      // Check if pass event date has expired -> RED POPUP
+      const getTodayStr = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      const todayStr = getTodayStr();
+      const targetAct = participant.passActivityId ? getActivityById(participant.passActivityId) : currentActivity;
+      const isDateExpired = Boolean(targetAct?.eventDate && todayStr > targetAct.eventDate);
+      const isFlaggedExpired = Boolean(participant.isExpired || participant.status === 'expired');
+
+      if (isDateExpired || isFlaggedExpired) {
+        if (navigator.vibrate) {
+          try { navigator.vibrate([200]); } catch (_) {}
+        }
+        recordScanResult({
+          type: 'expired',
+          title: 'Pass Expired',
+          name: participant.name,
+          usn: participant.usn,
+          detail: `${targetAct?.name || currentActivity.name} (${targetAct?.room || currentActivity.room})`,
+          reason: isFlaggedExpired
+            ? (participant.expiredReason || 'This QR pass has expired because a newer QR code was generated.')
+            : `Event date was ${targetAct?.eventDate}, which has already passed.`,
+        });
+        return;
+      }
+
+      // Check if scanned pass was generated for a different activity -> WARNING
       let passMismatchedNotice = null;
       if (participant.passActivityId && participant.passActivityId !== selectedActivityId) {
         const passAct = getActivityById(participant.passActivityId);
-        passMismatchedNotice = `Pass badge was for ${passAct.name} (${passAct.room}), but recorded present for ${currentActivity.name} (${currentActivity.room}).`;
+        passMismatchedNotice = `Pass was issued for ${passAct.name} (${passAct.room}), but checking in for ${currentActivity.name} (${currentActivity.room}).`;
       }
 
       const res = await markAttendance({
@@ -274,36 +350,78 @@ export default function CoordinatorScanner({ user }) {
         passActivityId: participant.passActivityId,
       });
 
-      if (res.status === 'marked_present') {
-        setScanResult({
-          type: 'success',
-          title: 'Marked Present!',
-          subtitle: participant.name,
-          detail: `USN: ${participant.usn || 'N/A'} • ${currentActivity.name} (${currentActivity.room})`,
-          warning: passMismatchedNotice,
+      if (res.status === 'already_marked') {
+        if (navigator.vibrate) {
+          try { navigator.vibrate([80, 80, 80]); } catch (_) {}
+        }
+        if (passMismatchedNotice) {
+          recordScanResult({
+            type: 'mismatch',
+            title: 'Room Mismatch',
+            name: participant.name,
+            usn: participant.usn,
+            detail: `${currentActivity.name} (${currentActivity.room})`,
+            reason: passMismatchedNotice,
+          });
+        } else {
+          recordScanResult({
+            type: 'warning',
+            title: 'Already Marked Present',
+            name: participant.name,
+            usn: participant.usn,
+            detail: `${currentActivity.name} (${currentActivity.room})`,
+            reason: 'Participant was already checked in previously for this activity.',
+          });
+        }
+      } else if (passMismatchedNotice) {
+        if (navigator.vibrate) {
+          try { navigator.vibrate([80, 80, 80]); } catch (_) {}
+        }
+        recordScanResult({
+          type: 'mismatch',
+          title: 'Room Mismatch',
+          name: participant.name,
+          usn: participant.usn,
+          detail: `${currentActivity.name} (${currentActivity.room})`,
+          reason: passMismatchedNotice,
         });
-      } else if (res.status === 'already_marked') {
-        setScanResult({
-          type: 'already',
-          title: 'Already Marked Present',
-          subtitle: participant.name,
-          detail: `USN: ${participant.usn || 'N/A'} • Already checked in for ${currentActivity.name}`,
+      } else if (res.status === 'marked_present') {
+        if (navigator.vibrate) {
+          try { navigator.vibrate(60); } catch (_) {}
+        }
+        recordScanResult({
+          type: 'approved',
+          title: 'Pass Approved',
+          name: participant.name,
+          usn: participant.usn,
+          detail: `${currentActivity.name} • ${currentActivity.room}`,
+          reason: 'Attendance successfully verified and recorded.',
         });
       } else if (res.status === 'queued_offline') {
         setOfflineCount(res.queueCount);
-        setScanResult({
-          type: 'success',
-          title: 'Saved to Offline Queue',
-          subtitle: participant.name,
-          detail: `USN: ${participant.usn || 'N/A'} • Saved locally on device. Will auto-sync when online.`,
+        if (navigator.vibrate) {
+          try { navigator.vibrate(60); } catch (_) {}
+        }
+        recordScanResult({
+          type: 'approved',
+          title: 'Pass Approved (Offline)',
+          name: participant.name,
+          usn: participant.usn,
+          detail: `${currentActivity.name} • ${currentActivity.room}`,
+          reason: 'Saved locally on device. Will auto-sync when online.',
         });
       }
     } catch (err) {
-      setScanResult({
-        type: 'error',
-        title: 'Scan Failed',
-        subtitle: err.message || 'Unrecognized QR Code',
-        detail: 'Please check if participant completed registration.',
+      if (navigator.vibrate) {
+        try { navigator.vibrate([200]); } catch (_) {}
+      }
+      recordScanResult({
+        type: 'expired',
+        title: 'Scan Failed / Invalid',
+        name: 'Unrecognized Pass',
+        usn: 'N/A',
+        detail: currentActivity.name,
+        reason: err.message || 'QR code is not recognized or participant registration not found.',
       });
     } finally {
       setIsProcessing(false);
@@ -327,6 +445,10 @@ export default function CoordinatorScanner({ user }) {
 
   useEffect(() => {
     return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
       if (scannerRef.current) {
         try {
           scannerRef.current.stop().catch(() => {});
@@ -350,29 +472,18 @@ export default function CoordinatorScanner({ user }) {
             </div>
           </div>
 
-          {/* Network & Offline Status */}
-          <div className="flex items-center gap-2">
-            {offlineCount > 0 && (
-              <button
-                onClick={triggerSync}
-                disabled={syncing || !isOnline}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-all"
-                title="Click to sync offline records"
-              >
-                <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
-                <span>{offlineCount} Queued</span>
-              </button>
-            )}
-
-            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-              isOnline 
-                ? 'bg-tertiary-container text-on-tertiary-container border-tertiary-container' 
-                : 'bg-error-container text-on-error-container border-error-container'
-            }`}>
-              {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              <span>{isOnline ? 'Online' : 'Offline'}</span>
-            </div>
-          </div>
+          {/* Offline Sync Button (when records are queued) */}
+          {offlineCount > 0 && (
+            <button
+              onClick={triggerSync}
+              disabled={syncing || !isOnline}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-all shadow-xs"
+              title="Click to sync offline records"
+            >
+              <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+              <span>{offlineCount} Queued</span>
+            </button>
+          )}
         </div>
 
         {/* Activity Selector */}
@@ -434,11 +545,25 @@ export default function CoordinatorScanner({ user }) {
             </div>
           )}
 
-          {/* Live Scanner Active Indicator */}
+          {/* Active Viewfinder Reticle: Rounded Square with Cut Sides (Only Rounded Corners Visible) */}
           {scanning && !isStarting && (
-            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700 text-[10px] font-bold text-white">
-              <span className="w-2 h-2 rounded-full bg-tertiary-fixed animate-ping" />
-              <span>Scanning Active</span>
+            <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center p-6">
+              <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center">
+                {/* Top-Left Rounded Corner */}
+                <div className="absolute top-0 left-0 w-10 h-10 border-t-[3.5px] border-l-[3.5px] border-white rounded-tl-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+                
+                {/* Top-Right Rounded Corner */}
+                <div className="absolute top-0 right-0 w-10 h-10 border-t-[3.5px] border-r-[3.5px] border-white rounded-tr-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+                
+                {/* Bottom-Left Rounded Corner */}
+                <div className="absolute bottom-0 left-0 w-10 h-10 border-b-[3.5px] border-l-[3.5px] border-white rounded-bl-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+                
+                {/* Bottom-Right Rounded Corner */}
+                <div className="absolute bottom-0 right-0 w-10 h-10 border-b-[3.5px] border-r-[3.5px] border-white rounded-br-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+
+                {/* Subtle Centered Aim Dot */}
+                <div className="w-1.5 h-1.5 rounded-full bg-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" />
+              </div>
             </div>
           )}
 
@@ -486,42 +611,95 @@ export default function CoordinatorScanner({ user }) {
             </button>
           )}
         </div>
-      </div>
 
-      {/* Real-time Scan Result Banner */}
-      {scanResult && (
-        <div className={`p-4 rounded-2xl border shadow-xs animate-fadeIn space-y-2 ${
-          scanResult.type === 'success' 
-            ? 'bg-tertiary-container text-on-tertiary-container border-tertiary-container' 
-            : scanResult.type === 'already'
-            ? 'bg-secondary-container text-on-secondary-container border-secondary-container' 
-            : 'bg-error-container text-on-error-container border-error-container'
-        }`}>
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex-shrink-0">
-              {scanResult.type === 'success' && <CheckCircle2 className="w-6 h-6 text-on-tertiary" />}
-              {scanResult.type === 'already' && <AlertTriangle className="w-6 h-6 text-on-secondary" />}
-              {scanResult.type === 'error' && <XCircle className="w-6 h-6 text-on-error" />}
+        {/* Last Scanned Information Right Below Scanner (Stays until next scan is registered) */}
+        {lastScanned ? (
+          <div 
+            key={lastScanned.timestamp + (lastScanned.usn || '')}
+            className={`rounded-2xl p-4 sm:p-5 shadow-sm animate-pop-in space-y-3 transition-all ${
+              lastScanned.type === 'expired'
+                ? 'bg-rose-600 text-white'
+                : lastScanned.type === 'warning'
+                ? 'bg-amber-400 text-slate-950'
+                : lastScanned.type === 'mismatch'
+                ? 'bg-slate-700 text-white border-2 border-slate-500'
+                : 'bg-emerald-600 text-white'
+            }`}
+          >
+            {/* Top Tag & Timestamp */}
+            <div className="flex items-center justify-between text-[11px] font-black tracking-wider uppercase">
+              <span className={`px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                lastScanned.type === 'warning'
+                  ? 'bg-black/15 text-slate-950 border border-black/20'
+                  : 'bg-white/20 text-white border border-white/30'
+              }`}>
+                {lastScanned.type === 'expired' && <XCircle className="w-3.5 h-3.5" />}
+                {lastScanned.type === 'warning' && <AlertTriangle className="w-3.5 h-3.5" />}
+                {lastScanned.type === 'mismatch' && <MapPinOff className="w-3.5 h-3.5" />}
+                {lastScanned.type === 'approved' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                <span>
+                  {lastScanned.type === 'expired' 
+                    ? 'Expired' 
+                    : lastScanned.type === 'warning' 
+                    ? 'Warning' 
+                    : lastScanned.type === 'mismatch' 
+                    ? 'Room Mismatch' 
+                    : 'Approved'}
+                </span>
+              </span>
+              <span className="opacity-90 font-mono text-[10px]">
+                Scanned at {lastScanned.timestamp}
+              </span>
             </div>
-            <div className="flex-1 space-y-0.5">
-              <h3 className="font-extrabold text-sm tracking-tight">{scanResult.title}</h3>
-              {scanResult.subtitle && (
-                <p className="font-bold text-sm">{scanResult.subtitle}</p>
-              )}
-              {scanResult.detail && (
-                <p className="text-xs opacity-90">{scanResult.detail}</p>
-              )}
+
+            {/* Participant Status & Identity */}
+            <div className="flex items-start gap-3">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
+                lastScanned.type === 'warning' ? 'bg-black/10' : 'bg-white/20'
+              }`}>
+                {lastScanned.type === 'expired' && <XCircle className="w-7 h-7 text-white" />}
+                {lastScanned.type === 'warning' && <AlertTriangle className="w-7 h-7 text-slate-950" />}
+                {lastScanned.type === 'mismatch' && <MapPinOff className="w-7 h-7 text-white" />}
+                {lastScanned.type === 'approved' && <CheckCircle2 className="w-7 h-7 text-white" />}
+              </div>
+
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-xs font-bold uppercase tracking-wider opacity-85">
+                  {lastScanned.title}
+                </div>
+                <div className="text-lg font-black truncate leading-tight">
+                  {lastScanned.name}
+                </div>
+                {lastScanned.usn && lastScanned.usn !== 'N/A' && (
+                  <div className={`font-mono text-[11px] font-bold inline-block px-2 py-0.5 rounded-md mt-1 ${
+                    lastScanned.type === 'warning' ? 'bg-black/10 text-slate-950' : 'bg-white/20 text-white'
+                  }`}>
+                    USN: {lastScanned.usn}
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Detail & Reason Pill */}
+            {(lastScanned.detail || lastScanned.reason) && (
+              <div className={`p-2.5 rounded-xl text-xs space-y-0.5 text-left ${
+                lastScanned.type === 'warning' ? 'bg-black/10' : 'bg-white/15'
+              }`}>
+                {lastScanned.detail && (
+                  <p className="font-bold opacity-95">{lastScanned.detail}</p>
+                )}
+                {lastScanned.reason && (
+                  <p className="text-[11px] opacity-85 leading-relaxed">{lastScanned.reason}</p>
+                )}
+              </div>
+            )}
           </div>
-
-          {scanResult.warning && (
-            <div className="p-2.5 rounded-xl bg-surface-container text-on-surface text-[11px] font-semibold flex items-center gap-2">
-              <Info className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
-              <span>{scanResult.warning}</span>
-            </div>
-          )}
-        </div>
-      )}
+        ) : (
+          <div className="p-3 rounded-2xl border border-dashed border-surface-container text-center text-xs text-secondary">
+            Ready to scan • Last scanned information will appear here
+          </div>
+        )}
+      </div>
 
       {/* Manual Fallback Search */}
       <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-5 shadow-xs space-y-4">

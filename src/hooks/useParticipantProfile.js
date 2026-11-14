@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export function validateUSN(rawUsn) {
@@ -11,9 +11,9 @@ export function validateUSN(rawUsn) {
   // 1ST + year (22-26, e.g. 24, 25, 26) + 2 letters branch + 3 digits roll number
   const usnRegex = /^1ST(2[2-6])[A-Z]{2}\d{3}$/;
   if (!usnRegex.test(usn)) {
-    return { 
-      valid: false, 
-      message: 'Invalid USN format. Must be 1ST[YY][BRANCH][ROLL] (e.g. 1ST24AI045, where year is 24/25/26 and last 3 are digits)' 
+    return {
+      valid: false,
+      message: 'Invalid USN format. Must be 1ST[YY][BRANCH][ROLL] (e.g. 1ST24AI045, where year is 24/25/26 and last 3 are digits)'
     };
   }
   return { valid: true, usn };
@@ -47,7 +47,7 @@ export function useParticipantProfile(user) {
             try {
               localStorage.setItem('club_games_qr_id', data.qrId);
               localStorage.setItem('club_games_cached_profile', JSON.stringify(data));
-            } catch (e) {}
+            } catch (e) { }
           }
 
           // Check if profile is complete
@@ -65,10 +65,10 @@ export function useParticipantProfile(user) {
           let existingQrId = null;
           try {
             existingQrId = localStorage.getItem('club_games_qr_id');
-          } catch (e) {}
+          } catch (e) { }
 
           const generatedQrId = existingQrId || (crypto.randomUUID ? crypto.randomUUID() : `qr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
-          
+
           // Split display name if available
           const nameParts = (user.displayName || '').trim().split(' ');
           const initialFirst = nameParts[0] || '';
@@ -79,6 +79,8 @@ export function useParticipantProfile(user) {
             firstName: initialFirst,
             lastName: initialLast,
             name: user.displayName || '',
+            certificateName: user.displayName || '',
+            gender: 'Male',
             usn: '',
             email: user.email || '',
             qrId: generatedQrId,
@@ -101,7 +103,7 @@ export function useParticipantProfile(user) {
             setNeedsProfileCompletion(false);
             setLoading(false);
             return;
-          } catch (e) {}
+          } catch (e) { }
         }
 
         if (cachedQrId) {
@@ -126,7 +128,7 @@ export function useParticipantProfile(user) {
     return () => unsubscribe();
   }, [user]);
 
-  const saveProfile = async ({ firstName, lastName, usn, mobile }) => {
+  const saveProfile = async ({ firstName, lastName, certificateName, gender, usn, mobile }) => {
     if (!user) throw new Error('User not authenticated');
 
     const cleanFirst = (firstName || '').trim();
@@ -135,11 +137,44 @@ export function useParticipantProfile(user) {
     }
 
     const cleanLast = (lastName || '').trim();
-    const fullName = cleanLast ? `${cleanFirst} ${cleanLast}` : cleanFirst;
+    const cleanCertName = (certificateName || '').trim();
+    const fullName = cleanCertName || (cleanLast ? `${cleanFirst} ${cleanLast}` : cleanFirst);
+    const cleanGender = gender || profile?.gender || 'Male';
 
     const usnCheck = validateUSN(usn);
     if (!usnCheck.valid) {
       throw new Error(usnCheck.message);
+    }
+    const targetUsn = usnCheck.usn;
+
+    // 1. LOCK CHECK FOR EXISTING LINKED USN:
+    // Once an email is linked with a USN, it should not be changed.
+    const existingUsn = profile?.usn?.trim()?.toUpperCase();
+    if (existingUsn && existingUsn.length > 0) {
+      if (targetUsn !== existingUsn) {
+        throw new Error(`USN cannot be changed. Your account (${user.email || 'this email'}) is permanently linked to USN ${existingUsn}.`);
+      }
+    }
+
+    // 2. CHECK IF USN IS ALREADY REGISTERED TO ANOTHER ACCOUNT:
+    const userEmail = (user.email || '').toLowerCase().trim();
+    const registeredUsnRef = doc(db, 'registeredUsns', targetUsn);
+    try {
+      const registeredSnap = await getDoc(registeredUsnRef);
+      if (registeredSnap.exists()) {
+        const regData = registeredSnap.data();
+        if (regData.uid && regData.uid !== user.uid) {
+          const ownerEmail = regData.email
+            ? regData.email.replace(/^(.)(.*)(@.*)$/, '$1***$3')
+            : 'another account';
+          throw new Error(`USN ${targetUsn} is already linked to ${ownerEmail}. Once a USN is linked to an email, it cannot be transferred or reused.`);
+        }
+      }
+    } catch (checkErr) {
+      if (checkErr.message?.includes('already linked')) {
+        throw checkErr;
+      }
+      console.warn('registeredUsns check notice:', checkErr);
     }
 
     const cleanMobile = (mobile || '').replace(/\D/g, '').slice(-10);
@@ -155,7 +190,10 @@ export function useParticipantProfile(user) {
       firstName: cleanFirst,
       lastName: cleanLast,
       name: fullName,
-      usn: usnCheck.usn,
+      certificateName: cleanCertName || fullName,
+      gender: cleanGender,
+      usn: targetUsn,
+      usnLocked: true,
       email: user.email || '',
       mobile: cleanMobile,
       qrId: qrIdToSave,
@@ -167,7 +205,7 @@ export function useParticipantProfile(user) {
     const qrPassData = {
       participantId: user.uid,
       name: fullName,
-      usn: usnCheck.usn,
+      usn: targetUsn,
       qrId: qrIdToSave,
       updatedAt: serverTimestamp(),
     };
@@ -179,14 +217,39 @@ export function useParticipantProfile(user) {
         updatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString()
       }));
-    } catch (e) {}
+    } catch (e) { }
 
-    // Save both atomically
+    // 3. Atomically register USN ownership lock in registeredUsns
+    try {
+      await setDoc(registeredUsnRef, {
+        usn: targetUsn,
+        uid: user.uid,
+        email: userEmail,
+        lockedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (regErr) {
+      console.warn('USN registration lock write notice:', regErr);
+    }
+
+    // Save both participant and public pass
     await setDoc(doc(db, 'participants', user.uid), participantData, { merge: true });
     await setDoc(doc(db, 'qrPasses', qrIdToSave), qrPassData, { merge: true });
 
     setNeedsProfileCompletion(false);
     return participantData;
+  };
+
+  const updateProfileFields = async (fields) => {
+    if (!user || !user.uid) return;
+    try {
+      await setDoc(doc(db, 'participants', user.uid), {
+        ...fields,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Failed to update profile fields:', e);
+    }
   };
 
   return {
@@ -195,5 +258,6 @@ export function useParticipantProfile(user) {
     needsProfileCompletion,
     error,
     saveProfile,
+    updateProfileFields,
   };
 }

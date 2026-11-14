@@ -1,121 +1,123 @@
 import React from 'react';
-import { 
-  Sparkles, 
-  Brain, 
-  Cpu, 
-  Layers, 
-  Globe, 
-  Users, 
-  Award, 
-  BookOpen, 
-  Terminal, 
-  ArrowRight, 
-  ShieldCheck, 
-  Zap, 
-  Target, 
-  Rocket, 
+import {
+  Sparkles,
+  Brain,
+  Cpu,
+  Layers,
+  Globe,
+  Users,
+  Award,
+  BookOpen,
+  Terminal,
+  ArrowRight,
+  ShieldCheck,
+  Zap,
+  Target,
   CalendarDays,
   QrCode,
+  Eye,
   Github,
   Linkedin,
   Instagram,
   Mail,
   HeartHandshake,
-  LogIn
+  LogIn,
+  ClipboardCheck
 } from 'lucide-react';
 
 // Direct message deep-links for instant communication
-export const DIRECT_MESSAGE_LINKS = {
+const DIRECT_MESSAGE_LINKS = {
   instagram: 'https://ig.me/m/cognisphereaiml',
   linkedin: 'https://www.linkedin.com/messaging/',
   mail: 'mailto:cognisphere.club@gmail.com?subject=Contact%20Cognisphere%20Team',
   github: 'https://github.com'
 };
 
-export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, user }) {
-  const domains = [
-    {
-      title: 'Generative AI & LLMs',
-      desc: 'Exploring foundational models, prompt engineering, Retrieval-Augmented Generation (RAG), and agentic autonomous systems.',
-      icon: Sparkles,
-      color: 'text-primary',
-      border: 'border-primary/20',
-      bg: 'bg-primary-fixed/40'
-    },
-    {
-      title: 'Computer Vision & Robotics',
-      desc: 'Real-time object detection, image segmentation, facial recognition, visual SLAM, and spatial perceptual intelligence.',
-      icon: EyeIcon,
-      color: 'text-tertiary',
-      border: 'border-tertiary/20',
-      bg: 'bg-tertiary-fixed/40'
-    },
-    {
-      title: 'Applied Machine Learning',
-      desc: 'Predictive analytics, deep neural networks, time-series forecasting, Kaggle sprints, and production ML pipelines.',
-      icon: Brain,
-      color: 'text-primary-container',
-      border: 'border-primary-container/20',
-      bg: 'bg-surface-container'
-    },
-    {
-      title: 'NLP & Audio Intelligence',
-      desc: 'Transformer architectures, multilingual text understanding, speech-to-text processing, and sentiment analysis engines.',
-      icon: Terminal,
-      color: 'text-secondary',
-      border: 'border-secondary/20',
-      bg: 'bg-secondary-container/40'
-    },
-    {
-      title: 'System Design & Deployments',
-      desc: 'Containerization, scalable cloud APIs, edge AI inference on micro-controllers, and production MLOps workflows.',
-      icon: Cpu,
-      color: 'text-primary',
-      border: 'border-primary/20',
-      bg: 'bg-surface-container-high'
-    }
-  ];
+const DOMAINS = [
+  {
+    title: 'Generative AI & LLMs',
+    desc: 'Exploring foundational models, prompt engineering, Retrieval-Augmented Generation (RAG), and agentic autonomous systems.',
+    icon: Sparkles,
+    color: 'text-primary',
+    border: 'border-primary/20',
+    bg: 'bg-primary-fixed/40'
+  },
+  {
+    title: 'Computer Vision & Robotics',
+    desc: 'Real-time object detection, image segmentation, facial recognition, visual SLAM, and spatial perceptual intelligence.',
+    icon: Eye,
+    color: 'text-tertiary',
+    border: 'border-tertiary/20',
+    bg: 'bg-tertiary-fixed/40'
+  },
+  {
+    title: 'Applied Machine Learning',
+    desc: 'Predictive analytics, deep neural networks, time-series forecasting, Kaggle sprints, and production ML pipelines.',
+    icon: Brain,
+    color: 'text-primary-container',
+    border: 'border-primary-container/20',
+    bg: 'bg-surface-container'
+  },
+  {
+    title: 'NLP & Audio Intelligence',
+    desc: 'Transformer architectures, multilingual text understanding, speech-to-text processing, and sentiment analysis engines.',
+    icon: Terminal,
+    color: 'text-secondary',
+    border: 'border-secondary/20',
+    bg: 'bg-secondary-container/40'
+  },
+  {
+    title: 'System Design & Deployments',
+    desc: 'Containerization, scalable cloud APIs, edge AI inference on micro-controllers, and production MLOps workflows.',
+    icon: Cpu,
+    color: 'text-primary',
+    border: 'border-primary/20',
+    bg: 'bg-surface-container-high'
+  }
+];
 
-  const milestones = [
-    {
-      year: '2023',
-      title: 'Genesis & Founding',
-      description: 'Established under the Department of Artificial Intelligence & Machine Learning to bridge collegiate academics with real-world AI industry engineering.'
-    },
-    {
-      year: '2024',
-      title: 'HackSphere & Community Surge',
-      description: 'Organized our first 36-hour flagship hackathon hosting 450+ participants across 28 collegiate institutions with 15 deployed AI prototypes.'
-    },
-    {
-      year: '2025',
-      title: 'Kaggle Grandmaster Sprint',
-      description: 'Conducted comprehensive hands-on bootcamps covering PyTorch deep learning, LLM fine-tuning, and algorithmic optimization.'
-    },
-    {
-      year: '2026',
-      title: 'Club Games & Beyond',
-      description: 'Pioneered synchronized multi-room campus competition platforms with real-time digital pass verification and live projectorial telemetry.'
-    }
-  ];
+const MILESTONES = [
+  {
+    year: '2023',
+    title: 'Genesis & Founding',
+    description: 'Established under the Department of Artificial Intelligence & Machine Learning to bridge collegiate academics with real-world AI industry engineering.'
+  },
+  {
+    year: '2024',
+    title: 'HackSphere & Community Surge',
+    description: 'Organized our first 36-hour flagship hackathon hosting 450+ participants across 28 collegiate institutions with 15 deployed AI prototypes.'
+  },
+  {
+    year: '2025',
+    title: 'Kaggle Grandmaster Sprint',
+    description: 'Conducted comprehensive hands-on bootcamps covering PyTorch deep learning, LLM fine-tuning, and algorithmic optimization.'
+  },
+  {
+    year: '2026',
+    title: 'Club Games & Beyond',
+    description: 'Pioneered synchronized multi-room campus competition platforms with real-time digital pass verification and live projectorial telemetry.'
+  }
+];
 
-  const leadership = [
-    {
-      name: 'Faculty Advisory Board',
-      role: 'Dept. of AI & Machine Learning',
-      desc: 'Guiding academic rigor, research opportunities, lab access, and institutional support.'
-    },
-    {
-      name: 'Student Core Council',
-      role: 'Executive & Technical Leads',
-      desc: 'Driving technical workshops, hackathon operations, mentorship pipelines, and industry connect.'
-    },
-    {
-      name: 'Domain Coordinators',
-      role: 'Specialization Leads',
-      desc: 'Mentoring peers across GenAI, Vision, Data Science, and Competitive Coding circles.'
-    }
-  ];
+const LEADERSHIP = [
+  {
+    name: 'Faculty Advisory Board',
+    role: 'Dept. of AI & Machine Learning',
+    desc: 'Guiding academic rigor, research opportunities, lab access, and institutional support.'
+  },
+  {
+    name: 'Student Core Council',
+    role: 'Executive & Technical Leads',
+    desc: 'Driving technical workshops, hackathon operations, mentorship pipelines, and industry connect.'
+  },
+  {
+    name: 'Domain Coordinators',
+    role: 'Specialization Leads',
+    desc: 'Mentoring peers across GenAI, Vision, Data Science, and Competitive Coding circles.'
+  }
+];
+
+export default function ClubHomePage({ onExploreGames, onOpenPass, onOpenRegistrations, onSignIn, user }) {
 
   return (
     <div className="space-y-10 animate-fadeIn max-w-5xl mx-auto w-full pb-12">
@@ -125,9 +127,9 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border border-surface-container-high shadow-xs shrink-0">
-                <img 
-                  src="/Cognisphere-logo.jpeg" 
-                  alt="Cognisphere Club Logo" 
+                <img
+                  src="/Cognisphere-logo.jpeg"
+                  alt="Cognisphere Club Logo"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -168,6 +170,16 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
               <span>Enter Club Games 2026</span>
               <ArrowRight className="w-4 h-4 text-on-primary" />
             </button>
+
+            {onOpenRegistrations && (
+              <button
+                onClick={onOpenRegistrations}
+                className="py-3 px-5 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 active:scale-95"
+              >
+                <ClipboardCheck className="w-4 h-4 text-primary" />
+                <span>Pass Registrations</span>
+              </button>
+            )}
 
             {user ? (
               <button
@@ -263,10 +275,10 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {domains.map((item, idx) => {
+          {DOMAINS.map((item, idx) => {
             const Icon = item.icon;
             return (
-              <div 
+              <div
                 key={idx}
                 className="bg-surface-container-lowest border border-surface-container hover:bg-surface-container-low rounded-2xl p-5 space-y-3 transition-all shadow-xs"
               >
@@ -293,9 +305,9 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {milestones.map((milestone, idx) => (
-            <div 
-              key={idx} 
+          {MILESTONES.map((milestone, idx) => (
+            <div
+              key={idx}
               className="bg-surface-container-low border border-surface-container rounded-2xl p-4 space-y-2"
             >
               <div className="flex items-center justify-between">
@@ -315,33 +327,7 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
         </div>
       </section>
 
-      {/* 5. Ongoing Event Spotlight: Club Games 2026 */}
-      <section className="bg-surface-container-low border border-surface-container-high rounded-3xl p-6 sm:p-8 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-xl">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-tertiary-container text-on-tertiary-container">
-              <Rocket className="w-3 h-3 text-on-tertiary" />
-              <span>Flagship Event</span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-extrabold text-on-surface">
-              Club Games 2026 is Underway!
-            </h2>
-            <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
-              Experience 5 concurrent arena challenges running synchronously across campus classrooms. Verify your pass, track round timers, and climb the live podium.
-            </p>
-          </div>
-
-          <button
-            onClick={onExploreGames}
-            className="py-3 px-6 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 whitespace-nowrap active:scale-95"
-          >
-            <span>View All Competitions</span>
-            <ArrowRight className="w-4 h-4 text-on-primary" />
-          </button>
-        </div>
-      </section>
-
-      {/* 6. Leadership & Faculty Advisory */}
+      {/* 5. Leadership & Faculty Advisory */}
       <section className="space-y-4">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-on-surface tracking-tight">
@@ -353,8 +339,8 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {leadership.map((lead, idx) => (
-            <div 
+          {LEADERSHIP.map((lead, idx) => (
+            <div
               key={idx}
               className="bg-surface-container-lowest border border-surface-container rounded-2xl p-5 space-y-2 shadow-xs"
             >
@@ -422,24 +408,5 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onSignIn, use
         </div>
       </section>
     </div>
-  );
-}
-
-// Simple fallback icon for Vision
-function EyeIcon(props) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      {...props}
-    >
-      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
   );
 }

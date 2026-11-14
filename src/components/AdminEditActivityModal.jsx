@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Edit3, Loader2 } from 'lucide-react';
+import { X, Save, Edit3, Loader2, Calendar } from 'lucide-react';
 
 export default function AdminEditActivityModal({ isOpen, onClose, activity, onSave }) {
   const [room, setRoom] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
+  const [eventDate, setEventDate] = useState('');
   const [status, setStatus] = useState('Upcoming');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
@@ -13,6 +14,7 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
     if (activity) {
       setRoom(activity.room || '');
       setScheduledTime(activity.scheduledTime || '10:00 AM');
+      setEventDate(activity.eventDate || '2026-11-24');
       setStatus(activity.status || 'Upcoming');
       setDescription(activity.description || '');
       setError('');
@@ -29,6 +31,7 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
       await onSave(activity.id, {
         room: room.trim(),
         scheduledTime: scheduledTime.trim(),
+        eventDate: eventDate.trim(),
         status,
         description: description.trim(),
       });
@@ -41,8 +44,8 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm animate-fadeIn">
-      <div className="max-w-md w-full bg-surface-container-lowest border border-surface-container rounded-3xl p-6 sm:p-7 shadow-xl relative text-on-surface">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 sm:pt-16 bg-black/40 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+      <div className="max-w-md w-full bg-surface-container-lowest border border-surface-container rounded-3xl p-5 sm:p-6 shadow-2xl relative text-on-surface h-auto max-h-fit">
         <button
           onClick={onClose}
           className="absolute top-5 right-5 p-2 text-secondary hover:text-on-surface rounded-xl hover:bg-surface-container transition-colors"
@@ -70,6 +73,36 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className="block text-xs font-semibold text-on-surface mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-primary" />
+                  <span>Event Date</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-on-surface mb-1.5">
+                  Scheduled Time
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  placeholder="e.g. 10:00 AM – 12:00 PM"
+                  className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className="block text-xs font-semibold text-on-surface mb-1.5">
                   Venue / Room
                 </label>
@@ -85,32 +118,18 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
 
               <div>
                 <label className="block text-xs font-semibold text-on-surface mb-1.5">
-                  Scheduled Time
+                  Current Status
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  placeholder="e.g. 10:30 AM"
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
                   className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
-                />
+                >
+                  <option value="Upcoming">Upcoming</option>
+                  <option value="In Progress">In Progress (Live)</option>
+                  <option value="Completed">Completed</option>
+                </select>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1.5">
-                Current Status
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
-              >
-                <option value="Upcoming">Upcoming</option>
-                <option value="In Progress">In Progress (Live)</option>
-                <option value="Completed">Completed</option>
-              </select>
             </div>
 
             <div>

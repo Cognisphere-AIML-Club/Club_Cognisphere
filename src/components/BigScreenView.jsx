@@ -820,8 +820,27 @@ export default function BigScreenView({
         </div>
       </header>
 
-      {/* Main View Display Area: Starts directly underneath the reserved control space */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      {/* Mobile View Disallowed Gate: Projector page removed from mobile view */}
+      <div className="md:hidden flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4 bg-slate-50 select-none">
+        <div className="w-14 h-14 rounded-2xl bg-slate-200 text-slate-700 flex items-center justify-center">
+          <Tv className="w-7 h-7" />
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-base font-bold text-slate-900">Projector View (Desktop Only)</h3>
+          <p className="text-xs text-slate-600 max-w-xs leading-relaxed">
+            The Projector Big Screen is designed for classroom wall projectors and desktop monitors. Please use a laptop or desktop computer to launch this view.
+          </p>
+        </div>
+        <button
+          onClick={onExit}
+          className="py-2.5 px-5 bg-slate-900 text-white font-bold rounded-xl text-xs shadow-xs active:scale-95"
+        >
+          Back to App
+        </button>
+      </div>
+
+      {/* Main View Display Area: Desktop & Large Displays */}
+      <main className="hidden md:flex flex-1 flex-col overflow-hidden relative">
         {displayMode === 'room' ? (
           <BigScreenRoomMode 
             activity={currentActivity} 

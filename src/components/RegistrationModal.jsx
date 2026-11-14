@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Shield, ArrowRight, AlertCircle, Loader2, X } from 'lucide-react';
+import { User, Shield, ArrowRight, AlertCircle, Loader2, X, Lock } from 'lucide-react';
 import { validateUSN } from '../hooks/useParticipantProfile';
 
 export default function RegistrationModal({ isOpen, onSubmit, onClose, initialProfile = {} }) {
@@ -18,6 +18,9 @@ export default function RegistrationModal({ isOpen, onSubmit, onClose, initialPr
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // USN Lock check: once a USN is linked to an account/email, it cannot be changed
+  const isUsnLocked = Boolean(initialProfile?.usn && initialProfile.usn.trim().length > 0);
+
   useEffect(() => {
     if (initialProfile) {
       if (initialProfile.firstName) setFirstName(initialProfile.firstName);
@@ -32,14 +35,15 @@ export default function RegistrationModal({ isOpen, onSubmit, onClose, initialPr
   // Validation calculations
   const isFirstNameValid = firstName.trim().length > 0;
   const usnCheck = validateUSN(usn);
-  const isUsnValid = usnCheck.valid;
+  const isUsnValid = isUsnLocked || usnCheck.valid;
   const isMobileValid = /^\d{10}$/.test(mobile.replace(/\D/g, '').slice(-10));
 
   const showFirstNameError = touched.firstName && !isFirstNameValid;
-  const showUsnError = touched.usn && !isUsnValid;
+  const showUsnError = !isUsnLocked && touched.usn && !isUsnValid;
   const showMobileError = touched.mobile && !isMobileValid;
 
   const handleUsnChange = (e) => {
+    if (isUsnLocked) return;
     const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
     setUsn(val);
     setTouched(prev => ({ ...prev, usn: true }));
@@ -64,7 +68,9 @@ export default function RegistrationModal({ isOpen, onSubmit, onClose, initialPr
       return;
     }
 
-    if (!isUsnValid) {
+    const finalUsn = isUsnLocked ? initialProfile.usn.trim().toUpperCase() : usnCheck.usn;
+
+    if (!isUsnLocked && !usnCheck.valid) {
       setFormError(usnCheck.message);
       return;
     }
@@ -80,7 +86,7 @@ export default function RegistrationModal({ isOpen, onSubmit, onClose, initialPr
       await onSubmit({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        usn: usnCheck.usn,
+        usn: finalUsn,
         mobile: cleanedMobile,
       });
     } catch (err) {
@@ -91,8 +97,8 @@ export default function RegistrationModal({ isOpen, onSubmit, onClose, initialPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-      <div className="max-w-md w-full bg-surface-container-lowest border border-surface-container rounded-3xl p-6 sm:p-8 shadow-xl relative my-8 text-on-surface">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 sm:pt-16 bg-black/40 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+      <div className="max-w-md w-full bg-surface-container-lowest border border-surface-container rounded-3xl p-6 sm:p-8 shadow-xl relative text-on-surface h-auto max-h-fit">
         {onClose && (
           <button
             type="button"
@@ -172,15 +178,23 @@ export default function RegistrationModal({ isOpen, onSubmit, onClose, initialPr
               </div>
             </div>
 
-            {/* USN Field with Red Focus and Red Helping Text */}
+            {/* USN Field with Lock Indicator if already registered */}
             <div>
               <div className="flex justify-between items-center mb-1.5">
-                <label className="text-xs font-semibold text-on-surface">
-                  College USN / Roll Number <span className="text-error">*</span>
+                <label className="text-xs font-semibold text-on-surface flex items-center gap-1.5">
+                  <span>College USN / Roll Number</span>
+                  <span className="text-error">*</span>
                 </label>
-                <span className={`text-[10px] font-mono ${showUsnError ? 'text-error font-bold' : 'text-secondary'}`}>
-                  {usn.length}/10
-                </span>
+                {isUsnLocked ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 shadow-xs">
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>Locked</span>
+                  </span>
+                ) : (
+                  <span className={`text-[10px] font-mono ${showUsnError ? 'text-error font-bold' : 'text-secondary'}`}>
+                    {usn.length}/10
+                  </span>
+                )}
               </div>
               <div className="relative">
                 <input
@@ -188,19 +202,35 @@ export default function RegistrationModal({ isOpen, onSubmit, onClose, initialPr
                   required
                   placeholder="1ST24AI045"
                   value={usn}
-                  onBlur={() => setTouched(prev => ({ ...prev, usn: true }))}
+                  readOnly={isUsnLocked}
+                  disabled={isUsnLocked}
+                  onBlur={() => !isUsnLocked && setTouched(prev => ({ ...prev, usn: true }))}
                   onChange={handleUsnChange}
                   maxLength={10}
-                  className={`w-full bg-surface-container-low rounded-xl py-2.5 px-3.5 text-sm font-mono tracking-wider uppercase placeholder-secondary focus:outline-none transition-all border ${
-                    showUsnError 
-                      ? 'border-error text-error focus:border-error focus:ring-2 focus:ring-error/20' 
-                      : 'border-surface-container text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20'
+                  className={`w-full rounded-xl py-2.5 px-3.5 text-sm font-mono tracking-wider uppercase transition-all border ${
+                    isUsnLocked
+                      ? 'bg-surface-container/70 border-surface-container text-on-surface/80 cursor-not-allowed select-none pr-9 font-semibold'
+                      : showUsnError 
+                        ? 'bg-surface-container-low border-error text-error focus:border-error focus:ring-2 focus:ring-error/20' 
+                        : 'bg-surface-container-low border-surface-container text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20'
                   }`}
                 />
+                {isUsnLocked && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 pointer-events-none" title="USN is locked">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                )}
               </div>
 
-              {/* Dynamic Helping Text: Red when invalid, secondary guidance when empty/valid */}
-              {showUsnError ? (
+              {/* Dynamic Helping Text: Locked banner vs Invalid vs Instructions */}
+              {isUsnLocked ? (
+                <div className="mt-1.5 p-2.5 rounded-xl bg-surface-container/60 border border-surface-container flex items-start gap-2 text-[11px] text-secondary">
+                  <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="leading-snug">
+                    <span className="font-semibold text-on-surface">USN Permanently Locked:</span> Linked to <span className="font-mono text-on-surface font-semibold">{initialProfile?.email || 'this account'}</span>. Once an email is linked with a USN, it cannot be changed.
+                  </div>
+                </div>
+              ) : showUsnError ? (
                 <p className="text-[11px] text-error mt-1 flex items-start gap-1 leading-tight">
                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>{usnCheck.message}</span>

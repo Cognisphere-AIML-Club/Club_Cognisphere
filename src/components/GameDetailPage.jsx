@@ -15,17 +15,181 @@ import {
   Send,
   Loader2,
   Lock,
+  Calendar,
   CalendarDays,
   Play,
   Tv,
-  LogIn
+  LogIn,
+  X
 } from 'lucide-react';
-import AdminEditActivityModal from './AdminEditActivityModal';
 import PassApprovalManager from './PassApprovalManager';
-import JudgeTimer from './JudgeTimer';
 import LeaderboardPodium from './LeaderboardPodium';
 import { requestGamePass, subscribeToUserPassRequests } from '../services/passApprovalService';
 import { useScores } from '../hooks/useScores';
+
+/**
+ * Inline Activity Editor for Game Detail Page: Tracks position right under the top navigation bar and occupies only required height
+ */
+function InlineGameDetailPageEditor({ activity, onSave, onCancel }) {
+  const [room, setRoom] = useState(activity.room || '');
+  const [scheduledTime, setScheduledTime] = useState(activity.scheduledTime || '10:00 AM');
+  const [eventDate, setEventDate] = useState(activity.eventDate || '2026-11-24');
+  const [status, setStatus] = useState(activity.status || 'Upcoming');
+  const [description, setDescription] = useState(activity.description || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      setError('');
+      await onSave(activity.id, {
+        room: room.trim(),
+        scheduledTime: scheduledTime.trim(),
+        eventDate: eventDate.trim(),
+        status,
+        description: description.trim(),
+      });
+      onCancel();
+    } catch (err) {
+      setError(err.message || 'Failed to update activity');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="bg-surface-container-lowest border-2 border-primary/40 rounded-3xl p-5 sm:p-6 shadow-md space-y-4 animate-fadeIn"
+    >
+      <div className="flex items-center justify-between pb-3 border-b border-surface-container">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-primary text-on-primary flex items-center justify-center">
+            <Edit3 className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-on-surface">Edit Game Information</h3>
+            <p className="text-[11px] text-secondary">Updates venue, timing, round status, and guidelines live</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="p-1.5 rounded-xl text-secondary hover:text-on-surface hover:bg-surface-container transition-colors"
+          title="Cancel"
+          aria-label="Cancel"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {error && (
+        <div className="p-3 rounded-xl bg-error-container border border-error/20 text-xs text-on-error-container">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-on-surface mb-1.5 flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-primary" />
+            <span>Event Date</span>
+          </label>
+          <input
+            type="date"
+            required
+            value={eventDate}
+            onChange={(e) => setEventDate(e.target.value)}
+            className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-on-surface mb-1.5 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-secondary" />
+            <span>Scheduled Time</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={scheduledTime}
+            onChange={(e) => setScheduledTime(e.target.value)}
+            placeholder="e.g. 10:00 AM – 12:00 PM"
+            className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-on-surface mb-1.5 flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-primary" />
+            <span>Assigned Room / Venue</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={room}
+            onChange={(e) => setRoom(e.target.value)}
+            placeholder="e.g. Room 204 or Lab 3"
+            className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-on-surface mb-1.5 flex items-center gap-1.5">
+            <Tag className="w-3.5 h-3.5 text-secondary" />
+            <span>Round Status</span>
+          </label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none cursor-pointer"
+          >
+            <option value="Upcoming">Upcoming</option>
+            <option value="In Progress">In Progress (Live)</option>
+            <option value="Paused">Paused</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-on-surface mb-1.5">
+          Description &amp; Rules Summary
+        </label>
+        <textarea
+          rows={3}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Brief description of the activity guidelines..."
+          className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none resize-none"
+        />
+      </div>
+
+      <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-surface-container">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="py-2 px-4 rounded-xl border border-surface-container hover:bg-surface-container text-xs font-semibold text-secondary hover:text-on-surface transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="py-2 px-5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all shadow-xs flex items-center gap-2 active:scale-95"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin text-on-primary" />}
+          <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export default function GameDetailPage({ 
   activity, 
@@ -64,9 +228,6 @@ export default function GameDetailPage({
   const isPending = request?.status === 'pending';
   const isRejected = request?.status === 'rejected';
 
-  // Room Coordinators and Admins control the room timer
-  const canControlTimer = isAdmin || role === 'coordinator';
-
   const handleRequestPass = async () => {
     if (!user || !profile) return;
     try {
@@ -98,14 +259,23 @@ export default function GameDetailPage({
 
         {isAdmin && (
           <button
-            onClick={() => setEditing(true)}
+            onClick={() => setEditing(prev => !prev)}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-surface-container border border-surface-container-high text-primary hover:bg-surface-container-high transition-all"
           >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>Edit This Game Page</span>
+            {editing ? <X className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
+            <span>{editing ? 'Close Editor' : 'Edit This Game Page'}</span>
           </button>
         )}
       </div>
+
+      {/* Inline Activity Editor for Admin (tracks position right under top bar and occupies only required height) */}
+      {editing && isAdmin && (
+        <InlineGameDetailPageEditor
+          activity={activity}
+          onSave={onUpdateActivity}
+          onCancel={() => setEditing(false)}
+        />
+      )}
 
       {/* Hero Banner for this Game */}
       <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-6 sm:p-8 shadow-xs relative overflow-hidden">
@@ -136,7 +306,20 @@ export default function GameDetailPage({
           </h1>
 
           {/* Quick Info Badges */}
-          <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
+          <div className="flex flex-wrap items-center gap-3 text-xs pt-1">
+            <div className="flex items-center gap-1.5 font-bold text-primary bg-surface-container px-3 py-1.5 rounded-xl border border-surface-container-high">
+              <Calendar className="w-4 h-4 text-primary" />
+              <span>
+                {activity.eventDate === '2026-11-24' 
+                  ? 'Date: Nov 24, 2026 (Day 1)' 
+                  : activity.eventDate === '2026-11-25' 
+                  ? 'Date: Nov 25, 2026 (Day 2)' 
+                  : activity.eventDate === '2026-11-26' 
+                  ? 'Date: Nov 26, 2026 (Day 3)' 
+                  : `Date: ${activity.eventDate || 'Nov 24, 2026'}`}
+              </span>
+            </div>
+
             <div className="flex items-center gap-1.5 font-bold text-on-surface bg-surface-container-low px-3 py-1.5 rounded-xl border border-surface-container">
               <MapPin className="w-4 h-4 text-primary" />
               <span>Venue: {activity.room}</span>
@@ -204,32 +387,6 @@ export default function GameDetailPage({
             </div>
           )}
         </div>
-      </div>
-
-      {/* Synchronized Classroom Live Timer */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <div className="text-xs font-semibold uppercase tracking-wider text-secondary flex items-center gap-2">
-            <span>Room Live Countdown</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-          </div>
-
-          {isStaff && (
-            <button
-              onClick={() => onOpenBigScreen(activity.id)}
-              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-medium transition-colors"
-            >
-              <Tv className="w-3.5 h-3.5" />
-              <span>Projector Big-Screen View</span>
-            </button>
-          )}
-        </div>
-
-        <JudgeTimer 
-          activity={activity} 
-          canControl={canControlTimer}
-          userEmail={user?.email}
-        />
       </div>
 
       {/* Complete Event Schedule Table (when available, e.g. for Reverse Prompt Engineering) */}
@@ -398,16 +555,6 @@ export default function GameDetailPage({
           </div>
         </div>
       </div>
-
-      {/* Admin Edit Modal */}
-      {editing && (
-        <AdminEditActivityModal
-          isOpen={editing}
-          activity={activity}
-          onClose={() => setEditing(false)}
-          onSave={onUpdateActivity}
-        />
-      )}
     </div>
   );
 }

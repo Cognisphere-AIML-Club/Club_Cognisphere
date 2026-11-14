@@ -1,5 +1,6 @@
 import { 
   doc, 
+  getDoc,
   setDoc, 
   updateDoc, 
   collection, 
@@ -79,6 +80,30 @@ export function subscribeToActivityRequests(activityId, callback) {
 }
 
 /**
+ * Real-time listener for ALL requests across ALL activities (for Registrations Hub)
+ */
+export function subscribeToAllPassRequests(callback) {
+  const colRef = collection(db, 'passRequests');
+
+  return onSnapshot(colRef, (snapshot) => {
+    const list = [];
+    snapshot.forEach((docSnap) => {
+      list.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    // In-memory sort: latest first
+    list.sort((a, b) => {
+      const timeA = a.requestedAt?.seconds || 0;
+      const timeB = b.requestedAt?.seconds || 0;
+      return timeB - timeA;
+    });
+    callback(list);
+  }, (err) => {
+    console.warn('Pass requests subscription notice:', err?.message);
+    callback([]);
+  });
+}
+
+/**
  * Coordinator or Admin approves or rejects a participant's pass request
  */
 export async function reviewPassRequest(requestId, status, reviewerEmail) {
@@ -91,5 +116,43 @@ export async function reviewPassRequest(requestId, status, reviewerEmail) {
     reviewedBy: reviewerEmail || 'coordinator',
     reviewedAt: serverTimestamp(),
   });
+}
+
+/**
+ * Bulk approve or reject a list of pass requests
+ */
+export async function bulkReviewPassRequests(requestIds, status, reviewerEmail) {
+  if (!Array.isArray(requestIds) || requestIds.length === 0) return;
+  const promises = requestIds.map(id => reviewPassRequest(id, status, reviewerEmail));
+  await Promise.all(promises);
+}
+
+/**
+ * Real-time listener for Pass Page layout configuration
+ */
+export function subscribeToPassConfig(callback) {
+  const docRef = doc(db, 'settings', 'passConfig');
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.data());
+    } else {
+      callback(null);
+    }
+  }, (err) => {
+    console.warn('Pass config notice:', err?.message);
+    callback(null);
+  });
+}
+
+/**
+ * Update Pass Page layout configuration (Admin only)
+ */
+export async function updatePassConfig(configData, updatedBy) {
+  const docRef = doc(db, 'settings', 'passConfig');
+  await setDoc(docRef, {
+    ...configData,
+    updatedBy: updatedBy || 'admin',
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 }
 

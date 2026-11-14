@@ -77,28 +77,49 @@ export async function resolveParticipantByQr(rawQrText) {
 
   if (passSnap.exists()) {
     const data = passSnap.data();
+    const isExpired = Boolean(data.isExpired || data.status === 'expired');
     return {
       participantId: data.participantId,
       name: data.name,
       usn: data.usn || '',
       qrId: cleanQrId,
-      passActivityId
+      passActivityId: data.activityId || passActivityId,
+      isExpired,
+      expiredReason: data.expiredReason || (isExpired ? `Pass expired: A newer QR pass was generated for USN ${data.usn || 'this participant'}.` : null),
+      status: isExpired ? 'expired' : 'active',
     };
   }
 
-  // 2. Fallback query on participants (for admin)
+  // 2. Fallback query on participants (for legacy passes)
   try {
     const q = query(collection(db, 'participants'), where('qrId', '==', cleanQrId), limit(1));
     const snap = await getDocs(q);
     if (!snap.empty) {
       const pDoc = snap.docs[0];
       const pData = pDoc.data();
+
+      // Check if a newer pass exists for this USN + game in activeGamePasses
+      let isExpired = false;
+      let expiredReason = null;
+      if (pData.usn && passActivityId) {
+        try {
+          const mapSnap = await getDoc(doc(db, 'activeGamePasses', `${pData.usn}_${passActivityId}`));
+          if (mapSnap.exists() && mapSnap.data().activeQrId !== cleanQrId) {
+            isExpired = true;
+            expiredReason = `Pass expired: A newer QR pass was generated for USN ${pData.usn}.`;
+          }
+        } catch (_) {}
+      }
+
       return {
         participantId: pDoc.id,
         name: pData.name || `${pData.firstName || ''} ${pData.lastName || ''}`.trim(),
         usn: pData.usn || '',
         qrId: cleanQrId,
-        passActivityId
+        passActivityId,
+        isExpired,
+        expiredReason,
+        status: isExpired ? 'expired' : 'active',
       };
     }
   } catch (e) {}

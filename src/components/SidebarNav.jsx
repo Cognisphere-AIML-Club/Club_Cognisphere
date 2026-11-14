@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -15,14 +15,21 @@ import {
   ShieldCheck,
   User,
   Sun,
-  Moon
+  Moon,
+  ClipboardCheck,
+  UserCheck,
+  Lock
 } from 'lucide-react';
+import { subscribeToUserPassRequests } from '../services/passApprovalService';
 
 export const SidebarNav = ({
   user,
   profile,
   role,
   isAdmin,
+  isAdminUser = isAdmin,
+  adminMode = false,
+  onToggleAdminMode,
   isCoordinator,
   isJudge,
   isStaff,
@@ -55,27 +62,71 @@ export const SidebarNav = ({
     });
   };
 
+  // Subscribe to real-time pass approval statuses to calculate accurate badge state
+  const [userRequests, setUserRequests] = useState({});
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setUserRequests({});
+      return;
+    }
+    const unsub = subscribeToUserPassRequests(user.uid, (map) => {
+      setUserRequests(map);
+    });
+    return () => unsub();
+  }, [user?.uid]);
+
+  // Compute dynamic pass badge: 'Ready', count like '1/3', or null if no QR
+  const passBadge = useMemo(() => {
+    if (!user || !profile?.qrId) return null;
+    if (isStaff) return 'Ready';
+
+    const requestedList = Object.values(userRequests);
+    const requestedCount = requestedList.length;
+    const approvedCount = requestedList.filter(r => r.status === 'approved').length;
+
+    // If no QR pass is approved/ready, hide the badge span
+    if (approvedCount === 0) {
+      return null;
+    }
+
+    // If all requested passes are approved
+    if (approvedCount === requestedCount && requestedCount > 0) {
+      return 'Ready';
+    }
+
+    // Otherwise show ratio e.g. 1/3, 2/3
+    return `${approvedCount}/${requestedCount}`;
+  }, [user, profile?.qrId, isStaff, userRequests]);
+
   const navItems = [
     {
       id: 'home',
-      label: 'Club Home',
+      label: 'Home',
       icon: Home,
       show: true,
       badge: null
     },
     {
       id: 'events',
-      label: 'Events & Hub',
+      label: 'Events Hub',
       icon: CalendarDays,
       show: true,
       badge: null
+    },
+    {
+      id: 'registrations',
+      label: isStaff ? 'Registrations & Approvals' : 'Event Registrations',
+      icon: ClipboardCheck,
+      show: true,
+      badge: isStaff ? 'Desk' : null
     },
     {
       id: 'pass',
       label: 'My QR Pass',
       icon: QrCode,
       show: Boolean(user),
-      badge: profile?.usn ? 'Ready' : 'Profile'
+      badge: passBadge
     },
     {
       id: 'certificates',
@@ -194,10 +245,14 @@ export const SidebarNav = ({
                 </div>
 
                 {!isCollapsed && item.badge && (
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${
                     isActive 
                       ? 'bg-primary-container text-on-primary' 
-                      : 'bg-surface-container text-secondary'
+                      : item.badge === 'Ready'
+                      ? 'bg-tertiary-container text-on-tertiary-container'
+                      : item.badge === 'Waiting'
+                      ? 'bg-surface-container text-secondary'
+                      : 'bg-secondary-container text-on-secondary-container font-mono'
                   }`}>
                     {item.badge}
                   </span>
@@ -228,6 +283,53 @@ export const SidebarNav = ({
       <div className="p-3 border-t border-surface-container bg-surface-container-low">
         {user ? (
           <div>
+            {/* Admin Mode Toggle (Only visible for Admins) */}
+            {isAdminUser && onToggleAdminMode && (
+              !isCollapsed ? (
+                <div 
+                  onClick={onToggleAdminMode}
+                  className="mb-2 p-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-high flex items-center justify-between cursor-pointer transition-all select-none group"
+                  title={`Admin Mode: ${adminMode ? 'ON (Administrative Controls Active)' : 'OFF (Participant View)'}`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onToggleAdminMode();
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-2 text-xs font-semibold text-on-surface">
+                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                    <span>Admin Mode</span>
+                  </div>
+                  <div
+                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
+                      adminMode ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
+                    }`}
+                  >
+                    <span className="w-4 h-4 rounded-full bg-white shadow-xs block" />
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={onToggleAdminMode}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shadow-xs border ${
+                      adminMode 
+                        ? 'bg-primary text-on-primary border-primary' 
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-surface-container-high'
+                    }`}
+                    title={`Admin Mode: ${adminMode ? 'ON' : 'OFF'}`}
+                    aria-label="Admin Mode"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                  </button>
+                </div>
+              )
+            )}
+
             {/* Admin Theme Toggle Switch (Only visible for Admin) */}
             {isAdmin && onToggleAdminTheme && (
               !isCollapsed ? (
@@ -265,7 +367,7 @@ export const SidebarNav = ({
                   <button
                     type="button"
                     onClick={onToggleAdminTheme}
-                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center transition-colors shadow-xs"
+                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center transition-colors shadow-xs border border-surface-container-high"
                     title={`Toggle Admin Theme (${adminTheme === 'dark' ? 'Dark' : 'Light'})`}
                     aria-label="Toggle Admin Theme"
                   >
@@ -284,7 +386,9 @@ export const SidebarNav = ({
               <div className="flex flex-col items-center justify-center w-full">
                 <div 
                   onClick={onOpenEditProfile}
-                  className="cursor-pointer group flex items-center justify-center"
+                  className={`cursor-pointer group flex items-center justify-center p-1 rounded-2xl transition-all ${
+                    activeTab === 'profile' ? 'ring-2 ring-primary bg-surface-container' : ''
+                  }`}
                   title={`${profile?.name || user.displayName || 'Participant'}${isAdmin || isCoordinator || isJudge ? ` (${roleLabel})` : ''}`}
                 >
                   {/* Avatar with Role Bubble */}
@@ -337,8 +441,10 @@ export const SidebarNav = ({
               <div className="flex items-center justify-between gap-2.5">
                 <div 
                   onClick={onOpenEditProfile}
-                  className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
-                  title="Profile Settings (Click to edit)"
+                  className={`flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1 p-1.5 rounded-2xl transition-all ${
+                    activeTab === 'profile' ? 'bg-surface-container ring-1 ring-primary/40' : 'hover:bg-surface-container/60'
+                  }`}
+                  title="Profile Settings"
                 >
                   {/* Avatar with Role Bubble */}
                   <div className="relative shrink-0">
@@ -378,8 +484,9 @@ export const SidebarNav = ({
                       {profile?.name || user.displayName || 'Participant'}
                     </div>
                     {profile?.usn && (
-                      <div className="text-[10px] font-mono text-secondary truncate">
-                        {profile.usn}
+                      <div className="text-[10px] font-mono text-secondary truncate flex items-center gap-1">
+                        <span>{profile.usn}</span>
+                        <Lock className="w-2.5 h-2.5 text-secondary shrink-0" title="USN permanently linked" />
                       </div>
                     )}
                   </div>

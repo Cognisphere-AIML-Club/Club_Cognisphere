@@ -5,6 +5,7 @@ export const ACTIVITIES = [
     name: 'Reverse Prompt Engineering',
     category: 'Technical',
     room: 'Room 101',
+    eventDate: '2026-11-24',
     defaultDuration: 900, // 15 mins default round
     scheduledTime: '10:00 AM – 12:00 PM (120 Mins Total)',
     description: 'Deconstruct generated outputs to deduce original prompts through visual analysis and iterative AI prompt refinement.',
@@ -24,8 +25,9 @@ export const ACTIVITIES = [
     name: 'UI/UX Makeover for Websites',
     category: 'Technical',
     room: 'Room 102',
+    eventDate: '2026-11-24',
     defaultDuration: 900, // 15 mins
-    scheduledTime: '10:00 AM',
+    scheduledTime: '1:30 PM – 3:30 PM',
     description: 'Rapid design critique and redesign proposal'
   },
   {
@@ -33,8 +35,9 @@ export const ACTIVITIES = [
     name: 'Tech Quiz',
     category: 'Technical',
     room: 'Room 103',
+    eventDate: '2026-11-25',
     defaultDuration: 60, // 1 min per round
-    scheduledTime: '11:30 AM',
+    scheduledTime: '10:00 AM – 11:30 AM',
     description: 'Fast-paced technical trivia'
   },
   {
@@ -42,8 +45,9 @@ export const ACTIVITIES = [
     name: 'Sell Me This Product',
     category: 'Non-Technical',
     room: 'Room 201',
+    eventDate: '2026-11-25',
     defaultDuration: 180, // 3 mins pitch
-    scheduledTime: '1:30 PM',
+    scheduledTime: '12:00 PM – 1:30 PM',
     description: 'Impromptu persuasion and product pitching'
   },
   {
@@ -51,8 +55,9 @@ export const ACTIVITIES = [
     name: 'Just A Minute (JAM)',
     category: 'Non-Technical',
     room: 'Room 202',
+    eventDate: '2026-11-25',
     defaultDuration: 60, // 1:00 strict
-    scheduledTime: '2:30 PM',
+    scheduledTime: '2:30 PM – 4:00 PM',
     description: 'One minute of speech without hesitation, repetition, or deviation'
   }
 ];

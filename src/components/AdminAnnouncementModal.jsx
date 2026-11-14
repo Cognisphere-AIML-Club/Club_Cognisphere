@@ -71,8 +71,8 @@ export default function AdminAnnouncementModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-xl space-y-5 text-on-surface">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 sm:pt-16 bg-black/40 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+      <div className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 text-on-surface h-auto max-h-fit">
         <div className="flex items-center justify-between pb-3 border-b border-surface-container">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-surface-container border border-surface-container-high text-primary flex items-center justify-center">

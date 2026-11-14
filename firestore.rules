@@ -43,10 +43,27 @@ service cloud.firestore {
     // === PARTICIPANTS COLLECTION ===
     // Sensitive data (email, mobile, uid).
     // Participant can read and write only their own profile doc.
+    // USN IMMUTABILITY LOCK: Once 'usn' is registered, it can NEVER be altered to another USN.
     // Only admins can query or read everyone's profile.
     match /participants/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
-      allow read: if isAdmin();
+      allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && request.auth.uid == userId && (
+        !('usn' in resource.data) || 
+        resource.data.usn == null || 
+        resource.data.usn == '' || 
+        request.resource.data.usn == resource.data.usn
+      );
+      allow delete: if isAdmin();
+    }
+
+    // === REGISTERED USNS COLLECTION (1:1 USN-to-Email Permanent Lock) ===
+    // Ensures a USN is linked strictly to a single account and cannot be claimed by another email.
+    match /registeredUsns/{cleanUsn} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
     }
 
     // === QR PASSES COLLECTION (Privacy-Preserving Attendance Index) ===
@@ -55,7 +72,14 @@ service cloud.firestore {
     // Coordinators and admins can read to verify passes at the door.
     // Participants can create/update only their own pass doc.
     match /qrPasses/{qrId} {
-      allow read: if isCoordinator() || isAdmin();
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.resource.data.participantId == request.auth.uid;
+    }
+
+    // === ACTIVE GAME PASSES COLLECTION ===
+    // Enforces single active QR per USN per game
+    match /activeGamePasses/{passMappingId} {
+      allow read: if isAuthenticated();
       allow write: if isAuthenticated() && request.resource.data.participantId == request.auth.uid;
     }
 
@@ -112,10 +136,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // === SETTINGS (CERTIFICATES SWITCH) ===
-    // All authenticated users can read settings to check if certificates are enabled.
-    // Only admins can modify the switch.
-    match /settings/certificates {
+    // === SETTINGS (CERTIFICATES SWITCH, PASS CONFIG, ETC.) ===
+    // All authenticated users can read settings.
+    // Only admins can modify settings.
+    match /settings/{settingId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
