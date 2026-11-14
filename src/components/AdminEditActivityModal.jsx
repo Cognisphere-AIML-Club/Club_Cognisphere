@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Edit3, Loader2 } from 'lucide-react';
+import { X, Save, Edit3, Loader2, Calendar } from 'lucide-react';
 
 export default function AdminEditActivityModal({ isOpen, onClose, activity, onSave }) {
   const [room, setRoom] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
+  const [eventDate, setEventDate] = useState('');
   const [status, setStatus] = useState('Upcoming');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
@@ -13,6 +14,7 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
     if (activity) {
       setRoom(activity.room || '');
       setScheduledTime(activity.scheduledTime || '10:00 AM');
+      setEventDate(activity.eventDate || '2026-11-24');
       setStatus(activity.status || 'Upcoming');
       setDescription(activity.description || '');
       setError('');
@@ -29,6 +31,7 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
       await onSave(activity.id, {
         room: room.trim(),
         scheduledTime: scheduledTime.trim(),
+        eventDate: eventDate.trim(),
         status,
         description: description.trim(),
       });
@@ -41,28 +44,28 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl relative text-white">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 sm:pt-16 bg-black/40 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+      <div className="max-w-md w-full bg-surface-container-lowest border border-surface-container rounded-3xl p-5 sm:p-6 shadow-2xl relative text-on-surface h-auto max-h-fit">
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+          className="absolute top-5 right-5 p-2 text-secondary hover:text-on-surface rounded-xl hover:bg-surface-container transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="space-y-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-surface-container border border-surface-container-high text-primary flex items-center justify-center">
               <Edit3 className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Edit Activity Info</h2>
-              <p className="text-xs text-slate-400 font-medium">{activity.name}</p>
+              <h2 className="text-base font-bold text-on-surface">Edit Activity Info</h2>
+              <p className="text-xs text-secondary font-medium">{activity.name}</p>
             </div>
           </div>
 
           {error && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300">
+            <div className="p-3 rounded-xl bg-error-container border border-error/20 text-xs text-on-error-container">
               {error}
             </div>
           )}
@@ -70,7 +73,37 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label className="block text-xs font-semibold text-on-surface mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-primary" />
+                  <span>Event Date</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-on-surface mb-1.5">
+                  Scheduled Time
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  placeholder="e.g. 10:00 AM – 12:00 PM"
+                  className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-on-surface mb-1.5">
                   Venue / Room
                 </label>
                 <input
@@ -79,42 +112,28 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
                   value={room}
                   onChange={(e) => setRoom(e.target.value)}
                   placeholder="e.g. Room 101"
-                  className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl py-2 px-3 text-xs text-white focus:outline-none"
+                  className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Scheduled Time
+                <label className="block text-xs font-semibold text-on-surface mb-1.5">
+                  Current Status
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  placeholder="e.g. 10:30 AM"
-                  className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl py-2 px-3 text-xs text-white focus:outline-none"
-                />
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none"
+                >
+                  <option value="Upcoming">Upcoming</option>
+                  <option value="In Progress">In Progress (Live)</option>
+                  <option value="Completed">Completed</option>
+                </select>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Current Status
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl py-2 px-3 text-xs text-white focus:outline-none"
-              >
-                <option value="Upcoming">Upcoming</option>
-                <option value="In Progress">In Progress (Live)</option>
-                <option value="Completed">Completed</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-on-surface mb-1.5">
                 Description / Rules Synopsis
               </label>
               <textarea
@@ -122,7 +141,7 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief guidelines for participants..."
-                className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl py-2 px-3 text-xs text-white focus:outline-none resize-none leading-relaxed"
+                className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2 px-3 text-xs text-on-surface focus:outline-none resize-none leading-relaxed"
               />
             </div>
 
@@ -130,7 +149,7 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-750 text-slate-300 font-medium rounded-xl text-xs transition-colors"
+                className="flex-1 py-2.5 px-4 bg-surface-container-low hover:bg-surface-container text-secondary hover:text-on-surface font-medium rounded-xl text-xs transition-colors border border-surface-container"
               >
                 Cancel
               </button>
@@ -138,7 +157,7 @@ export default function AdminEditActivityModal({ isOpen, onClose, activity, onSa
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10"
+                className="flex-1 py-2.5 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs"
               >
                 {saving ? (
                   <>

@@ -1,26 +1,35 @@
-import React, { useState } from 'react';
-import {
-  ChevronLeft,
-  ChevronRight,
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
   Home,
-  CalendarDays,
-  QrCode,
-  Timer,
-  ScanLine,
-  Award,
-  Tv,
-  LogOut,
+  CalendarDays, 
+  QrCode, 
+  Timer, 
+  ScanLine, 
+  Award, 
+  Tv, 
+  LogOut, 
   LogIn,
   Sparkles,
   ShieldCheck,
-  User
+  User,
+  Sun,
+  Moon,
+  ClipboardCheck,
+  UserCheck,
+  Lock
 } from 'lucide-react';
+import { subscribeToUserPassRequests } from '../services/passApprovalService';
 
 export const SidebarNav = ({
   user,
   profile,
   role,
   isAdmin,
+  isAdminUser = isAdmin,
+  adminMode = false,
+  onToggleAdminMode,
   isCoordinator,
   isJudge,
   isStaff,
@@ -29,7 +38,9 @@ export const SidebarNav = ({
   onOpenEditProfile,
   onLogout,
   onSignIn,
-  onLaunchBigScreen
+  onLaunchBigScreen,
+  adminTheme = 'light',
+  onToggleAdminTheme
 }) => {
   // Persist sidebar collapsed state (default collapsed)
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -46,32 +57,76 @@ export const SidebarNav = ({
       const next = !prev;
       try {
         localStorage.setItem('club_games_sidebar_collapsed', String(next));
-      } catch (e) { }
+      } catch (e) {}
       return next;
     });
   };
 
+  // Subscribe to real-time pass approval statuses to calculate accurate badge state
+  const [userRequests, setUserRequests] = useState({});
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setUserRequests({});
+      return;
+    }
+    const unsub = subscribeToUserPassRequests(user.uid, (map) => {
+      setUserRequests(map);
+    });
+    return () => unsub();
+  }, [user?.uid]);
+
+  // Compute dynamic pass badge: 'Ready', count like '1/3', or null if no QR
+  const passBadge = useMemo(() => {
+    if (!user || !profile?.qrId) return null;
+    if (isStaff) return 'Ready';
+
+    const requestedList = Object.values(userRequests);
+    const requestedCount = requestedList.length;
+    const approvedCount = requestedList.filter(r => r.status === 'approved').length;
+
+    // If no QR pass is approved/ready, hide the badge span
+    if (approvedCount === 0) {
+      return null;
+    }
+
+    // If all requested passes are approved
+    if (approvedCount === requestedCount && requestedCount > 0) {
+      return 'Ready';
+    }
+
+    // Otherwise show ratio e.g. 1/3, 2/3
+    return `${approvedCount}/${requestedCount}`;
+  }, [user, profile?.qrId, isStaff, userRequests]);
+
   const navItems = [
     {
       id: 'home',
-      label: 'Club Home',
+      label: 'Home',
       icon: Home,
       show: true,
       badge: null
     },
     {
       id: 'events',
-      label: 'Events & Hub',
+      label: 'Events Hub',
       icon: CalendarDays,
       show: true,
       badge: null
+    },
+    {
+      id: 'registrations',
+      label: isStaff ? 'Registrations & Approvals' : 'Event Registrations',
+      icon: ClipboardCheck,
+      show: true,
+      badge: isStaff ? 'Desk' : null
     },
     {
       id: 'pass',
       label: 'My QR Pass',
       icon: QrCode,
       show: Boolean(user),
-      badge: profile?.usn ? 'Ready' : 'Profile'
+      badge: passBadge
     },
     {
       id: 'certificates',
@@ -100,22 +155,24 @@ export const SidebarNav = ({
 
   return (
     <aside
-      className={`hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-300 z-30 select-none border-r ${isCollapsed ? 'w-20' : 'w-64'
-        } bg-slate-900 border-slate-800 text-slate-100 shadow-xl`}
+      className={`hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-300 z-30 select-none border-r ${
+        isCollapsed ? 'w-20' : 'w-64'
+      } bg-surface-container-lowest border-surface-container text-on-surface shadow-xs`}
     >
       {/* 1. Header with Logo & Brand */}
-      <div className={`h-16 flex items-center border-b border-slate-800 px-3.5 transition-all ${isCollapsed ? 'justify-center' : 'justify-between'
-        }`}>
-        <div
+      <div className={`h-16 flex items-center border-b border-surface-container px-3.5 transition-all ${
+        isCollapsed ? 'justify-center' : 'justify-between'
+      }`}>
+        <div 
           onClick={() => onSelectTab('home')}
           className="flex items-center gap-3 cursor-pointer overflow-hidden group"
           title="Cognisphere - AI & Machine Learning Club"
         >
           {/* Logo Squircle Badge */}
           <div className="w-10 h-10 rounded-xl overflow-hidden border border-surface-container-high shadow-xs shrink-0 group-hover:scale-105 transition-transform">
-            <img
-              src="/Cognisphere-logo.jpeg"
-              alt="Cognisphere Logo"
+            <img 
+              src="/Cognisphere-logo.jpeg" 
+              alt="Cognisphere Logo" 
               className="w-full h-full object-cover"
             />
           </div>
@@ -123,12 +180,12 @@ export const SidebarNav = ({
           {/* Logo Text (Expanded only) */}
           {!isCollapsed && (
             <div className="flex flex-col min-w-0">
-              <span className="font-bold text-base tracking-wider leading-none">
-                <span className="text-white">COGNI</span>
-                <span className="text-cyan-400">SPHERE</span>
+              <span className="font-extrabold text-base tracking-wider leading-none">
+                <span className="text-on-surface">COGNI</span>
+                <span className="text-primary">SPHERE</span>
               </span>
-              <span className="text-[9px] font-bold tracking-widest text-slate-500 uppercase mt-0.5 leading-none">
-                AI & ML CLUB
+              <span className="text-[9px] font-bold tracking-widest text-secondary uppercase mt-0.5 leading-none">
+                AI &amp; ML CLUB
               </span>
             </div>
           )}
@@ -138,7 +195,7 @@ export const SidebarNav = ({
         {!isCollapsed && (
           <button
             onClick={toggleCollapse}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container transition-colors"
             title="Collapse sidebar"
             aria-label="Collapse sidebar"
           >
@@ -152,7 +209,7 @@ export const SidebarNav = ({
         <div className="pt-2 px-3 flex justify-center">
           <button
             onClick={toggleCollapse}
-            className="w-full py-1.5 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            className="w-full py-1.5 flex items-center justify-center rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container transition-colors"
             title="Expand sidebar"
             aria-label="Expand sidebar"
           >
@@ -174,22 +231,29 @@ export const SidebarNav = ({
                 onClick={() => onSelectTab(item.id)}
                 title={isCollapsed ? item.label : undefined}
                 aria-label={item.label}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${isCollapsed ? 'justify-center' : 'justify-between'
-                  } ${isActive
-                    ? 'bg-slate-800/90 text-cyan-400 border-l-4 border-cyan-400 shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                  }`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  isCollapsed ? 'justify-center' : 'justify-between'
+                } ${
+                  isActive
+                    ? 'bg-surface-container text-primary border-l-4 border-primary shadow-xs font-bold'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
-                  {!isCollapsed && <span className="truncate font-medium">{item.label}</span>}
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary' : 'text-secondary'}`} />
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </div>
 
                 {!isCollapsed && item.badge && (
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isActive
-                      ? 'bg-cyan-500/20 text-cyan-300'
-                      : 'bg-slate-800 text-slate-400'
-                    }`}>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${
+                    isActive 
+                      ? 'bg-primary-container text-on-primary' 
+                      : item.badge === 'Ready'
+                      ? 'bg-tertiary-container text-on-tertiary-container'
+                      : item.badge === 'Waiting'
+                      ? 'bg-surface-container text-secondary'
+                      : 'bg-secondary-container text-on-secondary-container font-mono'
+                  }`}>
                     {item.badge}
                   </span>
                 )}
@@ -204,10 +268,11 @@ export const SidebarNav = ({
               onClick={() => onLaunchBigScreen('hall')}
               title={isCollapsed ? "Projector Big Screen" : undefined}
               aria-label="Launch Projector Big Screen"
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${isCollapsed ? 'justify-center' : 'justify-start'
-                } bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-xs`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                isCollapsed ? 'justify-center' : 'justify-start'
+              } bg-primary text-on-primary hover:bg-primary-container border-primary shadow-xs`}
             >
-              <Tv className="w-4 h-4 text-emerald-400 shrink-0" />
+              <Tv className="w-4 h-4 text-on-primary shrink-0" />
               {!isCollapsed && <span>Projector Screen</span>}
             </button>
           </div>
@@ -215,13 +280,60 @@ export const SidebarNav = ({
       </nav>
 
       {/* 3. Bottom Left Profile Section OR Sign In / Sign Up Button */}
-      <div className="p-3 border-t border-slate-800 bg-slate-950/40">
+      <div className="p-3 border-t border-surface-container bg-surface-container-low">
         {user ? (
           <div>
+            {/* Admin Mode Toggle (Only visible for Admins) */}
+            {isAdminUser && onToggleAdminMode && (
+              !isCollapsed ? (
+                <div 
+                  onClick={onToggleAdminMode}
+                  className="mb-2 p-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-high flex items-center justify-between cursor-pointer transition-all select-none group"
+                  title={`Admin Mode: ${adminMode ? 'ON (Administrative Controls Active)' : 'OFF (Participant View)'}`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onToggleAdminMode();
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-2 text-xs font-semibold text-on-surface">
+                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                    <span>Admin Mode</span>
+                  </div>
+                  <div
+                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
+                      adminMode ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
+                    }`}
+                  >
+                    <span className="w-4 h-4 rounded-full bg-white shadow-xs block" />
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={onToggleAdminMode}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shadow-xs border ${
+                      adminMode 
+                        ? 'bg-primary text-on-primary border-primary' 
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-surface-container-high'
+                    }`}
+                    title={`Admin Mode: ${adminMode ? 'ON' : 'OFF'}`}
+                    aria-label="Admin Mode"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                  </button>
+                </div>
+              )
+            )}
+
             {/* Admin Theme Toggle Switch (Only visible for Admin) */}
             {isAdmin && onToggleAdminTheme && (
               !isCollapsed ? (
-                <div
+                <div 
                   onClick={onToggleAdminTheme}
                   className="mb-2.5 p-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-high flex items-center justify-between cursor-pointer transition-all select-none group"
                   title={`Switch to ${adminTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
@@ -243,8 +355,9 @@ export const SidebarNav = ({
                     <span>{adminTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
                   </div>
                   <div
-                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${adminTheme === 'dark' ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
-                      }`}
+                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
+                      adminTheme === 'dark' ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
+                    }`}
                   >
                     <span className="w-4 h-4 rounded-full bg-white shadow-xs block" />
                   </div>
@@ -254,7 +367,7 @@ export const SidebarNav = ({
                   <button
                     type="button"
                     onClick={onToggleAdminTheme}
-                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center transition-colors shadow-xs"
+                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center transition-colors shadow-xs border border-surface-container-high"
                     title={`Toggle Admin Theme (${adminTheme === 'dark' ? 'Dark' : 'Light'})`}
                     aria-label="Toggle Admin Theme"
                   >
@@ -271,9 +384,11 @@ export const SidebarNav = ({
             {/* User Profile Overview */}
             {isCollapsed ? (
               <div className="flex flex-col items-center justify-center w-full">
-                <div
+                <div 
                   onClick={onOpenEditProfile}
-                  className="cursor-pointer group flex items-center justify-center"
+                  className={`cursor-pointer group flex items-center justify-center p-1 rounded-2xl transition-all ${
+                    activeTab === 'profile' ? 'ring-2 ring-primary bg-surface-container' : ''
+                  }`}
                   title={`${profile?.name || user.displayName || 'Participant'}${isAdmin || isCoordinator || isJudge ? ` (${roleLabel})` : ''}`}
                 >
                   {/* Avatar with Role Bubble */}
@@ -293,13 +408,14 @@ export const SidebarNav = ({
 
                     {/* Role bubble */}
                     {(isAdmin || isCoordinator || isJudge) && (
-                      <span
-                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${isAdmin
-                            ? 'bg-amber-600 text-white'
-                            : isCoordinator
-                              ? 'bg-primary text-on-primary'
-                              : 'bg-purple-600 text-white'
-                          }`}
+                      <span 
+                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${
+                          isAdmin 
+                            ? 'bg-amber-600 text-white' 
+                            : isCoordinator 
+                            ? 'bg-primary text-on-primary' 
+                            : 'bg-purple-600 text-white'
+                        }`}
                         title={roleLabel}
                       >
                         {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
@@ -323,10 +439,12 @@ export const SidebarNav = ({
               </div>
             ) : (
               <div className="flex items-center justify-between gap-2.5">
-                <div
+                <div 
                   onClick={onOpenEditProfile}
-                  className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
-                  title="Profile Settings (Click to edit)"
+                  className={`flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1 p-1.5 rounded-2xl transition-all ${
+                    activeTab === 'profile' ? 'bg-surface-container ring-1 ring-primary/40' : 'hover:bg-surface-container/60'
+                  }`}
+                  title="Profile Settings"
                 >
                   {/* Avatar with Role Bubble */}
                   <div className="relative shrink-0">
@@ -345,13 +463,14 @@ export const SidebarNav = ({
 
                     {/* Role bubble */}
                     {(isAdmin || isCoordinator || isJudge) && (
-                      <span
-                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${isAdmin
-                            ? 'bg-amber-600 text-white'
-                            : isCoordinator
-                              ? 'bg-primary text-on-primary'
-                              : 'bg-purple-600 text-white'
-                          }`}
+                      <span 
+                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${
+                          isAdmin 
+                            ? 'bg-amber-600 text-white' 
+                            : isCoordinator 
+                            ? 'bg-primary text-on-primary' 
+                            : 'bg-purple-600 text-white'
+                        }`}
                         title={roleLabel}
                       >
                         {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
@@ -361,12 +480,13 @@ export const SidebarNav = ({
 
                   {/* User Name & USN */}
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-white truncate group-hover:text-cyan-400 transition-colors">
+                    <div className="text-xs font-bold text-on-surface truncate group-hover:text-primary transition-colors">
                       {profile?.name || user.displayName || 'Participant'}
                     </div>
                     {profile?.usn && (
-                      <div className="text-[10px] font-mono text-slate-400 truncate">
-                        {profile.usn}
+                      <div className="text-[10px] font-mono text-secondary truncate flex items-center gap-1">
+                        <span>{profile.usn}</span>
+                        <Lock className="w-2.5 h-2.5 text-secondary shrink-0" title="USN permanently linked" />
                       </div>
                     )}
                   </div>
@@ -376,7 +496,7 @@ export const SidebarNav = ({
                 <button
                   type="button"
                   onClick={onLogout}
-                  className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
+                  className="p-2 rounded-xl text-secondary hover:text-error hover:bg-error-container/30 transition-colors shrink-0"
                   title="Sign Out"
                   aria-label="Sign Out"
                 >
@@ -386,35 +506,34 @@ export const SidebarNav = ({
             )}
           </div>
         ) : (
-          /* When NOT signed in: Sign In / Sign Up Button in place of profile */
+          /* When NOT signed in: Solid Sign In button (no gradients) */
           <div>
             {!isCollapsed ? (
               <div className="space-y-2">
                 <button
                   type="button"
                   onClick={onSignIn}
-                  className="w-full py-2.5 px-3 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 group active:scale-95"
+                  className="w-full py-2.5 px-3 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all shadow-xs flex items-center justify-center gap-2 group active:scale-95"
                   title="Sign In / Sign Up with Google"
                 >
-                  <LogIn className="w-4 h-4 text-slate-950 group-hover:scale-110 transition-transform" />
+                  <LogIn className="w-4 h-4 text-on-primary group-hover:scale-110 transition-transform" />
                   <span>Sign In / Sign Up</span>
                 </button>
-                <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-medium">
-                  <Sparkles className="w-3 h-3 text-cyan-400" />
+                <div className="flex items-center justify-center gap-1.5 text-[10px] text-secondary font-medium">
+                  <Sparkles className="w-3 h-3 text-primary" />
                   <span>Get your event QR pass</span>
                 </div>
               </div>
             ) : (
-              /* When collapsed: Glowing Sign In Button with compact native hover like direct message icons */
               <div className="flex justify-center">
                 <button
                   type="button"
                   onClick={onSignIn}
-                  className="w-10 h-10 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 flex items-center justify-center shadow-lg active:scale-95 transition-all group"
+                  className="w-10 h-10 rounded-xl bg-primary hover:bg-primary-container text-on-primary flex items-center justify-center shadow-xs active:scale-95 transition-all group"
                   title="Sign In / Sign Up"
                   aria-label="Sign In or Sign Up"
                 >
-                  <LogIn className="w-5 h-5 text-slate-950 group-hover:scale-110 transition-transform" />
+                  <LogIn className="w-5 h-5 text-on-primary group-hover:scale-110 transition-transform" />
                 </button>
               </div>
             )}
