@@ -170,11 +170,11 @@ export default function MobileDrawerNav({
         {/* 1. Header with App Info & Close Button */}
         <div className="h-16 px-4 border-b border-surface-container flex items-center justify-between bg-surface-container-low shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg overflow-hidden border border-surface-container shadow-xs shrink-0">
+            <div className="w-8 h-8 rounded-lg overflow-hidden border border-surface-container shadow-xs shrink-0 bg-white/5 flex items-center justify-center p-0.5">
               <img
-                src="/Cognisphere-logo.jpeg"
+                src="/cognisphere-emblem.png"
                 alt="Cognisphere Logo"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
             </div>
             <div className="flex flex-col">

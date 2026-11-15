@@ -181,11 +181,11 @@ export const SidebarNav = ({
           title="Cognisphere - AI & Machine Learning Club"
         >
           {/* Logo Squircle Badge */}
-          <div className="w-10 h-10 rounded-xl overflow-hidden border border-surface-container-high shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+          <div className="w-10 h-10 rounded-xl overflow-hidden border border-surface-container-high shadow-xs shrink-0 group-hover:scale-105 transition-transform bg-white/5 flex items-center justify-center p-0.5">
             <img 
-              src="/Cognisphere-logo.jpeg" 
+              src="/cognisphere-emblem.png" 
               alt="Cognisphere Logo" 
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
             />
           </div>
 

@@ -55,6 +55,11 @@ export default {
         'background': 'rgb(var(--color-background) / <alpha-value>)',
         'on-background': 'rgb(var(--color-on-background) / <alpha-value>)',
         'surface-variant': 'rgb(var(--color-surface-variant) / <alpha-value>)',
+      },
+      fontFamily: {
+        'arkhip': ['Arkhip', 'sans-serif'],
+        'audex': ['Audex', 'sans-serif'],
+        'skate-blade': ['SkateBlade', 'sans-serif'],
       }
     },
   },

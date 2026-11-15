@@ -22,8 +22,7 @@ import {
   Mail,
   HeartHandshake,
   LogIn,
-  ClipboardCheck,
-  Trophy
+  ClipboardCheck
 } from 'lucide-react';
 
 // Direct message deep-links for instant communication
@@ -118,7 +117,7 @@ const LEADERSHIP = [
   }
 ];
 
-export default function ClubHomePage({ onExploreGames, onOpenPass, onOpenRegistrations, onOpenLeaderboard, onSignIn, user }) {
+export default function ClubHomePage({ onExploreGames, onOpenPass, onOpenRegistrations, onSignIn, user }) {
 
   return (
     <div className="space-y-10 animate-fadeIn max-w-5xl mx-auto w-full pb-12">
@@ -127,11 +126,11 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onOpenRegistr
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border border-surface-container-high shadow-xs shrink-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border border-surface-container-high shadow-xs shrink-0 bg-white/5 flex items-center justify-center p-1">
                 <img
-                  src="/Cognisphere-logo.jpeg"
+                  src="/cognisphere-emblem.png"
                   alt="Cognisphere Club Logo"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                 />
               </div>
               <div>
@@ -171,16 +170,6 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onOpenRegistr
               <span>Enter Club Games 2026</span>
               <ArrowRight className="w-4 h-4 text-on-primary" />
             </button>
-
-            {onOpenLeaderboard && (
-              <button
-                onClick={onOpenLeaderboard}
-                className="py-3 px-5 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 active:scale-95"
-              >
-                <Trophy className="w-4 h-4 text-amber-500" />
-                <span>Leaderboard</span>
-              </button>
-            )}
 
             {onOpenRegistrations && (
               <button
