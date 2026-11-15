@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, X, Share, PlusSquare, Smartphone } from 'lucide-react';
+import { Download, X, Share, PlusSquare } from 'lucide-react';
 
 export const InstallAppPrompt = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -19,14 +19,14 @@ export const InstallAppPrompt = () => {
 
     checkStandalone();
 
-    // 2. Check if user dismissed prompt recently (last 24 hours)
+    // 2. Check if user already dismissed or installed (prompt only once - never show again if dismissed)
     try {
-      const dismissedAt = localStorage.getItem('club_games_install_dismissed');
-      if (dismissedAt) {
-        const diffHours = (Date.now() - parseInt(dismissedAt, 10)) / (1000 * 60 * 60);
-        if (diffHours < 24) {
-          setIsDismissed(true);
-        }
+      const isPermanentlyDismissed = 
+        localStorage.getItem('cognisphere_pwa_install_dismissed') === 'true' ||
+        localStorage.getItem('club_games_install_dismissed') === 'permanent';
+      if (isPermanentlyDismissed) {
+        setIsDismissed(true);
+        return;
       }
     } catch (e) {}
 
@@ -55,23 +55,26 @@ export const InstallAppPrompt = () => {
     if (!deferredPrompt) return;
 
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-    } else {
+    try {
+      await deferredPrompt.userChoice;
+      // Once prompted, never nag the user again
+      handleDismiss();
+    } catch (e) {
       handleDismiss();
     }
+    setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {
     setIsDismissed(true);
     try {
-      localStorage.setItem('club_games_install_dismissed', Date.now().toString());
+      // Permanent dismissal - prompt only once, never show again if "Not now" or closed
+      localStorage.setItem('cognisphere_pwa_install_dismissed', 'true');
+      localStorage.setItem('club_games_install_dismissed', 'permanent');
     } catch (e) {}
   };
 
-  // If already standalone or user dismissed recently, don't show
+  // If already standalone or user dismissed, don't show
   if (isStandalone || isDismissed) {
     return null;
   }
@@ -83,26 +86,29 @@ export const InstallAppPrompt = () => {
 
   return (
     <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      <div className="bg-slate-900/95 backdrop-blur-xl border border-cyan-500/30 rounded-2xl p-4 shadow-2xl shadow-cyan-950/50 text-slate-100 flex flex-col gap-3">
+      <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 shadow-xl text-on-surface flex flex-col gap-3">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-cyan-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0 text-white">
-              <Smartphone className="w-5 h-5" />
-            </div>
+            <img 
+              src="/cognisphere-emblem.png" 
+              alt="Cognisphere" 
+              className="w-10 h-10 rounded-xl object-contain shrink-0 shadow-xs border border-surface-container-high bg-white/5 p-1"
+            />
             <div>
-              <h4 className="text-sm font-bold text-white tracking-wide flex items-center gap-1.5">
-                Install Club Games App
+              <h4 className="text-sm font-bold text-on-surface tracking-wide flex items-center gap-1.5">
+                Install Cognisphere
               </h4>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-secondary">
                 Faster offline QR pass & real-time timers
               </p>
             </div>
           </div>
           <button
             onClick={handleDismiss}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            aria-label="Close"
+            className="p-1 rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container transition"
+            aria-label="Not now"
+            title="Not now"
           >
             <X className="w-4 h-4" />
           </button>
@@ -113,31 +119,41 @@ export const InstallAppPrompt = () => {
           <div className="flex items-center gap-2 pt-1">
             <button
               onClick={handleInstallClick}
-              className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-brand-500 hover:from-cyan-400 hover:to-brand-400 text-slate-950 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 transition active:scale-95"
+              className="flex-1 py-2 px-3 bg-primary hover:bg-primary-container text-on-primary text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition active:scale-95"
             >
               <Download className="w-3.5 h-3.5" />
-              Install App
+              Install Cognisphere
             </button>
             <button
               onClick={handleDismiss}
-              className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl transition"
+              className="py-2 px-3 bg-surface-container-low hover:bg-surface-container text-secondary hover:text-on-surface text-xs font-medium rounded-xl border border-surface-container transition active:scale-95"
             >
-              Later
+              Not now
             </button>
           </div>
         ) : isIOS ? (
-          <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5 text-cyan-400 font-medium">
-              <span>Tap</span>
-              <Share className="w-3.5 h-3.5 inline text-cyan-400" />
-              <span>Share in Safari toolbar</span>
+          <div className="flex flex-col gap-2.5 pt-1">
+            <div className="bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-xs text-on-surface flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 text-primary font-medium">
+                <span>Tap</span>
+                <Share className="w-3.5 h-3.5 inline text-primary" />
+                <span>Share in Safari toolbar</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-secondary">
+                <span>Then select</span>
+                <span className="inline-flex items-center gap-1 text-on-surface font-medium bg-surface-container px-1.5 py-0.5 rounded border border-surface-container-high">
+                  <PlusSquare className="w-3 h-3 text-primary" />
+                  Add to Home Screen
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <span>Then select</span>
-              <span className="inline-flex items-center gap-1 text-white font-medium bg-slate-800 px-1.5 py-0.5 rounded">
-                <PlusSquare className="w-3 h-3 text-cyan-400" />
-                Add to Home Screen
-              </span>
+            <div className="flex justify-end">
+              <button
+                onClick={handleDismiss}
+                className="py-1 px-3 text-secondary hover:text-on-surface text-xs font-medium rounded-lg transition"
+              >
+                Not now
+              </button>
             </div>
           </div>
         ) : null}

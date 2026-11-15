@@ -9,10 +9,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.ico', 'favicon.svg', 'favicon.png', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'Cognisphere-logo.jpeg', 'cognisphere-emblem.png'],
+      includeAssets: ['favicon.ico', 'favicon.png', 'favicon-16x16.png', 'favicon-32x32.png', 'favicon-48x48.png', 'favicon-64x64.png', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'Cognisphere-logo.jpeg', 'cognisphere-emblem.png'],
       manifest: {
-        name: 'Cognisphere Club Games',
-        short_name: 'ClubGames',
+        name: 'Cognisphere',
+        short_name: 'Cognisphere',
         description: 'Campus club games event dashboard, offline QR pass, live real-time timers & leaderboards',
         theme_color: '#0f172a',
         background_color: '#020617',
