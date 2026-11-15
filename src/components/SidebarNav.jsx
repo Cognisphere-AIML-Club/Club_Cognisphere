@@ -18,7 +18,8 @@ import {
   Moon,
   ClipboardCheck,
   UserCheck,
-  Lock
+  Lock,
+  Trophy
 } from 'lucide-react';
 import { subscribeToUserPassRequests } from '../services/passApprovalService';
 
@@ -40,8 +41,12 @@ export const SidebarNav = ({
   onSignIn,
   onLaunchBigScreen,
   adminTheme = 'light',
-  onToggleAdminTheme
+  theme = adminTheme,
+  onToggleAdminTheme,
+  onToggleTheme = onToggleAdminTheme
 }) => {
+  const currentTheme = theme || adminTheme || 'light';
+  const handleToggleTheme = onToggleTheme || onToggleAdminTheme;
   // Persist sidebar collapsed state (default collapsed)
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
@@ -113,6 +118,13 @@ export const SidebarNav = ({
       icon: CalendarDays,
       show: true,
       badge: null
+    },
+    {
+      id: 'leaderboard',
+      label: 'Leaderboard',
+      icon: Trophy,
+      show: true,
+      badge: 'Live'
     },
     {
       id: 'registrations',
@@ -330,33 +342,33 @@ export const SidebarNav = ({
               )
             )}
 
-            {/* Admin Theme Toggle Switch (Only visible for Admin) */}
-            {isAdmin && onToggleAdminTheme && (
+            {/* Theme Toggle Switch (Active whether Admin Mode is ON or OFF) */}
+            {handleToggleTheme && (
               !isCollapsed ? (
                 <div 
-                  onClick={onToggleAdminTheme}
+                  onClick={handleToggleTheme}
                   className="mb-2.5 p-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-high flex items-center justify-between cursor-pointer transition-all select-none group"
-                  title={`Switch to ${adminTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                  title={`Switch to ${currentTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      onToggleAdminTheme();
+                      handleToggleTheme();
                     }
                   }}
                 >
                   <div className="flex items-center gap-2 text-xs font-semibold text-on-surface">
-                    {adminTheme === 'dark' ? (
+                    {currentTheme === 'dark' ? (
                       <Moon className="w-3.5 h-3.5 text-primary" />
                     ) : (
                       <Sun className="w-3.5 h-3.5 text-amber-500" />
                     )}
-                    <span>{adminTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+                    <span>{currentTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
                   </div>
                   <div
                     className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
-                      adminTheme === 'dark' ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
+                      currentTheme === 'dark' ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
                     }`}
                   >
                     <span className="w-4 h-4 rounded-full bg-white shadow-xs block" />
@@ -366,12 +378,12 @@ export const SidebarNav = ({
                 <div className="mb-2.5 flex justify-center">
                   <button
                     type="button"
-                    onClick={onToggleAdminTheme}
+                    onClick={handleToggleTheme}
                     className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center transition-colors shadow-xs border border-surface-container-high"
-                    title={`Toggle Admin Theme (${adminTheme === 'dark' ? 'Dark' : 'Light'})`}
-                    aria-label="Toggle Admin Theme"
+                    title={`Toggle Theme (${currentTheme === 'dark' ? 'Dark' : 'Light'})`}
+                    aria-label="Toggle Theme"
                   >
-                    {adminTheme === 'dark' ? (
+                    {currentTheme === 'dark' ? (
                       <Moon className="w-4 h-4 text-primary" />
                     ) : (
                       <Sun className="w-4 h-4 text-amber-500" />

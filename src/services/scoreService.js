@@ -19,31 +19,38 @@ export function subscribeScoresForActivity(activityId, callback) {
   if (!activityId) return () => {};
 
   try {
+    // Single equality filter - NEVER requires a Firestore composite index
     const q = query(
       collection(db, 'scores'),
-      where('activityId', '==', activityId),
-      orderBy('rank', 'asc')
+      where('activityId', '==', activityId)
     );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const list = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-          publishedAt: d.data().publishedAt?.toDate ? d.data().publishedAt.toDate() : new Date()
-        }));
+        const list = snapshot.docs.map(d => {
+          const data = d.data();
+          const parsedRank = parseInt(data.rank, 10);
+          return {
+            id: d.id,
+            ...data,
+            rank: !isNaN(parsedRank) && parsedRank > 0 ? parsedRank : 999,
+            publishedAt: data.publishedAt?.toDate ? data.publishedAt.toDate() : new Date()
+          };
+        });
+        // Sort in memory by rank ascending
+        list.sort((a, b) => a.rank - b.rank);
         callback(list);
       },
       (error) => {
-        console.warn(`Scores snapshot error for ${activityId}:`, error.message);
+        console.error(`Scores snapshot error for ${activityId}:`, error);
         callback([]);
       }
     );
 
     return unsubscribe;
   } catch (err) {
-    console.warn('Failed to subscribe to scores:', err);
+    console.error('Failed to subscribe to scores:', err);
     callback([]);
     return () => {};
   }
@@ -54,30 +61,33 @@ export function subscribeScoresForActivity(activityId, callback) {
  */
 export function subscribeAllScores(callback) {
   try {
-    const q = query(
-      collection(db, 'scores'),
-      orderBy('rank', 'asc')
-    );
+    const q = collection(db, 'scores');
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const list = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-          publishedAt: d.data().publishedAt?.toDate ? d.data().publishedAt.toDate() : new Date()
-        }));
+        const list = snapshot.docs.map(d => {
+          const data = d.data();
+          const parsedRank = parseInt(data.rank, 10);
+          return {
+            id: d.id,
+            ...data,
+            rank: !isNaN(parsedRank) && parsedRank > 0 ? parsedRank : 999,
+            publishedAt: data.publishedAt?.toDate ? data.publishedAt.toDate() : new Date()
+          };
+        });
+        list.sort((a, b) => a.rank - b.rank);
         callback(list);
       },
       (error) => {
-        console.warn('All scores snapshot error:', error.message);
+        console.error('All scores snapshot error:', error);
         callback([]);
       }
     );
 
     return unsubscribe;
   } catch (err) {
-    console.warn('Failed to subscribe to all scores:', err);
+    console.error('Failed to subscribe to all scores:', err);
     callback([]);
     return () => {};
   }

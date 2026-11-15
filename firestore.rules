@@ -121,27 +121,34 @@ service cloud.firestore {
     }
 
     // === SCORES & LEADERBOARDS COLLECTION ===
-    // Readable by all authenticated participants.
-    // Only admins can write or publish scores.
+    // Publicly readable for all attendees, projectors and leaderboards.
+    // Configurable by room coordinators or admins (including Google Sheets live sync).
     match /scores/{scoreId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read: if true;
+      allow write: if isAdmin() || isCoordinator();
+    }
+
+    // === GOOGLE SHEET CONFIGS COLLECTION ===
+    // Readable for live sync status; configurable by coordinators and admins
+    match /sheetConfigs/{activityId} {
+      allow read: if true;
+      allow write: if isAdmin() || isCoordinator();
     }
 
     // === ANNOUNCEMENTS COLLECTION ===
-    // Readable by all authenticated users.
+    // Publicly readable for all event attendees.
     // Only admins can post or edit announcements.
     match /announcements/{announcementId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    // === SETTINGS (CERTIFICATES SWITCH, PASS CONFIG, ETC.) ===
-    // All authenticated users can read settings.
-    // Only admins can modify settings.
+    // === SETTINGS (CERTIFICATES SWITCH, GOOGLE SHEETS, PASS CONFIG, ETC.) ===
+    // Readable by all attendees (e.g. certificates enabled switch).
+    // Configurable by admins and coordinators.
     match /settings/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read: if true;
+      allow write: if isAdmin() || isCoordinator();
     }
 
     // === DENY BY DEFAULT ===

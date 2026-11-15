@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   User, 
   ArrowLeft, 
@@ -13,7 +13,8 @@ import {
   Award,
   Calendar,
   Building,
-  GraduationCap
+  GraduationCap,
+  X
 } from 'lucide-react';
 import { validateUSN } from '../hooks/useParticipantProfile';
 
@@ -53,15 +54,22 @@ export default function ProfileEditPage({
   profile, 
   onSave, 
   onBack, 
+  onNavigate,
+  onDirtyChange,
+  pendingExitTab,
+  onCancelExit,
   role = 'participant' 
 }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [certificateName, setCertificateName] = useState('');
   const [hasManuallyEditedCertName, setHasManuallyEditedCertName] = useState(false);
-  const [gender, setGender] = useState('Male');
   const [mobile, setMobile] = useState('');
   const [usn, setUsn] = useState('');
+
+  // Unsaved changes tracking baseline & modal state
+  const initialValuesRef = useRef(null);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   // Touched state
   const [touched, setTouched] = useState({
@@ -81,33 +89,93 @@ export default function ProfileEditPage({
 
   // Initialize from existing profile and user data
   useEffect(() => {
+    let initialF = '';
+    let initialL = '';
+    let initialCert = '';
+    let initialM = '';
+    let initialU = '';
+
     if (profile) {
-      if (profile.firstName) setFirstName(profile.firstName);
-      if (profile.lastName) setLastName(profile.lastName);
+      if (profile.firstName) initialF = profile.firstName;
+      if (profile.lastName) initialL = profile.lastName;
       
       const certName = profile.certificateName || profile.name || '';
       if (certName) {
-        setCertificateName(certName);
+        initialCert = certName;
         setHasManuallyEditedCertName(true);
       } else if (profile.firstName) {
-        setCertificateName(`${profile.firstName} ${profile.lastName || ''}`.trim());
+        initialCert = `${profile.firstName} ${profile.lastName || ''}`.trim();
       }
 
-      if (profile.gender) setGender(profile.gender);
-      if (profile.mobile && profile.mobile !== 'Offline') setMobile(profile.mobile);
-      if (profile.usn) setUsn(profile.usn);
+      if (profile.mobile && profile.mobile !== 'Offline') initialM = profile.mobile;
+      if (profile.usn) initialU = profile.usn;
     } else if (user) {
       const nameParts = (user.displayName || '').trim().split(' ');
-      const fName = nameParts[0] || '';
-      const lName = nameParts.slice(1).join(' ') || '';
-      setFirstName(fName);
-      setLastName(lName);
-      setCertificateName(user.displayName || '');
+      initialF = nameParts[0] || '';
+      initialL = nameParts.slice(1).join(' ') || '';
+      initialCert = user.displayName || '';
       if (user.phoneNumber) {
-        setMobile(user.phoneNumber.replace(/\D/g, '').slice(-10));
+        initialM = user.phoneNumber.replace(/\D/g, '').slice(-10);
       }
     }
+
+    setFirstName(initialF);
+    setLastName(initialL);
+    setCertificateName(initialCert);
+    setMobile(initialM);
+    setUsn(initialU);
+
+    initialValuesRef.current = {
+      firstName: initialF.trim(),
+      lastName: initialL.trim(),
+      certificateName: initialCert.trim(),
+      mobile: initialM.replace(/\D/g, '').slice(-10),
+      usn: initialU.trim().toUpperCase()
+    };
   }, [profile, user]);
+
+  // Compute dirty/unsaved state
+  const hasUnsavedChanges = useMemo(() => {
+    if (!initialValuesRef.current) return false;
+    const init = initialValuesRef.current;
+    const currentFirst = firstName.trim();
+    const currentLast = lastName.trim();
+    const currentCert = certificateName.trim();
+    const currentMobile = mobile.replace(/\D/g, '').slice(-10);
+    const currentUsn = usn.trim().toUpperCase();
+
+    return (
+      currentFirst !== init.firstName ||
+      currentLast !== init.lastName ||
+      currentCert !== init.certificateName ||
+      currentMobile !== init.mobile ||
+      currentUsn !== init.usn
+    );
+  }, [firstName, lastName, certificateName, mobile, usn]);
+
+  // Notify parent of dirty state for route-level guards
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onDirtyChange]);
+
+  // Open modal if external navigation was intercepted while dirty
+  useEffect(() => {
+    if (pendingExitTab && hasUnsavedChanges) {
+      setShowUnsavedModal(true);
+    }
+  }, [pendingExitTab, hasUnsavedChanges]);
+
+  // Browser reload/close guard
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   // Auto-compose certificate name when first or last name changes, UNLESS the user explicitly edited it
   const handleFirstNameChange = (e) => {
@@ -208,14 +276,129 @@ export default function ProfileEditPage({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         certificateName: certificateName.trim(),
-        gender,
         usn: finalUsn,
         mobile: cleanedMobile,
+        ...(profile?.gender ? { gender: profile.gender } : {})
       });
+
+      // Update baseline after successful save
+      initialValuesRef.current = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        certificateName: certificateName.trim(),
+        mobile: cleanedMobile,
+        usn: finalUsn
+      };
 
       setSuccessToast('Profile details updated successfully!');
       setTimeout(() => setSuccessToast(''), 4000);
     } catch (err) {
+      setErrorMsg(err.message || 'Failed to update profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Exit & Unsaved Changes handlers
+  const handleBackAttempt = () => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedModal(true);
+    } else {
+      onBack();
+    }
+  };
+
+  const handleModalCancel = () => {
+    setShowUnsavedModal(false);
+    onCancelExit?.();
+  };
+
+  const handleModalDiscardAndExit = () => {
+    if (initialValuesRef.current) {
+      setFirstName(initialValuesRef.current.firstName);
+      setLastName(initialValuesRef.current.lastName);
+      setCertificateName(initialValuesRef.current.certificateName);
+      setMobile(initialValuesRef.current.mobile);
+      setUsn(initialValuesRef.current.usn);
+    }
+    setShowUnsavedModal(false);
+    if (pendingExitTab) {
+      if (onNavigate) {
+        onNavigate(pendingExitTab);
+      } else {
+        onBack();
+      }
+    } else {
+      onBack();
+    }
+  };
+
+  const handleModalSaveAndExit = async () => {
+    setTouched({
+      firstName: true,
+      lastName: true,
+      certificateName: true,
+      mobile: true,
+      usn: true,
+    });
+
+    if (!isFirstNameValid) {
+      setShowUnsavedModal(false);
+      setErrorMsg('Please enter your first name.');
+      return;
+    }
+
+    if (!isCertNameValid) {
+      setShowUnsavedModal(false);
+      setErrorMsg('Please provide the name you want printed on certificates.');
+      return;
+    }
+
+    const finalUsn = isUsnLocked ? profile.usn.trim().toUpperCase() : usnCheck.usn;
+    if (!isUsnLocked && !usnCheck.valid) {
+      setShowUnsavedModal(false);
+      setErrorMsg(usnCheck.message);
+      return;
+    }
+
+    if (!isMobileValid) {
+      setShowUnsavedModal(false);
+      setErrorMsg('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await onSave({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        certificateName: certificateName.trim(),
+        usn: finalUsn,
+        mobile: cleanedMobile,
+        ...(profile?.gender ? { gender: profile.gender } : {})
+      });
+
+      initialValuesRef.current = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        certificateName: certificateName.trim(),
+        mobile: cleanedMobile,
+        usn: finalUsn
+      };
+
+      setShowUnsavedModal(false);
+
+      if (pendingExitTab) {
+        if (onNavigate) {
+          onNavigate(pendingExitTab);
+        } else {
+          onBack();
+        }
+      } else {
+        onBack();
+      }
+    } catch (err) {
+      setShowUnsavedModal(false);
       setErrorMsg(err.message || 'Failed to update profile. Please try again.');
     } finally {
       setSaving(false);
@@ -228,21 +411,12 @@ export default function ProfileEditPage({
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={onBack}
+          onClick={handleBackAttempt}
           className="inline-flex items-center gap-2 text-xs font-bold text-secondary hover:text-on-surface bg-surface-container-low hover:bg-surface-container px-3.5 py-2 rounded-xl transition-all shadow-xs active:scale-95"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back</span>
         </button>
-
-        <div className="flex items-center gap-2">
-          {isUsnLocked && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 shadow-xs">
-              <Lock className="w-3 h-3" />
-              <span>USN Verified & Locked</span>
-            </span>
-          )}
-        </div>
       </div>
 
       {/* Profile Overview Header Card */}
@@ -397,30 +571,6 @@ export default function ProfileEditPage({
                   <span>Certificate name is required</span>
                 </p>
               )}
-            </div>
-
-            {/* Gender Selection (Image 1: Male / Female / Transgender) */}
-            <div className="space-y-2 pt-1">
-              <label className="block text-xs font-semibold text-on-surface">
-                Gender
-              </label>
-              <div className="flex flex-wrap items-center gap-6 text-sm text-on-surface">
-                {['Male', 'Female', 'Transgender'].map((opt) => (
-                  <label key={opt} className="inline-flex items-center gap-2.5 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="gender"
-                      value={opt}
-                      checked={gender === opt}
-                      onChange={(e) => setGender(e.target.value)}
-                      className="w-4 h-4 text-primary accent-primary focus:ring-primary focus:ring-2 border-surface-container cursor-pointer"
-                    />
-                    <span className="text-xs font-medium text-on-surface group-hover:text-primary transition-colors">
-                      {opt}
-                    </span>
-                  </label>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -586,7 +736,7 @@ export default function ProfileEditPage({
         <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-3 pt-2">
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleBackAttempt}
             className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-surface-container text-secondary hover:text-on-surface hover:bg-surface-container font-semibold text-xs transition-all shadow-xs"
           >
             Cancel / Go Back
@@ -611,6 +761,86 @@ export default function ProfileEditPage({
           </button>
         </div>
       </form>
+
+      {/* Save Changes Before Exiting Pop-up Modal */}
+      {showUnsavedModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm animate-fadeIn"
+          onClick={handleModalCancel}
+        >
+          <div 
+            className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-xl relative text-on-surface"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={handleModalCancel}
+              className="absolute top-4 right-4 p-1.5 text-secondary hover:text-on-surface rounded-lg hover:bg-surface-container transition-colors"
+              title="Keep Editing"
+              aria-label="Keep Editing"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Save Icon Badge */}
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto shadow-xs">
+              <Save className="w-6 h-6 text-primary" />
+            </div>
+
+            {/* Heading & description */}
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-on-surface tracking-tight">
+                Save Changes Before Exiting?
+              </h3>
+              <p className="text-xs text-secondary leading-relaxed">
+                You have unsaved changes in your profile. Would you like to save them before leaving?
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleModalSaveAndExit}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-on-primary bg-primary hover:bg-primary-container flex items-center justify-center gap-2 transition-all shadow-xs active:scale-95 disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-on-primary" />
+                    <span>Saving Changes...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 text-on-primary" />
+                    <span>Save &amp; Exit</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleModalDiscardAndExit}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-error hover:bg-error-container/20 border border-surface-container hover:border-error/30 transition-colors flex items-center justify-center gap-2"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Discard &amp; Exit</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleModalCancel}
+                className="w-full py-2 px-4 rounded-xl text-xs font-medium text-secondary hover:text-on-surface transition-colors"
+              >
+                Keep Editing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

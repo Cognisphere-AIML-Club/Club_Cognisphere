@@ -22,7 +22,8 @@ import {
   Mail,
   HeartHandshake,
   LogIn,
-  ClipboardCheck
+  ClipboardCheck,
+  Trophy
 } from 'lucide-react';
 
 // Direct message deep-links for instant communication
@@ -117,7 +118,7 @@ const LEADERSHIP = [
   }
 ];
 
-export default function ClubHomePage({ onExploreGames, onOpenPass, onOpenRegistrations, onSignIn, user }) {
+export default function ClubHomePage({ onExploreGames, onOpenPass, onOpenRegistrations, onOpenLeaderboard, onSignIn, user }) {
 
   return (
     <div className="space-y-10 animate-fadeIn max-w-5xl mx-auto w-full pb-12">
@@ -170,6 +171,16 @@ export default function ClubHomePage({ onExploreGames, onOpenPass, onOpenRegistr
               <span>Enter Club Games 2026</span>
               <ArrowRight className="w-4 h-4 text-on-primary" />
             </button>
+
+            {onOpenLeaderboard && (
+              <button
+                onClick={onOpenLeaderboard}
+                className="py-3 px-5 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 active:scale-95"
+              >
+                <Trophy className="w-4 h-4 text-amber-500" />
+                <span>Leaderboard</span>
+              </button>
+            )}
 
             {onOpenRegistrations && (
               <button
