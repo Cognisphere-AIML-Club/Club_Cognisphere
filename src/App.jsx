@@ -339,9 +339,14 @@ export default function App() {
 
   const handleProfileNavigate = (targetTab) => {
     setProfileDirty(false);
+    currentNavRef.current.profileDirty = false;
     setPendingProfileExitTab(null);
     if (targetTab === '__back__') {
-      triggerBackAction();
+      if (navStackRef.current.index > 0) {
+        triggerBackAction();
+      } else {
+        navigateToTab('home');
+      }
     } else {
       pushNavEntry({ tab: targetTab || 'home', game: null, passGameId: null, leaderboardGameId: null });
     }
@@ -491,6 +496,21 @@ export default function App() {
     const handlePopState = (e) => {
       const { stack, index } = navStackRef.current;
       const targetIndex = e?.state?.stackIndex;
+      const current = currentNavRef.current;
+
+      // Intercept browser back / swipe gesture if on profile edit page with unsaved changes
+      if (current.activeTab === 'profile' && current.profileDirty) {
+        // Re-push profile route so history position is retained and app doesn't leave unexpectedly
+        try {
+          window.history.pushState(
+            { cognisphere: true, tab: 'profile', stackIndex: index },
+            '',
+            window.location.pathname + window.location.search
+          );
+        } catch (err) {}
+        setPendingProfileExitTab('__back__');
+        return;
+      }
 
       // Close open modals and mobile menu when navigating back/forward
       setMobileMenuOpen(false);
@@ -522,7 +542,6 @@ export default function App() {
 
       // Check current browser pathname directly
       const currentTab = getTabFromPath();
-      const current = currentNavRef.current;
 
       // If at root with no modals and no subview, trap and prompt leave confirmation
       if (
@@ -904,11 +923,19 @@ export default function App() {
                   role={effectiveRole}
                   onBack={() => {
                     setProfileDirty(false);
+                    currentNavRef.current.profileDirty = false;
                     setPendingProfileExitTab(null);
-                    navigateToTab('home');
+                    if (navStackRef.current.index > 0) {
+                      triggerBackAction();
+                    } else {
+                      navigateToTab('home');
+                    }
                   }}
                   onNavigate={handleProfileNavigate}
-                  onDirtyChange={setProfileDirty}
+                  onDirtyChange={(isDirty) => {
+                    setProfileDirty(isDirty);
+                    currentNavRef.current.profileDirty = isDirty;
+                  }}
                   pendingExitTab={pendingProfileExitTab}
                   onCancelExit={() => setPendingProfileExitTab(null)}
                   onSave={async (details) => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   User, 
   ArrowLeft, 
@@ -14,6 +15,8 @@ import {
   Calendar,
   Building,
   GraduationCap,
+  AlertTriangle,
+  Trash2,
   X
 } from 'lucide-react';
 import { validateUSN } from '../hooks/useParticipantProfile';
@@ -69,7 +72,11 @@ export default function ProfileEditPage({
 
   // Unsaved changes tracking baseline & modal state
   const initialValuesRef = useRef(null);
+  const isInitializedRef = useRef(false);
+  const isDirtyRef = useRef(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [exitTarget, setExitTarget] = useState(null);
+  const [modalError, setModalError] = useState('');
 
   // Touched state
   const [touched, setTouched] = useState({
@@ -89,6 +96,10 @@ export default function ProfileEditPage({
 
   // Initialize from existing profile and user data
   useEffect(() => {
+    // If already initialized with valid profile data, don't overwrite user's in-progress edits
+    if (isInitializedRef.current) return;
+    if (!profile && !user) return;
+
     let initialF = '';
     let initialL = '';
     let initialCert = '';
@@ -109,6 +120,7 @@ export default function ProfileEditPage({
 
       if (profile.mobile && profile.mobile !== 'Offline') initialM = profile.mobile;
       if (profile.usn) initialU = profile.usn;
+      isInitializedRef.current = true;
     } else if (user) {
       const nameParts = (user.displayName || '').trim().split(' ');
       initialF = nameParts[0] || '';
@@ -144,13 +156,15 @@ export default function ProfileEditPage({
     const currentMobile = mobile.replace(/\D/g, '').slice(-10);
     const currentUsn = usn.trim().toUpperCase();
 
-    return (
+    const dirty = (
       currentFirst !== init.firstName ||
       currentLast !== init.lastName ||
       currentCert !== init.certificateName ||
       currentMobile !== init.mobile ||
       currentUsn !== init.usn
     );
+    isDirtyRef.current = dirty;
+    return dirty;
   }, [firstName, lastName, certificateName, mobile, usn]);
 
   // Notify parent of dirty state for route-level guards
@@ -161,6 +175,7 @@ export default function ProfileEditPage({
   // Open modal if external navigation was intercepted while dirty
   useEffect(() => {
     if (pendingExitTab && hasUnsavedChanges) {
+      setExitTarget(pendingExitTab);
       setShowUnsavedModal(true);
     }
   }, [pendingExitTab, hasUnsavedChanges]);
@@ -289,6 +304,9 @@ export default function ProfileEditPage({
         mobile: cleanedMobile,
         usn: finalUsn
       };
+      isInitializedRef.current = true;
+      isDirtyRef.current = false;
+      onDirtyChange?.(false);
 
       setSuccessToast('Profile details updated successfully!');
       setTimeout(() => setSuccessToast(''), 4000);
@@ -302,6 +320,8 @@ export default function ProfileEditPage({
   // Exit & Unsaved Changes handlers
   const handleBackAttempt = () => {
     if (hasUnsavedChanges) {
+      setExitTarget('__back__');
+      setModalError('');
       setShowUnsavedModal(true);
     } else {
       onBack();
@@ -310,6 +330,8 @@ export default function ProfileEditPage({
 
   const handleModalCancel = () => {
     setShowUnsavedModal(false);
+    setExitTarget(null);
+    setModalError('');
     onCancelExit?.();
   };
 
@@ -322,9 +344,15 @@ export default function ProfileEditPage({
       setUsn(initialValuesRef.current.usn);
     }
     setShowUnsavedModal(false);
-    if (pendingExitTab) {
+    setModalError('');
+    isDirtyRef.current = false;
+    onDirtyChange?.(false);
+
+    const target = exitTarget || pendingExitTab;
+    setExitTarget(null);
+    if (target && target !== '__back__') {
       if (onNavigate) {
-        onNavigate(pendingExitTab);
+        onNavigate(target);
       } else {
         onBack();
       }
@@ -343,32 +371,29 @@ export default function ProfileEditPage({
     });
 
     if (!isFirstNameValid) {
-      setShowUnsavedModal(false);
-      setErrorMsg('Please enter your first name.');
+      setModalError('Please enter your first name.');
       return;
     }
 
     if (!isCertNameValid) {
-      setShowUnsavedModal(false);
-      setErrorMsg('Please provide the name you want printed on certificates.');
+      setModalError('Please provide the name you want printed on certificates.');
       return;
     }
 
-    const finalUsn = isUsnLocked ? profile.usn.trim().toUpperCase() : usnCheck.usn;
+    const finalUsn = isUsnLocked ? profile?.usn?.trim()?.toUpperCase() : usnCheck.usn;
     if (!isUsnLocked && !usnCheck.valid) {
-      setShowUnsavedModal(false);
-      setErrorMsg(usnCheck.message);
+      setModalError(usnCheck.message);
       return;
     }
 
     if (!isMobileValid) {
-      setShowUnsavedModal(false);
-      setErrorMsg('Please enter a valid 10-digit mobile number.');
+      setModalError('Please enter a valid 10-digit mobile number.');
       return;
     }
 
     try {
       setSaving(true);
+      setModalError('');
       await onSave({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -385,12 +410,17 @@ export default function ProfileEditPage({
         mobile: cleanedMobile,
         usn: finalUsn
       };
+      isInitializedRef.current = true;
+      isDirtyRef.current = false;
+      onDirtyChange?.(false);
 
       setShowUnsavedModal(false);
 
-      if (pendingExitTab) {
+      const target = exitTarget || pendingExitTab;
+      setExitTarget(null);
+      if (target && target !== '__back__') {
         if (onNavigate) {
-          onNavigate(pendingExitTab);
+          onNavigate(target);
         } else {
           onBack();
         }
@@ -398,8 +428,7 @@ export default function ProfileEditPage({
         onBack();
       }
     } catch (err) {
-      setShowUnsavedModal(false);
-      setErrorMsg(err.message || 'Failed to update profile. Please try again.');
+      setModalError(err.message || 'Failed to update profile. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -762,14 +791,15 @@ export default function ProfileEditPage({
         </div>
       </form>
 
-      {/* Save Changes Before Exiting Pop-up Modal */}
-      {showUnsavedModal && (
+      {/* Save Changes Before Exiting Pop-up Modal (Portaled to document.body for true Screen Center) */}
+      {showUnsavedModal && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm animate-fadeIn"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
           onClick={handleModalCancel}
         >
           <div 
-            className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-xl relative text-on-surface"
+            className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl relative text-on-surface m-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
@@ -783,20 +813,28 @@ export default function ProfileEditPage({
               <X className="w-4 h-4" />
             </button>
 
-            {/* Save Icon Badge */}
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto shadow-xs">
-              <Save className="w-6 h-6 text-primary" />
+            {/* Warning Icon Badge */}
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
+              <AlertTriangle className="w-6 h-6 text-amber-500" />
             </div>
 
             {/* Heading & description */}
             <div className="space-y-1.5">
               <h3 className="text-base font-bold text-on-surface tracking-tight">
-                Save Changes Before Exiting?
+                Save Changes Before Leaving?
               </h3>
               <p className="text-xs text-secondary leading-relaxed">
-                You have unsaved changes in your profile. Would you like to save them before leaving?
+                You have modified your profile details. What would you like to do before leaving?
               </p>
             </div>
+
+            {/* In-Modal Error alert */}
+            {modalError && (
+              <div className="bg-error-container text-on-error-container text-xs p-3 rounded-xl flex items-center gap-2 text-left font-medium animate-fadeIn">
+                <AlertCircle className="w-4 h-4 shrink-0 text-error" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-2">
@@ -823,23 +861,24 @@ export default function ProfileEditPage({
                 type="button"
                 disabled={saving}
                 onClick={handleModalDiscardAndExit}
-                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-error hover:bg-error-container/20 border border-surface-container hover:border-error/30 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-error hover:bg-error/10 border border-error/20 hover:border-error/30 transition-colors flex items-center justify-center gap-2"
               >
-                <X className="w-3.5 h-3.5" />
-                <span>Discard &amp; Exit</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Discard Changes</span>
               </button>
 
               <button
                 type="button"
                 disabled={saving}
                 onClick={handleModalCancel}
-                className="w-full py-2 px-4 rounded-xl text-xs font-medium text-secondary hover:text-on-surface transition-colors"
+                className="w-full py-2 px-4 rounded-xl text-xs font-medium text-secondary hover:text-on-surface hover:bg-surface-container/50 rounded-xl transition-colors"
               >
                 Keep Editing
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

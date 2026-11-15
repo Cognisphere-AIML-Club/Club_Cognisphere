@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, X, Share, PlusSquare, Smartphone } from 'lucide-react';
+import { Download, X, Share, PlusSquare } from 'lucide-react';
 
 export const InstallAppPrompt = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -19,14 +19,14 @@ export const InstallAppPrompt = () => {
 
     checkStandalone();
 
-    // 2. Check if user dismissed prompt recently (last 24 hours)
+    // 2. Check if user already dismissed or installed (prompt only once - never show again if dismissed)
     try {
-      const dismissedAt = localStorage.getItem('club_games_install_dismissed');
-      if (dismissedAt) {
-        const diffHours = (Date.now() - parseInt(dismissedAt, 10)) / (1000 * 60 * 60);
-        if (diffHours < 24) {
-          setIsDismissed(true);
-        }
+      const isPermanentlyDismissed = 
+        localStorage.getItem('cognisphere_pwa_install_dismissed') === 'true' ||
+        localStorage.getItem('club_games_install_dismissed') === 'permanent';
+      if (isPermanentlyDismissed) {
+        setIsDismissed(true);
+        return;
       }
     } catch (e) {}
 
@@ -55,23 +55,26 @@ export const InstallAppPrompt = () => {
     if (!deferredPrompt) return;
 
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-    } else {
+    try {
+      await deferredPrompt.userChoice;
+      // Once prompted, never nag the user again
+      handleDismiss();
+    } catch (e) {
       handleDismiss();
     }
+    setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {
     setIsDismissed(true);
     try {
-      localStorage.setItem('club_games_install_dismissed', Date.now().toString());
+      // Permanent dismissal - prompt only once, never show again if "Not now" or closed
+      localStorage.setItem('cognisphere_pwa_install_dismissed', 'true');
+      localStorage.setItem('club_games_install_dismissed', 'permanent');
     } catch (e) {}
   };
 
-  // If already standalone or user dismissed recently, don't show
+  // If already standalone or user dismissed, don't show
   if (isStandalone || isDismissed) {
     return null;
   }
@@ -87,12 +90,14 @@ export const InstallAppPrompt = () => {
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-surface-container border border-surface-container-high flex items-center justify-center shrink-0 text-primary">
-              <Smartphone className="w-5 h-5" />
-            </div>
+            <img 
+              src="/cognisphere-emblem.png" 
+              alt="Cognisphere" 
+              className="w-10 h-10 rounded-xl object-contain shrink-0 shadow-xs border border-surface-container-high bg-white/5 p-1"
+            />
             <div>
               <h4 className="text-sm font-bold text-on-surface tracking-wide flex items-center gap-1.5">
-                Install Club Games App
+                Install Cognisphere
               </h4>
               <p className="text-xs text-secondary">
                 Faster offline QR pass & real-time timers
@@ -102,7 +107,8 @@ export const InstallAppPrompt = () => {
           <button
             onClick={handleDismiss}
             className="p-1 rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container transition"
-            aria-label="Close"
+            aria-label="Not now"
+            title="Not now"
           >
             <X className="w-4 h-4" />
           </button>
@@ -116,28 +122,38 @@ export const InstallAppPrompt = () => {
               className="flex-1 py-2 px-3 bg-primary hover:bg-primary-container text-on-primary text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition active:scale-95"
             >
               <Download className="w-3.5 h-3.5" />
-              Install App
+              Install Cognisphere
             </button>
             <button
               onClick={handleDismiss}
-              className="py-2 px-3 bg-surface-container-low hover:bg-surface-container text-secondary hover:text-on-surface text-xs font-medium rounded-xl border border-surface-container transition"
+              className="py-2 px-3 bg-surface-container-low hover:bg-surface-container text-secondary hover:text-on-surface text-xs font-medium rounded-xl border border-surface-container transition active:scale-95"
             >
-              Later
+              Not now
             </button>
           </div>
         ) : isIOS ? (
-          <div className="bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-xs text-on-surface flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5 text-primary font-medium">
-              <span>Tap</span>
-              <Share className="w-3.5 h-3.5 inline text-primary" />
-              <span>Share in Safari toolbar</span>
+          <div className="flex flex-col gap-2.5 pt-1">
+            <div className="bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-xs text-on-surface flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 text-primary font-medium">
+                <span>Tap</span>
+                <Share className="w-3.5 h-3.5 inline text-primary" />
+                <span>Share in Safari toolbar</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-secondary">
+                <span>Then select</span>
+                <span className="inline-flex items-center gap-1 text-on-surface font-medium bg-surface-container px-1.5 py-0.5 rounded border border-surface-container-high">
+                  <PlusSquare className="w-3 h-3 text-primary" />
+                  Add to Home Screen
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 text-secondary">
-              <span>Then select</span>
-              <span className="inline-flex items-center gap-1 text-on-surface font-medium bg-surface-container px-1.5 py-0.5 rounded border border-surface-container-high">
-                <PlusSquare className="w-3 h-3 text-primary" />
-                Add to Home Screen
-              </span>
+            <div className="flex justify-end">
+              <button
+                onClick={handleDismiss}
+                className="py-1 px-3 text-secondary hover:text-on-surface text-xs font-medium rounded-lg transition"
+              >
+                Not now
+              </button>
             </div>
           </div>
         ) : null}
