@@ -15,7 +15,9 @@ import RegistrationsHub from './components/RegistrationsHub';
 import LogoutConfirmModal from './components/LogoutConfirmModal';
 import LeaveSiteConfirmModal from './components/LeaveSiteConfirmModal';
 import ProfileEditPage from './components/ProfileEditPage';
+import LeaderboardPage from './components/LeaderboardPage';
 import { SidebarNav } from './components/SidebarNav';
+import MobileDrawerNav from './components/MobileDrawerNav';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
 import {
   ShieldCheck,
@@ -35,7 +37,10 @@ import {
   Sun,
   Moon,
   UserCheck,
-  User
+  User,
+  Trophy,
+  Menu,
+  X
 } from 'lucide-react';
 
 export default function App() {
@@ -46,6 +51,9 @@ export default function App() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [pendingProfileExitTab, setPendingProfileExitTab] = useState(null);
 
   // Path-Based Clean Routing Helper
   const getTabFromPath = () => {
@@ -54,8 +62,9 @@ export default function App() {
     const hash = window.location.hash.replace(/^#\/?/, '');
     const search = new URLSearchParams(window.location.search);
 
-    // Exact path matches (e.g. /events, /registrations, /pass)
+    // Exact path matches (e.g. /events, /leaderboard, /registrations, /pass)
     if (pathname === '/events' || hash === 'events') return 'events';
+    if (pathname === '/leaderboard' || hash === 'leaderboard') return 'leaderboard';
     if (pathname === '/registrations' || hash === 'registrations') return 'registrations';
     if (pathname === '/pass' || hash === 'pass') return 'pass';
     if (pathname === '/certificates' || hash === 'certificates') return 'certificates';
@@ -65,7 +74,7 @@ export default function App() {
 
     // Query parameter fallback support (?tab=events)
     const tabParam = search.get('tab');
-    if (tabParam && ['home', 'events', 'registrations', 'pass', 'certificates', 'timers', 'scan', 'profile'].includes(tabParam)) {
+    if (tabParam && ['home', 'events', 'leaderboard', 'registrations', 'pass', 'certificates', 'timers', 'scan', 'profile'].includes(tabParam)) {
       return tabParam;
     }
 
@@ -85,9 +94,10 @@ export default function App() {
     window.location.hash === '#/screen'
   );
 
-  const [activeTab, setActiveTab] = useState(getTabFromPath); // 'home' | 'events' | 'registrations' | 'pass' | 'timers' | 'scan' | 'certificates' | 'profile'
+  const [activeTab, setActiveTab] = useState(getTabFromPath); // 'home' | 'events' | 'leaderboard' | 'registrations' | 'pass' | 'timers' | 'scan' | 'certificates' | 'profile'
   const [selectedGame, setSelectedGame] = useState(null); // active GameDetailPage
   const [selectedPassGameId, setSelectedPassGameId] = useState(null);
+  const [selectedLeaderboardGameId, setSelectedLeaderboardGameId] = useState(() => searchParams.get('game') || null);
 
   // Helper to safely get window scroll position
   const getWindowScrollY = () => {
@@ -111,12 +121,13 @@ export default function App() {
   };
 
   // Create an entry in the navigation stack
-  const createStackEntry = ({ tab, game = null, passGameId = null, path = null, scrollY = 0 }) => ({
+  const createStackEntry = ({ tab, game = null, passGameId = null, leaderboardGameId = null, path = null, scrollY = 0 }) => ({
     id: `nav_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     tab,
     game,
     passGameId,
-    path: path || (game ? `/events?game=${game.id}` : getPathForTab(tab)),
+    leaderboardGameId,
+    path: path || (game ? `/events?game=${game.id}` : (tab === 'leaderboard' && leaderboardGameId ? `/leaderboard?game=${leaderboardGameId}` : getPathForTab(tab))),
     scrollY: scrollY || 0,
     timestamp: Date.now()
   });
@@ -181,22 +192,20 @@ export default function App() {
   const effectiveIsStaff = (effectiveIsAdmin || isCoordinator);
   const effectiveRole = isAdmin ? (adminMode ? 'admin' : 'participant') : role;
 
-  // Admin-only Dark Theme preference (light by default for all users, toggleable exclusively for Admin)
-  const [adminTheme, setAdminTheme] = useState(() => {
+  // Theme preference (light by default for all users, toggleable anytime between Light and Dark)
+  const [theme, setTheme] = useState(() => {
     try {
-      return localStorage.getItem('cognisphere_admin_theme') || 'light';
+      return localStorage.getItem('cognisphere_theme') || localStorage.getItem('cognisphere_admin_theme') || 'light';
     } catch (e) {
       return 'light';
     }
   });
 
   // Apply theme to DOM elements:
-  // If user is NOT admin, dark mode is NEVER active (strictly forced to Light Mode).
-  // Only if isAdmin is true and adminTheme is 'dark', apply .dark class and attributes.
-  const applyThemeToDOM = (theme, adminStatus) => {
+  const applyThemeToDOM = (currentTheme) => {
     const root = document.documentElement;
     const body = document.body;
-    const isDark = adminStatus && theme === 'dark';
+    const isDark = currentTheme === 'dark';
 
     if (isDark) {
       root.classList.add('dark');
@@ -218,16 +227,17 @@ export default function App() {
   };
 
   useEffect(() => {
-    applyThemeToDOM(adminTheme, isAdmin);
-  }, [isAdmin, adminTheme]);
+    applyThemeToDOM(theme);
+  }, [theme]);
 
-  const toggleAdminTheme = () => {
-    const next = adminTheme === 'dark' ? 'light' : 'dark';
-    setAdminTheme(next);
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
     try {
+      localStorage.setItem('cognisphere_theme', next);
       localStorage.setItem('cognisphere_admin_theme', next);
     } catch (e) { }
-    applyThemeToDOM(next, isAdmin);
+    applyThemeToDOM(next);
   };
 
   const handleOpenBigScreen = (mode = 'hall', activityId = null) => {
@@ -253,7 +263,9 @@ export default function App() {
     showBigScreen,
     showEditProfile,
     showLogoutConfirm,
-    showLeaveConfirm
+    showLeaveConfirm,
+    mobileMenuOpen,
+    profileDirty
   });
 
   useEffect(() => {
@@ -263,12 +275,15 @@ export default function App() {
       showBigScreen,
       showEditProfile,
       showLogoutConfirm,
-      showLeaveConfirm
+      showLeaveConfirm,
+      mobileMenuOpen,
+      profileDirty
     };
-  }, [activeTab, selectedGame, showBigScreen, showEditProfile, showLogoutConfirm, showLeaveConfirm]);
+  }, [activeTab, selectedGame, showBigScreen, showEditProfile, showLogoutConfirm, showLeaveConfirm, mobileMenuOpen, profileDirty]);
 
   // Push new page onto stack with scroll position remembered from the current page
-  const pushNavEntry = ({ tab, game = null, passGameId = null, path = null }) => {
+  const pushNavEntry = ({ tab, game = null, passGameId = null, leaderboardGameId = null, path = null }) => {
+    setMobileMenuOpen(false);
     const fromScrollY = getWindowScrollY();
     const { stack, index } = navStackRef.current;
 
@@ -284,7 +299,7 @@ export default function App() {
     const nextStack = updatedStack.slice(0, index + 1);
 
     // 3. Create and push new layer entry
-    const newEntry = createStackEntry({ tab, game, passGameId, path, scrollY: 0 });
+    const newEntry = createStackEntry({ tab, game, passGameId, leaderboardGameId, path, scrollY: 0 });
     nextStack.push(newEntry);
     const newIndex = nextStack.length - 1;
 
@@ -293,6 +308,7 @@ export default function App() {
     setActiveTab(tab);
     setSelectedGame(game);
     setSelectedPassGameId(passGameId);
+    setSelectedLeaderboardGameId(leaderboardGameId);
 
     // 4. Update browser history
     try {
@@ -302,7 +318,8 @@ export default function App() {
         entryId: newEntry.id,
         tab,
         gameId: game?.id || null,
-        passGameId: passGameId || null
+        passGameId: passGameId || null,
+        leaderboardGameId: leaderboardGameId || null
       }, '', newEntry.path);
     } catch (e) { }
 
@@ -313,20 +330,60 @@ export default function App() {
   };
 
   const navigateToTab = (tab) => {
-    pushNavEntry({ tab, game: null, passGameId: null });
+    if (activeTab === 'profile' && profileDirty && tab !== 'profile') {
+      setPendingProfileExitTab(tab);
+      return;
+    }
+    pushNavEntry({ tab, game: null, passGameId: null, leaderboardGameId: null });
+  };
+
+  const handleProfileNavigate = (targetTab) => {
+    setProfileDirty(false);
+    setPendingProfileExitTab(null);
+    if (targetTab === '__back__') {
+      triggerBackAction();
+    } else {
+      pushNavEntry({ tab: targetTab || 'home', game: null, passGameId: null, leaderboardGameId: null });
+    }
   };
 
   const navigateToGame = (game) => {
-    pushNavEntry({ tab: 'events', game, passGameId: null, path: `/events?game=${game?.id}` });
+    if (activeTab === 'profile' && profileDirty) {
+      setPendingProfileExitTab('events');
+      return;
+    }
+    pushNavEntry({ tab: 'events', game, passGameId: null, leaderboardGameId: null, path: `/events?game=${game?.id}` });
   };
 
   const handleOpenPassForGame = (activityId) => {
-    pushNavEntry({ tab: 'pass', game: null, passGameId: activityId, path: '/pass' });
+    pushNavEntry({ tab: 'pass', game: null, passGameId: activityId, leaderboardGameId: null, path: '/pass' });
+  };
+
+  const handleOpenLeaderboardForGame = (activityId) => {
+    pushNavEntry({
+      tab: 'leaderboard',
+      game: null,
+      passGameId: null,
+      leaderboardGameId: activityId,
+      path: activityId ? `/leaderboard?game=${activityId}` : '/leaderboard'
+    });
   };
 
   // Back Navigation: Moves back along the layer stack, restoring the remembered scroll position
   const triggerBackAction = () => {
     const current = currentNavRef.current;
+
+    // 0. Dismiss Mobile Drawer if open
+    if (current.mobileMenuOpen) {
+      setMobileMenuOpen(false);
+      return;
+    }
+
+    // 0.5. Prompt if on profile edit page with unsaved changes
+    if (current.activeTab === 'profile' && current.profileDirty) {
+      setPendingProfileExitTab('__back__');
+      return;
+    }
 
     // 1. Dismiss Leave Confirmation Modal if open
     if (current.showLeaveConfirm) {
@@ -377,6 +434,7 @@ export default function App() {
       setActiveTab(targetEntry.tab);
       setSelectedGame(targetEntry.game);
       setSelectedPassGameId(targetEntry.passGameId);
+      setSelectedLeaderboardGameId(targetEntry.leaderboardGameId || null);
 
       restoreScrollPosition(targetEntry.scrollY);
       return;
@@ -413,6 +471,7 @@ export default function App() {
       setActiveTab(targetEntry.tab);
       setSelectedGame(targetEntry.game);
       setSelectedPassGameId(targetEntry.passGameId);
+      setSelectedLeaderboardGameId(targetEntry.leaderboardGameId || null);
 
       restoreScrollPosition(targetEntry.scrollY);
     }
@@ -433,7 +492,8 @@ export default function App() {
       const { stack, index } = navStackRef.current;
       const targetIndex = e?.state?.stackIndex;
 
-      // Close open modals when navigating back/forward
+      // Close open modals and mobile menu when navigating back/forward
+      setMobileMenuOpen(false);
       setShowLeaveConfirm(false);
       setShowLogoutConfirm(false);
       setShowEditProfile(false);
@@ -453,6 +513,7 @@ export default function App() {
         setActiveTab(targetEntry.tab);
         setSelectedGame(targetEntry.game);
         setSelectedPassGameId(targetEntry.passGameId);
+        setSelectedLeaderboardGameId(targetEntry.leaderboardGameId || null);
 
         // Restore remembered position
         restoreScrollPosition(targetEntry.scrollY);
@@ -487,6 +548,7 @@ export default function App() {
         setActiveTab(targetEntry.tab);
         setSelectedGame(targetEntry.game);
         setSelectedPassGameId(targetEntry.passGameId);
+        setSelectedLeaderboardGameId(targetEntry.leaderboardGameId || null);
         restoreScrollPosition(targetEntry.scrollY);
       }
     };
@@ -510,7 +572,9 @@ export default function App() {
         triggerForwardAction();
       } else if (e.key === 'Escape') {
         const current = currentNavRef.current;
-        if (current.showLeaveConfirm) {
+        if (current.mobileMenuOpen) {
+          setMobileMenuOpen(false);
+        } else if (current.showLeaveConfirm) {
           setShowLeaveConfirm(false);
         } else if (current.showLogoutConfirm) {
           setShowLogoutConfirm(false);
@@ -578,8 +642,10 @@ export default function App() {
         onLogout={() => setShowLogoutConfirm(true)}
         onSignIn={signInWithGoogle}
         onLaunchBigScreen={(mode, actId) => handleOpenBigScreen(mode, actId)}
-        adminTheme={adminTheme}
-        onToggleAdminTheme={toggleAdminTheme}
+        adminTheme={theme}
+        theme={theme}
+        onToggleAdminTheme={toggleTheme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* 2. Main Content Area */}
@@ -603,222 +669,92 @@ export default function App() {
         {/* Mobile-Only Header */}
         <header className="md:hidden border-b border-surface-container bg-surface-container-lowest sticky top-0 z-40 transition-colors">
           <div className="px-4 h-16 flex items-center justify-between">
-            {/* Mobile Logo & History Stack Navigation */}
-            <div className="flex items-center gap-2">
-              <div
-                onClick={() => navigateToTab('home')}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-lg overflow-hidden border border-surface-container shadow-xs shrink-0">
-                  <img
-                    src="/Cognisphere-logo.jpeg"
-                    alt="Cognisphere Logo"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-bold text-sm tracking-wider leading-none">
-                    <span className="text-on-surface">COGNI</span>
-                    <span className="text-primary">SPHERE</span>
-                  </span>
-                  <span className="text-[8px] font-bold text-secondary tracking-widest uppercase mt-0.5 leading-none">
-                    AI & ML CLUB
-                  </span>
-                </div>
+            {/* Mobile Logo */}
+            <div
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateToTab('home');
+              }}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              <div className="w-8 h-8 rounded-lg overflow-hidden border border-surface-container shadow-xs shrink-0">
+                <img
+                  src="/Cognisphere-logo.jpeg"
+                  alt="Cognisphere Logo"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-bold text-sm tracking-wider leading-none">
+                  <span className="text-on-surface">COGNI</span>
+                  <span className="text-primary">SPHERE</span>
+                </span>
+                <span className="text-[8px] font-bold text-secondary tracking-widest uppercase mt-0.5 leading-none">
+                  AI & ML CLUB
+                </span>
               </div>
             </div>
 
-            {/* Mobile Right Controls: User Auth & Admin Switch */}
+            {/* Mobile Right Controls: Admin Toggle (left side of hamburger menu) + Hamburger Button */}
             <div className="flex items-center gap-2">
-              {user ? (
-                <div className="flex items-center gap-2">
-                  <div
-                    onClick={() => navigateToTab('profile')}
-                    className="relative cursor-pointer group"
-                    title="Profile Settings"
-                  >
-                    {user.photoURL ? (
-                      <img
-                        src={user.photoURL}
-                        alt="avatar"
-                        className="w-7 h-7 rounded-full border border-surface-container object-cover group-hover:border-primary transition-colors"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-xs font-bold text-on-surface group-hover:ring-1 group-hover:ring-primary transition-all">
-                        {user.displayName ? user.displayName.charAt(0) : 'U'}
-                      </div>
-                    )}
-
-                    {/* Role bubble in bottom-right corner for Staff */}
-                    {(effectiveIsAdmin || effectiveIsCoordinator || effectiveIsJudge) && (
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-black uppercase shadow-xs border border-surface-container-lowest ${effectiveIsAdmin
-                            ? 'bg-primary text-on-primary'
-                            : effectiveIsCoordinator
-                              ? 'bg-tertiary text-on-tertiary'
-                              : 'bg-secondary text-on-secondary'
-                          }`}
-                        title={effectiveIsAdmin ? 'Admin' : effectiveIsCoordinator ? 'Coordinator' : 'Judge'}
-                      >
-                        {effectiveIsAdmin ? 'A' : effectiveIsCoordinator ? 'C' : 'J'}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Admin Mode Toggle in mobile header */}
-                  {isAdmin && (
-                    <button
-                      onClick={toggleAdminMode}
-                      title={`Admin Mode: ${adminMode ? 'ON' : 'OFF (Participant View)'}`}
-                      className={`p-1.5 rounded-lg border transition-colors flex items-center gap-1.5 text-[10px] font-bold ${
-                        adminMode 
-                          ? 'bg-primary text-on-primary border-primary shadow-xs' 
-                          : 'text-secondary hover:text-on-surface bg-surface-container border-surface-container-high'
-                      }`}
-                      aria-label="Admin Mode"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Admin Mode</span>
-                    </button>
-                  )}
-
-                  {/* Admin-only Theme Toggle in mobile header */}
-                  {isAdmin && (
-                    <button
-                      onClick={toggleAdminTheme}
-                      title={`Switch to ${adminTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
-                      className="p-1.5 text-secondary hover:text-on-surface rounded-lg hover:bg-surface-container transition-colors"
-                      aria-label="Toggle Admin Theme"
-                    >
-                      {adminTheme === 'dark' ? (
-                        <Moon className="w-4 h-4 text-primary" />
-                      ) : (
-                        <Sun className="w-4 h-4 text-amber-500" />
-                      )}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setShowLogoutConfirm(true)}
-                    title="Sign out"
-                    className="p-1.5 text-secondary hover:text-error rounded-lg transition-colors"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
+              {/* Admin Mode Toggle Button (placed strictly on the left side of the menu) */}
+              {isAdmin && (
                 <button
-                  onClick={signInWithGoogle}
-                  className="py-1.5 px-3 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-sm"
+                  onClick={toggleAdminMode}
+                  title={`Admin Mode: ${adminMode ? 'ON (Active)' : 'OFF (Participant View)'}`}
+                  className={`px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-bold active:scale-95 ${
+                    adminMode 
+                      ? 'bg-primary text-on-primary border-primary shadow-xs' 
+                      : 'text-on-surface bg-surface-container border-surface-container-high hover:bg-surface-container-high'
+                  }`}
+                  aria-label="Admin Mode Toggle"
                 >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Sign In</span>
+                  <ShieldCheck className={`w-3.5 h-3.5 ${adminMode ? 'text-on-primary' : 'text-primary'}`} />
+                  <span className="text-[11px]">{adminMode ? 'Admin ON' : 'Admin'}</span>
                 </button>
               )}
+
+              {/* Hamburger Menu Button */}
+              <button
+                onClick={() => setMobileMenuOpen(prev => !prev)}
+                className="p-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container transition-all active:scale-95"
+                title={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={mobileMenuOpen}
+              >
+                {mobileMenuOpen ? (
+                  <X className="w-5 h-5 text-on-surface" />
+                ) : (
+                  <Menu className="w-5 h-5 text-on-surface" />
+                )}
+              </button>
             </div>
           </div>
-
-          {/* Mobile Sub-navigation Tabs (Projector Page Removed from Mobile View) */}
-          <div className="border-t border-surface-container bg-surface-container-lowest px-3 py-1.5 overflow-x-auto flex items-center gap-1.5 no-scrollbar">
-            <button
-              onClick={() => navigateToTab('home')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'home'
-                ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
-                : 'text-secondary hover:text-on-surface'
-                }`}
-            >
-              <Home className="w-3.5 h-3.5" />
-              <span>Home</span>
-            </button>
-
-            <button
-              onClick={() => navigateToTab('events')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'events'
-                ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
-                : 'text-secondary hover:text-on-surface'
-                }`}
-            >
-              <CalendarDays className="w-3.5 h-3.5" />
-              <span>Events Hub</span>
-            </button>
-
-            <button
-              onClick={() => navigateToTab('registrations')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'registrations'
-                ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
-                : 'text-secondary hover:text-on-surface'
-                }`}
-            >
-              <ClipboardCheck className="w-3.5 h-3.5" />
-              <span>{effectiveIsStaff ? 'Registrations & Approvals' : 'Registrations'}</span>
-            </button>
-
-            {user && (
-              <button
-                onClick={() => navigateToTab('pass')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'pass'
-                  ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
-                  : 'text-secondary hover:text-on-surface'
-                  }`}
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span>My Pass</span>
-              </button>
-            )}
-
-            {user && (
-              <button
-                onClick={() => navigateToTab('certificates')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'certificates'
-                  ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
-                  : 'text-secondary hover:text-on-surface'
-                  }`}
-              >
-                <Award className="w-3.5 h-3.5" />
-                <span>Certificates</span>
-              </button>
-            )}
-
-            {user && (
-              <button
-                onClick={() => navigateToTab('profile')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'profile'
-                  ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
-                  : 'text-secondary hover:text-on-surface'
-                  }`}
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>Profile</span>
-              </button>
-            )}
-
-            {(effectiveIsStaff || effectiveIsJudge) && (
-              <button
-                onClick={() => navigateToTab('timers')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'timers'
-                  ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
-                  : 'text-secondary hover:text-on-surface'
-                  }`}
-              >
-                <Timer className="w-3.5 h-3.5" />
-                <span>Timers</span>
-              </button>
-            )}
-
-            {user && effectiveIsStaff && (
-              <button
-                onClick={() => navigateToTab('scan')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'scan'
-                  ? 'bg-surface-container text-primary font-bold border border-surface-container-high'
-                  : 'text-secondary hover:text-on-surface'
-                  }`}
-              >
-                <ScanLine className="w-3.5 h-3.5" />
-                <span>Scanner</span>
-              </button>
-            )}
-          </div>
         </header>
+
+        {/* Mobile Slide-out Drawer Navigation */}
+        <MobileDrawerNav
+          isOpen={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+          user={user}
+          profile={profile}
+          role={effectiveRole}
+          isAdmin={effectiveIsAdmin}
+          isAdminUser={isAdmin}
+          adminMode={adminMode}
+          onToggleAdminMode={toggleAdminMode}
+          isCoordinator={effectiveIsCoordinator}
+          isJudge={effectiveIsJudge}
+          isStaff={effectiveIsStaff}
+          activeTab={activeTab}
+          onSelectTab={navigateToTab}
+          onOpenEditProfile={() => navigateToTab('profile')}
+          onLogout={() => setShowLogoutConfirm(true)}
+          onSignIn={signInWithGoogle}
+          onLaunchBigScreen={(mode, actId) => handleOpenBigScreen(mode, actId)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
 
         {/* Main Content Area */}
         <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8">
@@ -854,6 +790,7 @@ export default function App() {
                   onExploreGames={() => navigateToTab('events')}
                   onOpenPass={() => navigateToTab('pass')}
                   onOpenRegistrations={() => navigateToTab('registrations')}
+                  onOpenLeaderboard={() => navigateToTab('leaderboard')}
                 />
               )}
 
@@ -870,6 +807,7 @@ export default function App() {
                     profile={profile}
                     onBack={triggerBackAction}
                     onOpenPass={handleOpenPassForGame}
+                    onOpenLeaderboard={handleOpenLeaderboardForGame}
                     onUpdateActivity={updateActivity}
                     onOpenBigScreen={(actId) => handleOpenBigScreen('room', actId)}
                     onSignIn={signInWithGoogle}
@@ -886,6 +824,23 @@ export default function App() {
                     onSignIn={signInWithGoogle}
                   />
                 )
+              )}
+
+              {/* Tab: Dedicated Leaderboard Page with Multi-Event Selector */}
+              {activeTab === 'leaderboard' && (
+                <LeaderboardPage
+                  activities={activities}
+                  initialActivityId={selectedLeaderboardGameId}
+                  user={user}
+                  isAdmin={effectiveIsAdmin}
+                  isCoordinator={effectiveIsCoordinator}
+                  isStaff={effectiveIsStaff}
+                  onBack={triggerBackAction}
+                  onNavigateToEvent={(actId) => {
+                    const act = activities.find(a => a.id === actId);
+                    if (act) navigateToGame(act);
+                  }}
+                />
               )}
 
               {/* Tab: Dedicated Event Registrations & Approvals Portal */}
@@ -948,7 +903,15 @@ export default function App() {
                   user={user}
                   profile={profile}
                   role={effectiveRole}
-                  onBack={() => navigateToTab('home')}
+                  onBack={() => {
+                    setProfileDirty(false);
+                    setPendingProfileExitTab(null);
+                    navigateToTab('home');
+                  }}
+                  onNavigate={handleProfileNavigate}
+                  onDirtyChange={setProfileDirty}
+                  pendingExitTab={pendingProfileExitTab}
+                  onCancelExit={() => setPendingProfileExitTab(null)}
                   onSave={async (details) => {
                     await saveProfile(details);
                   }}

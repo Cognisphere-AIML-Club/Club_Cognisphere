@@ -20,12 +20,11 @@ import {
   Play,
   Tv,
   LogIn,
-  X
+  X,
+  Trophy,
+  ArrowRight
 } from 'lucide-react';
-import PassApprovalManager from './PassApprovalManager';
-import LeaderboardPodium from './LeaderboardPodium';
 import { requestGamePass, subscribeToUserPassRequests } from '../services/passApprovalService';
-import { useScores } from '../hooks/useScores';
 
 /**
  * Inline Activity Editor for Game Detail Page: Tracks position right under the top navigation bar and occupies only required height
@@ -201,6 +200,7 @@ export default function GameDetailPage({
   profile, 
   onBack, 
   onOpenPass, 
+  onOpenLeaderboard,
   onUpdateActivity,
   onOpenBigScreen,
   onSignIn
@@ -208,9 +208,6 @@ export default function GameDetailPage({
   const [editing, setEditing] = useState(false);
   const [userRequests, setUserRequests] = useState({});
   const [requesting, setRequesting] = useState(false);
-
-  // Subscribe to real-time scores and attendees for leaderboard
-  const { scores, attendees, publishScore, unpublishScore } = useScores(activity?.id);
 
   // Subscribe to participant's pass requests
   useEffect(() => {
@@ -450,24 +447,36 @@ export default function GameDetailPage({
         </div>
       )}
 
-      {/* Coordinator / Admin Approval Management Panel */}
-      {isStaff && (
-        <PassApprovalManager 
-          activity={activity} 
-          reviewerEmail={user?.email} 
-        />
-      )}
+      {/* Link to Dedicated Leaderboard & Standings Page */}
+      <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-xs">
+            <Trophy className="w-6 h-6" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold text-on-surface">Official Standings & Leaderboard</h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                Live
+              </span>
+            </div>
+            <p className="text-xs text-secondary leading-relaxed">
+              View the real-time winners podium, complete participant standings, and synced Google Sheets scores for <strong className="text-on-surface">{activity.name}</strong>.
+            </p>
+          </div>
+        </div>
 
-      {/* Official Live Leaderboard & Winners Podium */}
-      <LeaderboardPodium 
-        activity={activity}
-        scores={scores}
-        attendees={attendees}
-        isAdmin={isAdmin}
-        onPublishScore={publishScore}
-        onUnpublishScore={unpublishScore}
-        adminEmail={user?.email}
-      />
+        {onOpenLeaderboard && (
+          <button
+            type="button"
+            onClick={() => onOpenLeaderboard(activity.id)}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-2xl text-xs transition-all active:scale-95 shadow-xs whitespace-nowrap self-start sm:self-auto shrink-0"
+          >
+            <span>View Leaderboard</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
       {/* Game Details Sections Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

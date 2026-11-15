@@ -27,8 +27,13 @@ import {
   RefreshCw,
   Users,
   Sparkles,
-  LogIn
+  LogIn,
+  FileSpreadsheet
 } from 'lucide-react';
+import { 
+  pushParticipantToGoogleSheet, 
+  pushBulkParticipantsToGoogleSheet 
+} from '../services/googleSheetsService';
 
 export default function RegistrationsHub({
   user,
@@ -111,12 +116,29 @@ export default function RegistrationsHub({
     }
   };
 
-  // Staff action: Approve or reject single request
+  const [syncingToSheets, setSyncingToSheets] = useState(false);
+
+  // Staff action: Approve or reject single request (2-Way sync pushes approved name & usn)
   const handleReviewRequest = async (requestId, status) => {
     try {
       setActionInProgressId(requestId);
+      const req = allRequests.find(r => r.id === requestId);
       await reviewPassRequest(requestId, status, user?.email || 'staff');
-      setSuccessBanner(status === 'approved' ? 'Pass Approved!' : 'Pass Declined.');
+
+      // 2-Way Sync: If approved, automatically add participant (Name & USN) to linked Google Sheet tab!
+      if (status === 'approved' && req) {
+        try {
+          await pushParticipantToGoogleSheet({
+            activityId: req.activityId,
+            participantName: req.participantName,
+            participantUsn: req.participantUsn
+          });
+        } catch (sheetErr) {
+          console.warn('Google Sheet participant push notice:', sheetErr);
+        }
+      }
+
+      setSuccessBanner(status === 'approved' ? 'Pass Approved & Pushed to Google Sheet!' : 'Pass Declined.');
     } catch (err) {
       alert(err.message || 'Failed to update request');
     } finally {
@@ -126,9 +148,8 @@ export default function RegistrationsHub({
 
   // Staff action: Bulk approve all pending in current filtered list
   const handleBulkApprovePending = async () => {
-    const pendingIds = filteredRequests
-      .filter(r => r.status === 'pending')
-      .map(r => r.id);
+    const pendingList = filteredRequests.filter(r => r.status === 'pending');
+    const pendingIds = pendingList.map(r => r.id);
 
     if (pendingIds.length === 0) return;
 
@@ -139,11 +160,71 @@ export default function RegistrationsHub({
     try {
       setBulkActionLoading(true);
       await bulkReviewPassRequests(pendingIds, 'approved', user?.email || 'staff');
-      setSuccessBanner(`Successfully approved ${pendingIds.length} pass requests!`);
+
+      // 2-Way Sync: Group and bulk push to respective Google Sheet tabs!
+      try {
+        const byActivity = {};
+        pendingList.forEach(r => {
+          if (!byActivity[r.activityId]) byActivity[r.activityId] = [];
+          byActivity[r.activityId].push({
+            participantName: r.participantName,
+            participantUsn: r.participantUsn
+          });
+        });
+
+        await Promise.all(
+          Object.entries(byActivity).map(([actId, participants]) =>
+            pushBulkParticipantsToGoogleSheet({
+              activityId: actId,
+              participants
+            })
+          )
+        );
+      } catch (sheetErr) {
+        console.warn('Google Sheet bulk push notice:', sheetErr);
+      }
+
+      setSuccessBanner(`Successfully approved ${pendingIds.length} pass requests & synced to Google Sheets!`);
     } catch (err) {
       alert(err.message || 'Failed to approve all requests');
     } finally {
       setBulkActionLoading(false);
+    }
+  };
+
+  // Staff action: On-demand bulk push of all approved participants to Google Sheet tabs
+  const handleSyncApprovedToSheets = async () => {
+    const approvedList = allRequests.filter(r => r.status === 'approved');
+    if (approvedList.length === 0) {
+      alert('No approved participants found to sync.');
+      return;
+    }
+
+    try {
+      setSyncingToSheets(true);
+      const byActivity = {};
+      approvedList.forEach(r => {
+        if (!byActivity[r.activityId]) byActivity[r.activityId] = [];
+        byActivity[r.activityId].push({
+          participantName: r.participantName,
+          participantUsn: r.participantUsn
+        });
+      });
+
+      await Promise.all(
+        Object.entries(byActivity).map(([actId, participants]) =>
+          pushBulkParticipantsToGoogleSheet({
+            activityId: actId,
+            participants
+          })
+        )
+      );
+
+      setSuccessBanner(`Synced ${approvedList.length} approved participants to their Google Sheet tabs!`);
+    } catch (err) {
+      alert(`Google Sheet Sync Error: ${err.message}`);
+    } finally {
+      setSyncingToSheets(false);
     }
   };
 
@@ -344,26 +425,39 @@ export default function RegistrationsHub({
                 </select>
               </div>
 
-              {/* Right: Bulk Action button */}
-              {selectedStatusFilter === 'pending' && filteredRequests.filter(r => r.status === 'pending').length > 0 && (
+              {/* Right: Actions (Bulk Approve & Push to Sheets) */}
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={handleBulkApprovePending}
-                  disabled={bulkActionLoading}
-                  className="py-2 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap active:scale-95 disabled:opacity-50"
+                  type="button"
+                  onClick={handleSyncApprovedToSheets}
+                  disabled={syncingToSheets || metrics.approved === 0}
+                  className="py-2 px-3.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap active:scale-95 disabled:opacity-50"
+                  title="Push all approved participants (Name & USN) into their Google Sheet tabs"
                 >
-                  {bulkActionLoading ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Approving All...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Approve All Pending ({filteredRequests.filter(r => r.status === 'pending').length})</span>
-                    </>
-                  )}
+                  <FileSpreadsheet className={`w-3.5 h-3.5 text-emerald-600 ${syncingToSheets ? 'animate-spin' : ''}`} />
+                  <span>{syncingToSheets ? 'Syncing...' : `Push Approved to Sheets (${metrics.approved})`}</span>
                 </button>
-              )}
+
+                {selectedStatusFilter === 'pending' && filteredRequests.filter(r => r.status === 'pending').length > 0 && (
+                  <button
+                    onClick={handleBulkApprovePending}
+                    disabled={bulkActionLoading}
+                    className="py-2 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap active:scale-95 disabled:opacity-50"
+                  >
+                    {bulkActionLoading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Approving All...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Approve All Pending ({filteredRequests.filter(r => r.status === 'pending').length})</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Status Pills Bar */}
