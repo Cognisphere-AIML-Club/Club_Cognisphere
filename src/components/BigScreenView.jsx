@@ -8,7 +8,6 @@ import {
   Tv, 
   Timer, 
   Megaphone, 
-  CalendarDays, 
   Sparkles, 
   Volume2, 
   VolumeX, 
@@ -17,7 +16,6 @@ import {
   Pause, 
   Play, 
   ArrowLeft,
-  SunMedium,
   CheckCircle2,
   Clock,
   Layers,
@@ -65,7 +63,7 @@ function MultiRoomTimerCard({ activity, onClickRoom }) {
             <span className="text-slate-300">&bull;</span>
             <span className="text-slate-600">{activity.category}</span>
           </span>
-          <h4 className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors mt-0.5 line-clamp-1">
+          <h4 className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors mt-0.5 line-clamp-1 font-arkhip">
             {activity.name}
           </h4>
         </div>
@@ -93,7 +91,7 @@ function MultiRoomTimerCard({ activity, onClickRoom }) {
         </div>
 
         <span className="text-xs text-slate-500 group-hover:text-emerald-700 font-semibold flex items-center gap-1 transition-colors">
-          <span>Projector Mode</span>
+          <span>Projector</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </span>
       </div>
@@ -102,10 +100,11 @@ function MultiRoomTimerCard({ activity, onClickRoom }) {
 }
 
 /**
- * Room Projector Mode: Giant Screen Timer (Bright High-Contrast Projector Light Theme)
+ * Room Projector Mode: Giant Screen Timer with Event Schedule at the Bottom
  */
 function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
   const {
+    remainingMs,
     minutes,
     seconds,
     status,
@@ -122,7 +121,7 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
   const activeTimeline = activity.scheduleTimeline || null;
 
   return (
-    <div className="flex-1 flex flex-col justify-between items-center text-center p-6 sm:p-10 relative overflow-hidden select-none bg-slate-50">
+    <div className="flex-1 flex flex-col justify-between items-center text-center p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none bg-slate-50">
       {/* Dynamic Background Glow Effect (Soft and bright for projector clarity) */}
       <div className={`absolute inset-0 pointer-events-none transition-opacity duration-700 ${
         isZero
@@ -130,40 +129,67 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
           : isLast10Sec
           ? 'bg-gradient-to-b from-amber-100/60 via-transparent to-amber-50 opacity-100'
           : isRunning
-          ? 'bg-gradient-to-b from-emerald-100/40 via-transparent to-slate-50 opacity-100'
+          ? 'bg-gradient-to-b from-blue-100/40 via-transparent to-slate-50 opacity-100'
           : 'opacity-0'
       }`} />
 
-      {/* Top Header Information */}
-      <div className="z-10 w-full max-w-5xl mx-auto flex flex-col items-center gap-2 pt-2 sm:pt-4">
-        <div className="flex flex-wrap items-center justify-center gap-2.5">
-          <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-black uppercase tracking-widest bg-emerald-50 text-emerald-800 border-2 border-emerald-400 flex items-center gap-1.5 shadow-sm">
-            <MapPin className="w-4 h-4 text-emerald-600" />
+      {/* Top Header Information: Compact & Elevated */}
+      <div className="z-10 w-full max-w-5xl mx-auto flex flex-col items-center gap-1.5 pt-0 sm:pt-1">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <span className="px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-emerald-50 text-emerald-800 border-2 border-emerald-400 flex items-center gap-1.5 shadow-sm">
+            <MapPin className="w-3.5 h-3.5 text-emerald-600" />
             <span>{activity.room}</span>
           </span>
-          <span className="px-3.5 py-1 rounded-full text-xs sm:text-sm font-bold uppercase tracking-widest bg-white text-slate-800 border border-slate-300 shadow-sm">
+          <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-white text-slate-800 border border-slate-300 shadow-sm">
             {activity.category}
           </span>
           {activity.totalDuration && (
-            <span className="px-3.5 py-1 rounded-full text-xs sm:text-sm font-mono font-bold text-slate-600 bg-white border border-slate-300 shadow-sm">
+            <span className="px-3 py-1 rounded-full text-xs font-mono font-bold text-slate-600 bg-white border border-slate-300 shadow-sm">
               {activity.totalDuration}
             </span>
           )}
         </div>
 
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-slate-950 mt-1 drop-shadow-sm">
+        {/* Heading in Skate Blade Font */}
+        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-slate-950 mt-1 drop-shadow-sm font-skate-blade">
           {activity.name}
         </h1>
 
-        <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto font-medium">
+        <p className="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto font-medium">
           {activity.description}
         </p>
       </div>
 
-      {/* Giant Monospace Timer (Maximum Projector Contrast: Deep Pitch Black / Alert Red) */}
-      <div className="z-10 my-auto py-4 sm:py-8 flex flex-col items-center justify-center">
+      {/* Giant Monospace Digital Timer (Screen-Dominant Projector Scale) */}
+      <div className="z-10 my-auto py-2 sm:py-6 flex flex-col items-center justify-center">
+        {/* Status Pill */}
+        <div className="mb-2 sm:mb-4">
+          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-black uppercase tracking-wider shadow-sm ${
+            isZero
+              ? 'bg-rose-100 text-rose-800 border-2 border-rose-400 animate-bounce'
+              : isLast10Sec
+              ? 'bg-amber-100 text-amber-900 border-2 border-amber-400 animate-pulse'
+              : isRunning
+              ? 'bg-emerald-100 text-emerald-900 border-2 border-emerald-400'
+              : status === 'paused'
+              ? 'bg-amber-50 text-amber-800 border-2 border-amber-300'
+              : 'bg-white text-slate-700 border-2 border-slate-300'
+          }`}>
+            {isRunning && <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping" />}
+            {isLast10Sec && <AlertTriangle className="w-4 h-4 text-amber-600" />}
+            <span>
+              {isZero ? "🚨 TIME'S UP — PENS DOWN / SUBMIT" : 
+               isLast10Sec ? "⚠️ FINAL 10 SECONDS — WRAP UP" : 
+               isRunning ? "ROUND IN PROGRESS" : 
+               status === 'paused' ? "TIMER PAUSED" : 
+               "READY — AWAITING COORDINATOR START"}
+            </span>
+          </span>
+        </div>
+
+        {/* Huge Monospace Digits (Increased Font Size for Grand Display) */}
         <div 
-          className={`font-mono font-black tracking-tighter tabular-nums transition-all duration-300 drop-shadow-sm ${
+          className={`font-mono font-black tabular-nums tracking-tighter leading-none transition-colors duration-300 drop-shadow-md select-none ${
             isZero
               ? 'text-rose-600 animate-bounce'
               : isLast10Sec
@@ -174,49 +200,29 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
               ? 'text-amber-700'
               : 'text-slate-400'
           }`}
-          style={{ fontSize: 'clamp(5rem, 16vw, 18rem)', lineHeight: 0.9 }}
+          style={{ fontSize: 'clamp(6rem, 20vw, 22rem)', lineHeight: 0.88 }}
         >
           {formattedMinutes}:{formattedSeconds}
         </div>
 
-        {/* Dynamic Status Banner */}
-        <div className="mt-4 sm:mt-6">
-          <div className={`inline-flex items-center gap-2.5 px-6 py-2.5 rounded-2xl border-2 text-sm sm:text-lg font-black uppercase tracking-wider shadow-md ${
-            isZero
-              ? 'bg-rose-100 text-rose-800 border-rose-400 animate-bounce'
-              : isLast10Sec
-              ? 'bg-amber-100 text-amber-900 border-amber-400'
-              : isRunning
-              ? 'bg-emerald-100 text-emerald-900 border-emerald-400'
-              : status === 'paused'
-              ? 'bg-amber-50 text-amber-800 border-amber-300'
-              : 'bg-white text-slate-700 border-slate-300'
-          }`}>
-            {isRunning && <span className="w-3 h-3 rounded-full bg-emerald-600 animate-ping" />}
-            {isLast10Sec && <AlertTriangle className="w-5 h-5 text-amber-600" />}
-            <span>
-              {isZero ? "🚨 TIME'S UP — PENS DOWN / SUBMIT" : 
-               isLast10Sec ? "⚠️ FINAL 10 SECONDS — WRAP UP" : 
-               isRunning ? "ROUND IN PROGRESS" : 
-               status === 'paused' ? "TIMER PAUSED" : 
-               "READY — AWAITING COORDINATOR START"}
-            </span>
-          </div>
+        {/* Subtitle */}
+        <div className="text-xs sm:text-sm md:text-base font-extrabold uppercase tracking-[0.3em] text-slate-400 mt-3 sm:mt-5">
+          MINUTES : SECONDS
         </div>
       </div>
 
-      {/* Reverse Prompt Stage Timeline (if available) */}
-      {activeTimeline && (
-        <div className="z-10 w-full max-w-4xl mx-auto pt-4 border-t border-slate-200">
-          <div className="text-xs uppercase font-extrabold tracking-widest text-emerald-700 mb-2 flex items-center justify-center gap-1.5">
-            <Clock className="w-3.5 h-3.5" />
-            <span>Complete 120-Minute Stage Schedule</span>
+      {/* Event Schedule at the Bottom */}
+      {activeTimeline && activeTimeline.length > 0 ? (
+        <div className="z-10 w-full max-w-5xl mx-auto pt-2 pb-1">
+          <div className="text-[11px] uppercase font-extrabold tracking-widest text-slate-500 mb-2 flex items-center justify-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Event Schedule &bull; {activity.totalDuration || '120 Minutes'}</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-left">
             {activeTimeline.map((item, idx) => (
               <div 
                 key={idx} 
-                className="bg-white border-2 border-slate-200 rounded-xl p-2.5 flex flex-col justify-between shadow-sm"
+                className="bg-white border-2 border-slate-200 rounded-xl p-2.5 flex flex-col justify-between shadow-xs"
               >
                 <div className="font-mono text-[10px] text-emerald-700 font-extrabold">{item.time}</div>
                 <div className="text-[11px] text-slate-900 font-bold line-clamp-2 my-1 leading-snug">{item.stage}</div>
@@ -225,18 +231,32 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
             ))}
           </div>
         </div>
+      ) : (
+        <div className="z-10 w-full max-w-2xl mx-auto pt-2 pb-1">
+          <div className="bg-white border-2 border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-wrap items-center justify-around gap-3 shadow-xs text-center">
+            <div>
+              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Scheduled Time</div>
+              <div className="text-xs sm:text-sm font-bold font-mono text-slate-900 mt-0.5">{activity.scheduledTime}</div>
+            </div>
+            {activity.eventDate && (
+              <div className="border-l border-slate-200 pl-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Date</div>
+                <div className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">{activity.eventDate}</div>
+              </div>
+            )}
+            <div className="border-l border-slate-200 pl-3">
+              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Venue</div>
+              <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5">{activity.room}</div>
+            </div>
+            {activity.totalDuration && (
+              <div className="border-l border-slate-200 pl-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Duration</div>
+                <div className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">{activity.totalDuration}</div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
-
-      {/* Bottom Quiet Room Bar */}
-      <div className="z-10 w-full max-w-5xl mx-auto pt-3 flex items-center justify-between text-xs text-slate-500 font-medium">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-          <span className="font-bold text-slate-700">Room Coordinator Controlled Synchronous Timer</span>
-        </div>
-        <div className="font-mono text-slate-400">
-          Strict Privacy Guaranteed &bull; Projector High-Contrast Mode
-        </div>
-      </div>
     </div>
   );
 }
@@ -247,11 +267,11 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
 function BigScreenHallMode({ activities, onSelectRoom }) {
   const { announcements } = useAnnouncements();
   const [allScores, setAllScores] = useState([]);
-  const [activeSlide, setActiveSlide] = useState(0); // 0: Live Timers, 1: Announcements, 2: Leaderboard, 3: Schedule
+  const [activeSlide, setActiveSlide] = useState(0); // 0: Live Timers, 1: Announcements, 2: Leaderboard
   const [isAutoPlaying, setIsAutoPlaying] = useState(false); // Off by default
   const [slideProgress, setSlideProgress] = useState(0);
 
-  const TOTAL_SLIDES = 4;
+  const TOTAL_SLIDES = 3;
   const SLIDE_DURATION_MS = 12000; // 12 seconds per slide
 
   // Subscribe to real-time scores across all activities
@@ -293,18 +313,14 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 select-none relative overflow-hidden bg-slate-50">
-      {/* Slide Content Area */}
-      <div className="flex-1 flex flex-col justify-center max-w-6xl w-full mx-auto my-auto">
+    <div className="flex-1 flex flex-col justify-between pt-3 px-6 pb-6 sm:pt-4 sm:px-10 sm:pb-8 select-none relative overflow-hidden bg-slate-50">
+      {/* Slide Content Area: Elevated towards top for optimal vertical balance */}
+      <div className="flex-1 flex flex-col justify-start pt-2 sm:pt-4 max-w-6xl w-full mx-auto">
         {/* SLIDE 0: Live Timers Matrix */}
         {activeSlide === 0 && (
           <div className="space-y-6">
             <div className="text-center space-y-1.5">
-              <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1.5 shadow-sm">
-                <Timer className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Live Multi-Room Matrix</span>
-              </span>
-              <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
+              <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-950 tracking-tight font-skate-blade">
                 All 5 Competition Timers
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 font-medium">
@@ -328,11 +344,7 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
         {activeSlide === 1 && (
           <div className="space-y-6">
             <div className="text-center space-y-1.5">
-              <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-widest bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1.5 shadow-sm">
-                <Megaphone className="w-3.5 h-3.5 text-amber-600" />
-                <span>Live Official Feed</span>
-              </span>
-              <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
+              <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-950 tracking-tight font-skate-blade">
                 Event Announcements
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 font-medium">
@@ -360,7 +372,7 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
                     </span>
                   </div>
 
-                  <h3 className="text-lg font-bold text-slate-950 mb-1.5">
+                  <h3 className="text-lg font-bold text-slate-950 mb-1.5 font-arkhip">
                     {item.title}
                   </h3>
 
@@ -377,11 +389,7 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
         {activeSlide === 2 && (
           <div className="space-y-6">
             <div className="text-center space-y-1.5">
-              <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-widest bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1.5 shadow-sm">
-                <Trophy className="w-3.5 h-3.5 text-amber-600" />
-                <span>Live Event Champions</span>
-              </span>
-              <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
+              <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-950 tracking-tight font-skate-blade">
                 Competition Leaderboard
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 font-medium">
@@ -404,7 +412,7 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
                     >
                       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                         <span className="text-xs font-extrabold uppercase text-emerald-700">{act.room}</span>
-                        <h4 className="text-sm font-black text-slate-950 truncate max-w-[170px]">{act.name}</h4>
+                        <h4 className="text-sm font-black text-slate-950 truncate max-w-[170px] font-arkhip">{act.name}</h4>
                       </div>
 
                       {actScores.length > 0 ? (
@@ -457,48 +465,6 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
             )}
           </div>
         )}
-
-        {/* SLIDE 3: Schedule & Room Directory */}
-        {activeSlide === 3 && (
-          <div className="space-y-6">
-            <div className="text-center space-y-1.5">
-              <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-widest bg-blue-100 text-blue-800 border border-blue-300 inline-flex items-center gap-1.5 shadow-sm">
-                <CalendarDays className="w-3.5 h-3.5 text-blue-600" />
-                <span>Venue & Schedule</span>
-              </span>
-              <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
-                Event Schedule & Rooms
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-600 font-medium">
-                Locate your assigned room and check start timings
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
-              {activities.map((act) => (
-                <div 
-                  key={act.id} 
-                  onClick={() => onSelectRoom(act.id)}
-                  className="bg-white border-2 border-slate-200 hover:border-emerald-500 rounded-2xl p-5 cursor-pointer transition-all group shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-emerald-600" />
-                      <span>{act.room}</span>
-                    </span>
-                    <span className="text-xs font-mono font-bold text-slate-500">{act.scheduledTime}</span>
-                  </div>
-                  <h3 className="text-base font-black text-slate-950 group-hover:text-emerald-700 transition-colors">
-                    {act.name}
-                  </h3>
-                  <p className="text-xs text-slate-600 mt-1 line-clamp-2">
-                    {act.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Bottom Carousel Controls & Slide Dots (Light Theme) */}
@@ -535,7 +501,7 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
 
           {/* Slide Indicator Dots */}
           <div className="flex items-center gap-2">
-            {[0, 1, 2, 3].map((idx) => (
+            {[0, 1, 2].map((idx) => (
               <button
                 key={idx}
                 onClick={() => {
@@ -724,51 +690,46 @@ export default function BigScreenView({
               : 'opacity-0 -translate-y-2 pointer-events-none scale-98'
           }`}
         >
-          {/* Left: Branding & Back Button */}
+          {/* Left: Back Button & Mode Switcher (Anchored in place to prevent movement) */}
           <div className="flex items-center gap-3">
             <button
               onClick={onExit}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 border border-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 border border-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
               title="Return to Dashboard"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Exit Projector</span>
             </button>
 
-            <div className="hidden sm:flex items-center gap-2 border-l border-slate-200 pl-3">
-              <Tv className="w-4 h-4 text-emerald-600" />
-              <span className="text-xs font-bold text-slate-800 tracking-tight">Projector / Big Screen Mode</span>
+            {/* Mode Switcher Buttons */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+              <button
+                onClick={() => setDisplayMode('hall')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  displayMode === 'hall'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Carousel</span>
+              </button>
+
+              <button
+                onClick={() => setDisplayMode('room')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  displayMode === 'room'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Timer className="w-3.5 h-3.5" />
+                <span>Projector</span>
+              </button>
             </div>
           </div>
 
-          {/* Center: Mode Switcher */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setDisplayMode('hall')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                displayMode === 'hall'
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Hall Carousel</span>
-            </button>
-
-            <button
-              onClick={() => setDisplayMode('room')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                displayMode === 'room'
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Timer className="w-3.5 h-3.5" />
-              <span>Room Projector</span>
-            </button>
-          </div>
-
-          {/* Right Controls: Room Selector (if in Room Mode), Wake Lock, Sound & Fullscreen */}
+          {/* Right Controls: Room Selector (if in Room Mode), Sound & Fullscreen */}
           <div className="flex items-center gap-2">
             {displayMode === 'room' && (
               <select
@@ -782,17 +743,6 @@ export default function BigScreenView({
                   </option>
                 ))}
               </select>
-            )}
-
-            {/* Wake Lock Indicator */}
-            {wakeLockActive && (
-              <span 
-                className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-[11px] font-mono font-bold text-emerald-800"
-                title="Screen will not turn off or sleep"
-              >
-                <SunMedium className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Wake Lock Active</span>
-              </span>
             )}
 
             {/* Sound Toggle */}

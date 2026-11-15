@@ -2,6 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Display Fonts for Projector & Big Screen Modes */
+@font-face {
+  font-family: 'Arkhip';
+  src: url('/fonts/arkhip.regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Audex';
+  src: url('/fonts/audex.regular.otf') format('opentype'),
+       url('/fonts/audex.regular.otf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SkateBlade';
+  src: url('/fonts/skate-blade.regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-arkhip {
+  font-family: 'Arkhip', system-ui, -apple-system, sans-serif;
+}
+
+.font-audex {
+  font-family: 'Audex', system-ui, -apple-system, sans-serif;
+}
+
+.font-skate-blade {
+  font-family: 'SkateBlade', system-ui, -apple-system, sans-serif;
+}
+
 :root,
 :root.light,
 html:not(.dark) {
