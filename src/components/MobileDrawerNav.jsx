@@ -126,13 +126,6 @@ export default function MobileDrawerNav({
       badge: null
     },
     {
-      id: 'profile',
-      label: 'Profile Settings',
-      icon: User,
-      show: Boolean(user),
-      badge: null
-    },
-    {
       id: 'timers',
       label: 'Timers Hub',
       icon: Timer,
@@ -326,62 +319,10 @@ export default function MobileDrawerNav({
                 </button>
               );
             })}
-
-          {/* Staff Projector Screen Button */}
-          {isStaff && onLaunchBigScreen && (
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  onClose();
-                  onLaunchBigScreen('hall');
-                }}
-                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-[0.98]"
-              >
-                <div className="flex items-center gap-3">
-                  <Tv className="w-4 h-4 shrink-0 text-primary" />
-                  <span>Projector Screen</span>
-                </div>
-                <ChevronRight className="w-4 h-4 opacity-60" />
-              </button>
-            </div>
-          )}
         </div>
 
-        {/* 4. Bottom Section: Theme Toggle & Logout */}
+        {/* 4. Bottom Section: Logout */}
         <div className="p-3.5 border-t border-surface-container bg-surface-container-low space-y-2 shrink-0">
-          {/* Mobile Theme Toggle Button inside the Menu */}
-          {onToggleTheme && (
-            <div
-              onClick={onToggleTheme}
-              className="p-2.5 rounded-2xl bg-surface-container hover:bg-surface-container-high border border-surface-container flex items-center justify-between cursor-pointer transition-all select-none active:scale-[0.98]"
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onToggleTheme();
-                }
-              }}
-            >
-              <div className="flex items-center gap-2.5 text-xs font-semibold text-on-surface">
-                {theme === 'dark' ? (
-                  <Moon className="w-4 h-4 text-primary" />
-                ) : (
-                  <Sun className="w-4 h-4 text-amber-500" />
-                )}
-                <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
-              </div>
-              <div
-                className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
-                  theme === 'dark' ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
-                }`}
-              >
-                <span className="w-4 h-4 rounded-full bg-white shadow-xs block" />
-              </div>
-            </div>
-          )}
-
           {/* Sign Out Button */}
           {user && (
             <button

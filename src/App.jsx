@@ -921,6 +921,9 @@ export default function App() {
                   user={user}
                   profile={profile}
                   role={effectiveRole}
+                  isAdmin={effectiveIsAdmin}
+                  theme={theme}
+                  onToggleTheme={toggleTheme}
                   onBack={() => {
                     setProfileDirty(false);
                     currentNavRef.current.profileDirty = false;
