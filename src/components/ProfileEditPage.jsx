@@ -17,9 +17,14 @@ import {
   GraduationCap,
   AlertTriangle,
   Trash2,
-  X
+  X,
+  QrCode,
+  Sun,
+  Moon,
+  ShieldCheck
 } from 'lucide-react';
 import { validateUSN } from '../hooks/useParticipantProfile';
+import { subscribeToPassConfig, updatePassConfig } from '../services/passApprovalService';
 
 // Helper to decode branch and batch year from VTU/college USN (e.g. 1ST24AI045)
 function parseUsnMetadata(rawUsn) {
@@ -61,14 +66,56 @@ export default function ProfileEditPage({
   onDirtyChange,
   pendingExitTab,
   onCancelExit,
-  role = 'participant' 
+  role = 'participant',
+  isAdmin = false,
+  theme = 'light',
+  onToggleTheme
 }) {
+  const effectiveIsAdmin = Boolean(isAdmin || role === 'admin');
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [certificateName, setCertificateName] = useState('');
   const [hasManuallyEditedCertName, setHasManuallyEditedCertName] = useState(false);
   const [mobile, setMobile] = useState('');
   const [usn, setUsn] = useState('');
+
+  // Admin Operational Settings (Pass QR check-in & theme)
+  const [passConfig, setPassConfig] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cognisphere_pass_config');
+      return cached ? JSON.parse(cached) : { hidePassAfterAttendance: true };
+    } catch (e) {
+      return { hidePassAfterAttendance: true };
+    }
+  });
+
+  useEffect(() => {
+    if (!effectiveIsAdmin) return;
+    const unsub = subscribeToPassConfig((cfg) => {
+      if (cfg) {
+        setPassConfig(cfg);
+        try {
+          localStorage.setItem('cognisphere_pass_config', JSON.stringify(cfg));
+        } catch (e) {}
+      }
+    });
+    return () => unsub();
+  }, [effectiveIsAdmin]);
+
+  const hidePassAfterAttendance = passConfig.hidePassAfterAttendance ?? true;
+
+  const handleToggleHidePassAfterAttendance = async () => {
+    const nextVal = !hidePassAfterAttendance;
+    const updated = { ...passConfig, hidePassAfterAttendance: nextVal };
+    setPassConfig(updated);
+    try {
+      localStorage.setItem('cognisphere_pass_config', JSON.stringify(updated));
+      await updatePassConfig(updated, user?.email || 'admin');
+    } catch (err) {
+      console.warn('Failed to update passConfig:', err);
+    }
+  };
 
   // Unsaved changes tracking baseline & modal state
   const initialValuesRef = useRef(null);
@@ -760,6 +807,104 @@ export default function ProfileEditPage({
             )}
           </div>
         </div>
+
+        {/* ========================================================================= */}
+        {/* SECTION 3: ADMINISTRATOR CONTROLS (Admin Exclusive)                      */}
+        {/* ========================================================================= */}
+        {effectiveIsAdmin && (
+          <div className="rounded-3xl border border-primary/20 bg-surface-container-lowest p-6 sm:p-7 shadow-xs space-y-6">
+            <div className="flex items-center justify-between border-b border-surface-container pb-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Admin Configuration</span>
+                </div>
+                <h2 className="text-base font-extrabold text-on-surface tracking-tight">
+                  Event Operations &amp; Interface Controls
+                </h2>
+                <p className="text-xs text-secondary">
+                  Configure real-time pass redemption behavior and toggle application appearance.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Control 1: Hide QR Pass After Attendance Marked */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-lg">
+                  <div className="flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-on-surface">
+                      Hide QR Pass Once Scanned &amp; Marked
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      hidePassAfterAttendance ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
+                    }`}>
+                      {hidePassAfterAttendance ? 'Active (Auto-Hide)' : 'Disabled (Testing Mode)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-secondary leading-relaxed">
+                    When enabled, once attendance is scanned and recorded at the door, the active QR pass is hidden and marked as checked-in on &quot;My Pass&quot; to avoid confusion or duplicate scans. Toggle off to test mismatches and re-scan scenarios.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleToggleHidePassAfterAttendance}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    hidePassAfterAttendance ? 'bg-primary' : 'bg-surface-container-high'
+                  }`}
+                  role="switch"
+                  aria-checked={hidePassAfterAttendance}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                      hidePassAfterAttendance ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Control 2: Theme Toggle (Admin Exclusive, directly accessible) */}
+              {onToggleTheme && (
+                <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1 max-w-lg">
+                    <div className="flex items-center gap-2">
+                      {theme === 'dark' ? <Moon className="w-4 h-4 text-primary" /> : <Sun className="w-4 h-4 text-amber-500" />}
+                      <span className="text-xs font-bold text-on-surface">
+                        System Theme Mode
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-surface-container text-primary uppercase tracking-wider">
+                        {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-secondary leading-relaxed">
+                      Toggle system appearance between Light and Dark mode. Available exclusively for administrators.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={onToggleTheme}
+                    className="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-xl text-xs flex items-center gap-2 transition active:scale-95 shadow-xs"
+                  >
+                    {theme === 'dark' ? (
+                      <>
+                        <Sun className="w-4 h-4 text-amber-400" />
+                        <span>Switch to Light Mode</span>
+                      </>
+                    ) : (
+                      <>
+                        <Moon className="w-4 h-4 text-primary" />
+                        <span>Switch to Dark Mode</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Bottom Save & Discard Buttons */}
         <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-3 pt-2">

@@ -342,8 +342,8 @@ export const SidebarNav = ({
               )
             )}
 
-            {/* Theme Toggle Switch (Active whether Admin Mode is ON or OFF) */}
-            {handleToggleTheme && (
+            {/* Theme Toggle Switch (Admin Only) */}
+            {isAdmin && handleToggleTheme && (
               !isCollapsed ? (
                 <div 
                   onClick={handleToggleTheme}

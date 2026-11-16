@@ -30,10 +30,12 @@ import {
   updatePassConfig 
 } from '../services/passApprovalService';
 import { getOrGenerateGamePass } from '../services/gamePassService';
+import { subscribeToUserAttendance } from '../services/attendanceService';
 
 const DEFAULT_PASS_CONFIG = {
   passSystemEnabled: true, // Master disable toggle: if false, displays "No events taking place currently"
   showDownloadButton: true,
+  hidePassAfterAttendance: true, // Hide active QR pass once attendance has been scanned & marked
   hiddenActivityIds: [], // Activity IDs toggled OFF (taken out of participant pass selection dropdown)
   panelDismissedActivityIds: [], // Activity IDs dismissed with '✕' from admin control panel (searchable to restore)
 };
@@ -51,6 +53,7 @@ export default function ParticipantPass({
   const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
 
   const [userRequests, setUserRequests] = useState({});
+  const [userAttendance, setUserAttendance] = useState({});
 
   const qrCanvasRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
@@ -163,6 +166,18 @@ export default function ParticipantPass({
     return () => unsubscribe();
   }, [currentUserId]);
 
+  // Subscribe to real-time attendance records for this participant
+  useEffect(() => {
+    if (!currentUserId) {
+      setUserAttendance({});
+      return;
+    }
+    const unsubscribe = subscribeToUserAttendance(currentUserId, (map) => {
+      setUserAttendance(map);
+    });
+    return () => unsubscribe();
+  }, [currentUserId]);
+
   // Subscribe to remote pass layout config in Firestore
   useEffect(() => {
     const unsub = subscribeToPassConfig((remoteConfig) => {
@@ -192,6 +207,11 @@ export default function ParticipantPass({
   const isPending = Boolean(!isStaff && request?.status === 'pending');
   const isRejected = Boolean(!isStaff && request?.status === 'rejected');
   const isUnrequested = Boolean(!request && !isStaff);
+
+  // Attendance status for this game
+  const attendanceRecord = currentActivity?.id ? userAttendance[currentActivity.id] : null;
+  const isAttendanceMarked = Boolean(attendanceRecord);
+  const shouldHideForAttendance = Boolean((passConfig.hidePassAfterAttendance ?? true) && isAttendanceMarked);
 
   // Automatically load or generate single active pass for this USN & game (ONLY when approved or staff preview)
   useEffect(() => {
@@ -359,6 +379,10 @@ export default function ParticipantPass({
   const handleDownload = async () => {
     if (!isApproved) {
       alert('Only approved passes can be downloaded.');
+      return;
+    }
+    if (shouldHideForAttendance) {
+      alert('Attendance has already been marked for this event. Entry pass has been redeemed.');
       return;
     }
     try {
@@ -804,10 +828,12 @@ export default function ParticipantPass({
                 </div>
               </div>
 
-              {/* Status Badge (Flagged if expired) */}
+              {/* Status Badge (Flagged if expired or attendance marked) */}
               <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border flex-shrink-0 ${
                 isExpired
                   ? 'bg-error-container text-on-error-container border-error/30'
+                  : shouldHideForAttendance
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                   : isApproved 
                   ? 'bg-tertiary-container text-on-tertiary-container border-tertiary-container' 
                   : isPending 
@@ -817,13 +843,16 @@ export default function ParticipantPass({
                   : 'bg-surface-container text-secondary border-surface-container-high'
               }`}>
                 {isExpired && <AlertTriangle className="w-3 h-3 text-error" />}
-                {!isExpired && isApproved && <CheckCircle2 className="w-3 h-3 text-on-tertiary" />}
+                {!isExpired && shouldHideForAttendance && <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
+                {!isExpired && !shouldHideForAttendance && isApproved && <CheckCircle2 className="w-3 h-3 text-on-tertiary" />}
                 {!isExpired && isPending && <Clock className="w-3 h-3 text-secondary animate-pulse" />}
                 {!isExpired && isRejected && <XCircle className="w-3 h-3 text-on-error" />}
                 {!isExpired && isUnrequested && <Lock className="w-3 h-3 text-secondary" />}
                 <span>
                   {isExpired 
                     ? 'Expired' 
+                    : shouldHideForAttendance
+                    ? 'Attended & Redeemed'
                     : isApproved 
                     ? 'Approved' 
                     : isPending 
@@ -845,8 +874,29 @@ export default function ParticipantPass({
               </span>
             </div>
 
-            {/* Dynamic Pass Content Based on Approval Status & Expiration (80% mobile viewport width QR) */}
-            {isApproved ? (
+            {/* Dynamic Pass Content Based on Attendance Check-in, Approval Status & Expiration */}
+            {shouldHideForAttendance ? (
+              <div className="p-6 sm:p-8 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-4 my-2 animate-fadeIn">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-xs border border-emerald-500/30">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-2 max-w-sm mx-auto">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Attendance Verified</span>
+                  </div>
+                  <h4 className="text-base font-bold text-on-surface">
+                    Pass Checked In &amp; Redeemed
+                  </h4>
+                  <p className="text-xs text-on-surface-variant leading-relaxed">
+                    Your attendance for <strong className="text-on-surface">{currentActivity.name}</strong> was scanned and marked by the room coordinator. The active QR code has been redeemed to avoid duplicate check-in.
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-2xl bg-surface-container-low border border-surface-container text-[11px] text-secondary font-mono inline-block">
+                  Verified Pass: #{passIdSnippet}
+                </div>
+              </div>
+            ) : isApproved ? (
               <div className="space-y-4">
                 <div className={`p-3 sm:p-4 rounded-3xl border mx-auto w-[80vw] max-w-[340px] aspect-square flex flex-col items-center justify-center my-2 shadow-xs animate-fadeIn ${
                   isExpired ? 'bg-error-container/10 border-error/30' : 'bg-white border-surface-container'
@@ -942,7 +992,7 @@ export default function ParticipantPass({
 
           {/* Action Buttons: Save Activity Pass to Gallery, Regenerate QR, & Edit Profile */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {passConfig.showDownloadButton && isApproved && (
+            {passConfig.showDownloadButton && isApproved && !shouldHideForAttendance && (
               <button
                 onClick={handleDownload}
                 disabled={downloading}
@@ -970,7 +1020,7 @@ export default function ParticipantPass({
             <button
               onClick={onEditProfile}
               className={`w-full py-3 px-4 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-2xl transition-all flex items-center justify-center gap-2 text-xs shadow-xs ${
-                !(passConfig.showDownloadButton && isApproved) ? 'sm:col-span-2' : ''
+                !(passConfig.showDownloadButton && isApproved && !shouldHideForAttendance) ? 'sm:col-span-2' : ''
               }`}
             >
               <span>Edit Profile Details</span>
@@ -1046,6 +1096,24 @@ export default function ParticipantPass({
                     type="checkbox"
                     checked={modalConfig.showDownloadButton}
                     onChange={(e) => setModalConfig({ ...modalConfig, showDownloadButton: e.target.checked })}
+                    className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
+                  />
+                </label>
+              </div>
+
+              {/* Hide QR Pass After Attendance Marked */}
+              <div className="bg-surface-container-low p-4 rounded-2xl border border-surface-container">
+                <label className="flex items-center justify-between cursor-pointer text-xs">
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-on-surface">Hide QR Pass Once Scanned &amp; Marked</span>
+                    <p className="text-[11px] text-secondary">
+                      When active, marked attendance hides the QR pass to avoid duplicate entry scans. Toggle off for testing.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalConfig.hidePassAfterAttendance ?? true}
+                    onChange={(e) => setModalConfig({ ...modalConfig, hidePassAfterAttendance: e.target.checked })}
                     className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
                   />
                 </label>

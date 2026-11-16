@@ -7,7 +7,8 @@ import {
   serverTimestamp, 
   query, 
   where, 
-  limit 
+  limit,
+  onSnapshot 
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ACTIVITIES } from '../data/activities';
@@ -284,4 +285,31 @@ export async function searchParticipantsForCoordinator(searchTerm) {
   });
 
   return results.slice(0, 10);
+}
+
+/**
+ * Real-time listener for attendance records of a specific participant
+ */
+export function subscribeToUserAttendance(participantId, callback) {
+  if (!participantId) {
+    callback({});
+    return () => {};
+  }
+
+  const q = query(
+    collection(db, 'attendance'),
+    where('participantId', '==', participantId)
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const map = {};
+    snapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      map[data.activityId] = { id: docSnap.id, ...data };
+    });
+    callback(map);
+  }, (err) => {
+    console.warn('subscribeToUserAttendance notice:', err);
+    callback({});
+  });
 }
