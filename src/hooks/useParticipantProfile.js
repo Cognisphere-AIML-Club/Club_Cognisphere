@@ -41,14 +41,18 @@ export function useParticipantProfile(user) {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
-          setProfile(data);
+          const resolvedQrId = data.qrId || localStorage.getItem(`club_games_qr_id_${user.uid}`) || `qr_${user.uid.slice(0, 10)}`;
+          const enrichedProfile = {
+            uid: user.uid,
+            qrId: resolvedQrId,
+            ...data,
+          };
+          setProfile(enrichedProfile);
 
-          if (data.qrId) {
-            try {
-              localStorage.setItem('club_games_qr_id', data.qrId);
-              localStorage.setItem('club_games_cached_profile', JSON.stringify(data));
-            } catch (e) { }
-          }
+          try {
+            localStorage.setItem(`club_games_qr_id_${user.uid}`, resolvedQrId);
+            localStorage.setItem(`club_games_cached_profile_${user.uid}`, JSON.stringify(enrichedProfile));
+          } catch (e) { }
 
           // Check if profile is complete
           const hasName = Boolean(data.firstName && data.firstName.trim().length > 0);
@@ -64,7 +68,7 @@ export function useParticipantProfile(user) {
           // Document does not exist yet
           let existingQrId = null;
           try {
-            existingQrId = localStorage.getItem('club_games_qr_id');
+            existingQrId = localStorage.getItem(`club_games_qr_id_${user.uid}`);
           } catch (e) { }
 
           const generatedQrId = existingQrId || (crypto.randomUUID ? crypto.randomUUID() : `qr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
@@ -93,8 +97,8 @@ export function useParticipantProfile(user) {
       },
       (err) => {
         // Fallback for offline mode: load cached profile & qrId from localStorage
-        const cachedRaw = localStorage.getItem('club_games_cached_profile');
-        const cachedQrId = localStorage.getItem('club_games_qr_id');
+        const cachedRaw = localStorage.getItem(`club_games_cached_profile_${user.uid}`) || localStorage.getItem('club_games_cached_profile');
+        const cachedQrId = localStorage.getItem(`club_games_qr_id_${user.uid}`) || localStorage.getItem('club_games_qr_id');
 
         if (cachedRaw) {
           try {

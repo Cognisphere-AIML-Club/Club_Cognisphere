@@ -81,12 +81,19 @@ export default function ParticipantPass({
   const dismissedIds = Array.isArray(passConfig.panelDismissedActivityIds) ? passConfig.panelDismissedActivityIds : [];
   const visibleActivities = allActivities.filter(a => !hiddenIds.includes(a.id) && !dismissedIds.includes(a.id));
 
-  // Selection dropdown displays ONLY requested or approved passes for participants
-  // Staff/Admins can preview all enabled activities for testing
-  const displayActivities = visibleActivities.filter(act => {
-    if (isStaff) return true;
+  // Selection dropdown displays all activities where participant has an approved pass (ALWAYS accessible!),
+  // plus requested pending passes that are visible.
+  // Staff/Admins can preview all enabled activities for testing.
+  const displayActivities = allActivities.filter(act => {
+    if (isStaff) return !hiddenIds.includes(act.id) && !dismissedIds.includes(act.id);
     const req = userRequests[act.id];
-    return req && (req.status === 'approved' || req.status === 'pending');
+    // APPROVED passes are ALWAYS displayed for the attendee
+    if (req?.status === 'approved') return true;
+    // PENDING passes are displayed as long as activity is not hidden
+    if (req?.status === 'pending') {
+      return !hiddenIds.includes(act.id) && !dismissedIds.includes(act.id);
+    }
+    return false;
   });
 
   const [selectedActivityId, setSelectedActivityId] = useState(() => {
@@ -128,14 +135,13 @@ export default function ParticipantPass({
     if (displayActivities.length > 0) {
       const isCurrentVisible = displayActivities.some(a => a.id === selectedActivityId);
       if (!isCurrentVisible) {
-        if (initialActivityId && displayActivities.some(a => a.id === initialActivityId)) {
-          setSelectedActivityId(initialActivityId);
-        } else {
-          setSelectedActivityId(displayActivities[0].id);
-        }
+        const matchInitial = initialActivityId && displayActivities.find(a => a.id === initialActivityId);
+        const matchApproved = displayActivities.find(a => userRequests[a.id]?.status === 'approved');
+        const nextId = matchInitial?.id || matchApproved?.id || displayActivities[0].id;
+        setSelectedActivityId(nextId);
       }
     }
-  }, [displayActivities, selectedActivityId, initialActivityId]);
+  }, [displayActivities, selectedActivityId, initialActivityId, userRequests]);
 
   useEffect(() => {
     if (initialActivityId) {
@@ -143,14 +149,19 @@ export default function ParticipantPass({
     }
   }, [initialActivityId]);
 
+  const currentUserId = user?.uid || profile?.uid;
+
   // Subscribe to real-time pass approval statuses
   useEffect(() => {
-    if (!profile?.uid) return;
-    const unsubscribe = subscribeToUserPassRequests(profile.uid, (map) => {
+    if (!currentUserId) {
+      setUserRequests({});
+      return;
+    }
+    const unsubscribe = subscribeToUserPassRequests(currentUserId, (map) => {
       setUserRequests(map);
     });
     return () => unsubscribe();
-  }, [profile?.uid]);
+  }, [currentUserId]);
 
   // Subscribe to remote pass layout config in Firestore
   useEffect(() => {
@@ -173,19 +184,31 @@ export default function ParticipantPass({
   }, []);
 
   const currentActivity = displayActivities.find(a => a.id === selectedActivityId) || displayActivities[0] || visibleActivities[0] || allActivities[0];
-  const displayName = profile?.name || `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'Participant';
+  const displayName = profile?.name || `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || user?.displayName || 'Participant';
 
-  // Automatically load or generate single active pass for this USN & game (MUST be before any return)
+  // Request status for this game
+  const request = currentActivity?.id ? userRequests[currentActivity.id] : null;
+  const isApproved = Boolean(isStaff || request?.status === 'approved');
+  const isPending = Boolean(!isStaff && request?.status === 'pending');
+  const isRejected = Boolean(!isStaff && request?.status === 'rejected');
+  const isUnrequested = Boolean(!request && !isStaff);
+
+  // Automatically load or generate single active pass for this USN & game (ONLY when approved or staff preview)
   useEffect(() => {
-    if (!profile?.usn || !currentActivity?.id || !profile?.uid) return;
+    if (!currentUserId || !currentActivity?.id) return;
+    if (!isApproved) {
+      setGamePass(null);
+      return;
+    }
     let isMounted = true;
+    const currentUsn = profile?.usn || request?.participantUsn || '';
 
     const loadGamePass = async () => {
       try {
         const p = await getOrGenerateGamePass({
           activityId: currentActivity.id,
-          usn: profile.usn,
-          participantId: profile.uid,
+          usn: currentUsn || `PART_${currentUserId.slice(0, 6)}`,
+          participantId: currentUserId,
           name: displayName,
           forceNew: false,
         });
@@ -199,18 +222,11 @@ export default function ParticipantPass({
 
     loadGamePass();
     return () => { isMounted = false; };
-  }, [currentActivity?.id, profile?.usn, profile?.uid, displayName]);
+  }, [currentActivity?.id, profile?.usn, request?.participantUsn, currentUserId, displayName, isApproved]);
 
-  if (!profile || !profile.qrId) {
+  if (!user && !profile) {
     return null;
   }
-
-  // Request status for this game
-  const request = userRequests[currentActivity.id];
-  const isApproved = isStaff || request?.status === 'approved';
-  const isPending = request?.status === 'pending';
-  const isRejected = request?.status === 'rejected';
-  const isUnrequested = !request && !isStaff;
 
   // Date expiration check: compare today (YYYY-MM-DD) vs activeEventDate
   const getTodayStr = () => {
@@ -226,8 +242,9 @@ export default function ParticipantPass({
   const isExpired = Boolean(activeEventDate && todayStr > activeEventDate);
 
   // Active game pass for this USN (One USN gets only one active QR per game)
-  const activeQrId = gamePass?.qrId || profile.qrId;
-  const activityQrValue = gamePass?.qrValue || `${currentActivity.id}_${profile.qrId}`;
+  const fallbackQrId = profile?.qrId || (currentUserId ? `qr_${currentUserId.slice(0, 8)}_${currentActivity.id}` : 'pass_guest');
+  const activeQrId = gamePass?.qrId || fallbackQrId;
+  const activityQrValue = gamePass?.qrValue || `${currentActivity.id}_${activeQrId}`;
   const passIdSnippet = `${currentActivity.id.slice(0, 3).toUpperCase()}-${activeQrId.slice(-6).toUpperCase()}`;
 
   const isSystemActive = passConfig.passSystemEnabled ?? true;
@@ -340,6 +357,10 @@ export default function ParticipantPass({
   };
 
   const handleDownload = async () => {
+    if (!isApproved) {
+      alert('Only approved passes can be downloaded.');
+      return;
+    }
     try {
       setDownloading(true);
 
@@ -857,28 +878,25 @@ export default function ParticipantPass({
                 </p>
               </div>
             ) : isPending ? (
-              <div className="p-4 sm:p-6 rounded-3xl bg-secondary-container/40 border border-secondary/20 text-center space-y-4 my-2 animate-fadeIn">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-secondary-container text-secondary mx-auto">
+              <div className="p-6 sm:p-8 rounded-3xl bg-secondary-container/20 border border-secondary/30 text-center space-y-4 my-2 animate-fadeIn">
+                <div className="w-16 h-16 rounded-2xl bg-secondary-container text-secondary flex items-center justify-center mx-auto shadow-xs border border-secondary/40">
+                  <Clock className="w-8 h-8 animate-pulse text-secondary" />
+                </div>
+                <div className="space-y-2 max-w-sm mx-auto">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-secondary-container text-secondary">
                     <Clock className="w-3.5 h-3.5 animate-pulse" />
                     <span>Approval Request Pending</span>
                   </div>
-                  <p className="text-xs text-on-surface-variant leading-relaxed max-w-xs mx-auto pt-1">
-                    Your request for <strong className="text-primary">{currentActivity.name}</strong> is submitted. A coordinator will verify your pass.
+                  <h4 className="text-base font-bold text-on-surface">
+                    Pass Awaiting Coordinator Approval
+                  </h4>
+                  <p className="text-xs text-on-surface-variant leading-relaxed">
+                    Your request for <strong className="text-primary">{currentActivity.name}</strong> has been submitted. Your active QR entry pass will be automatically unlocked and displayed here once approved by the event coordinator.
                   </p>
                 </div>
-
-                <div className="bg-white p-3 sm:p-4 rounded-3xl border border-surface-container mx-auto w-[80vw] max-w-[340px] aspect-square flex flex-col items-center justify-center my-2 shadow-xs">
-                  <QRCodeSVG
-                    id="participant-visible-qr-svg"
-                    value={activityQrValue}
-                    size={320}
-                    level="M"
-                    includeMargin={true}
-                    className="w-full h-full"
-                  />
+                <div className="p-2.5 rounded-2xl bg-surface-container-low border border-surface-container text-[11px] text-secondary font-mono inline-block">
+                  Request Reference: #{passIdSnippet}
                 </div>
-                <span className="text-[10px] font-bold text-secondary uppercase tracking-wider block text-center">Pass ID: #{passIdSnippet}</span>
               </div>
             ) : isRejected ? (
               <div className="p-6 rounded-2xl bg-error-container/30 border border-error/20 text-center space-y-4 my-2 animate-fadeIn">
@@ -893,35 +911,38 @@ export default function ParticipantPass({
                 </div>
               </div>
             ) : (
-              <div className="p-4 sm:p-6 rounded-3xl bg-surface-container-low border border-surface-container text-center space-y-4 my-2 animate-fadeIn">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-secondary mx-auto">
+              <div className="p-6 sm:p-8 rounded-3xl bg-surface-container-low border border-surface-container text-center space-y-4 my-2 animate-fadeIn">
+                <div className="w-16 h-16 rounded-2xl bg-surface-container text-secondary flex items-center justify-center mx-auto shadow-xs border border-surface-container-high">
+                  <Lock className="w-8 h-8 text-secondary" />
+                </div>
+                <div className="space-y-2 max-w-sm mx-auto">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-secondary">
                     <Lock className="w-3.5 h-3.5" />
-                    <span>Pass for {currentActivity.name}</span>
+                    <span>Pass Locked</span>
                   </div>
-                  <p className="text-xs text-on-surface-variant leading-relaxed max-w-xs mx-auto pt-1">
-                    {isStaff ? 'Staff Preview: Pass is unrequested.' : 'Pass is not active for this event.'}
+                  <h4 className="text-base font-bold text-on-surface">
+                    {currentActivity.name}
+                  </h4>
+                  <p className="text-xs text-on-surface-variant leading-relaxed">
+                    {isStaff ? 'Staff Preview: Pass is unrequested.' : 'You have not registered for this event yet. Visit the Events Hub to request participation.'}
                   </p>
                 </div>
-
-                <div className="bg-white p-3 sm:p-4 rounded-3xl border border-surface-container mx-auto w-[80vw] max-w-[340px] aspect-square flex flex-col items-center justify-center my-2 shadow-xs">
-                  <QRCodeSVG
-                    id="participant-visible-qr-svg"
-                    value={activityQrValue}
-                    size={320}
-                    level="M"
-                    includeMargin={true}
-                    className="w-full h-full opacity-90"
-                  />
-                </div>
-                <span className="text-[10px] font-bold text-secondary uppercase tracking-wider block text-center">Pass ID: #{passIdSnippet}</span>
+                {onGoToEvents && !isStaff && (
+                  <button
+                    onClick={onGoToEvents}
+                    className="py-2.5 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs inline-flex items-center gap-2 shadow-xs transition"
+                  >
+                    <span>Browse Events</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             )}
           </div>
 
           {/* Action Buttons: Save Activity Pass to Gallery, Regenerate QR, & Edit Profile */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {passConfig.showDownloadButton && (
+            {passConfig.showDownloadButton && isApproved && (
               <button
                 onClick={handleDownload}
                 disabled={downloading}
