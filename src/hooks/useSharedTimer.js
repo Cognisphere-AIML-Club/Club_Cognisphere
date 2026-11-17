@@ -14,6 +14,7 @@ export function useSharedTimer(activityId, defaultDurationSeconds = 60) {
   const [remainingMs, setRemainingMs] = useState(defaultDurationSeconds * 1000);
   const [status, setStatus] = useState('idle'); // 'idle' | 'running' | 'paused' | 'finished'
   const [durationSeconds, setDurationSeconds] = useState(defaultDurationSeconds);
+  const [stageName, setStageName] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   const warned10SecRef = useRef(false);
@@ -33,6 +34,7 @@ export function useSharedTimer(activityId, defaultDurationSeconds = 60) {
           setTimerDoc(data);
           setStatus(data.status || 'idle');
           setDurationSeconds(data.durationSeconds || defaultDurationSeconds);
+          setStageName(data.stageName || '');
 
           if (data.status === 'paused' || data.status === 'idle') {
             setRemainingMs(data.remainingMs ?? (data.durationSeconds || defaultDurationSeconds) * 1000);
@@ -45,12 +47,14 @@ export function useSharedTimer(activityId, defaultDurationSeconds = 60) {
           setStatus('idle');
           setRemainingMs(defaultDurationSeconds * 1000);
           setDurationSeconds(defaultDurationSeconds);
+          setStageName('');
         }
       },
       () => {
         // Fallback on error
         setStatus('idle');
         setRemainingMs(defaultDurationSeconds * 1000);
+        setStageName('');
       }
     );
 
@@ -103,10 +107,11 @@ export function useSharedTimer(activityId, defaultDurationSeconds = 60) {
 
   // === ROOM COORDINATOR / ADMIN TIMER CONTROLS ===
 
-  const startTimer = async (customSeconds = null, operatorEmail = 'coordinator') => {
+  const startTimer = async (customSeconds = null, operatorEmail = 'coordinator', customStageName = null) => {
     const durSec = customSeconds || durationSeconds;
     const now = Date.now();
     const endsAt = Timestamp.fromMillis(now + durSec * 1000);
+    const resolvedStage = customStageName !== null ? customStageName : (stageName || '');
 
     warned10SecRef.current = false;
     buzzerFiredRef.current = false;
@@ -116,6 +121,7 @@ export function useSharedTimer(activityId, defaultDurationSeconds = 60) {
       activityId,
       status: 'running',
       durationSeconds: durSec,
+      stageName: resolvedStage,
       endsAt,
       remainingMs: durSec * 1000,
       updatedAt: serverTimestamp(),
@@ -157,8 +163,9 @@ export function useSharedTimer(activityId, defaultDurationSeconds = 60) {
     }, { merge: true });
   };
 
-  const resetTimer = async (customSeconds = null, operatorEmail = 'coordinator') => {
+  const resetTimer = async (customSeconds = null, operatorEmail = 'coordinator', customStageName = null) => {
     const durSec = customSeconds || durationSeconds;
+    const resolvedStage = customStageName !== null ? customStageName : (stageName || '');
     warned10SecRef.current = false;
     buzzerFiredRef.current = false;
 
@@ -167,6 +174,7 @@ export function useSharedTimer(activityId, defaultDurationSeconds = 60) {
       activityId,
       status: 'idle',
       durationSeconds: durSec,
+      stageName: resolvedStage,
       endsAt: null,
       remainingMs: durSec * 1000,
       updatedAt: serverTimestamp(),
@@ -212,6 +220,7 @@ export function useSharedTimer(activityId, defaultDurationSeconds = 60) {
     seconds,
     status,
     durationSeconds,
+    stageName,
     isLast10Sec,
     isZero,
     soundEnabled,

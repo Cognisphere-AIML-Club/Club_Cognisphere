@@ -9,7 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^9.5.0",
+    "@mui/x-date-pickers": "^9.18.0",
+    "@number-flow/react": "^0.6.2",
     "clsx": "2.1.1",
+    "dayjs": "^1.11.23",
     "firebase": "^13.2.0",
     "framer-motion": "11.11.9",
     "html5-qrcode": "^2.3.8",

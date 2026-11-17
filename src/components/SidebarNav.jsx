@@ -14,14 +14,13 @@ import {
   Sparkles,
   ShieldCheck,
   User,
-  Sun,
-  Moon,
   ClipboardCheck,
   UserCheck,
   Lock,
   Trophy
 } from 'lucide-react';
 import { subscribeToUserPassRequests } from '../services/passApprovalService';
+import { ThemeToggleButton } from './ThemeToggleButton';
 
 export const SidebarNav = ({
   user,
@@ -43,7 +42,8 @@ export const SidebarNav = ({
   adminTheme = 'light',
   theme = adminTheme,
   onToggleAdminTheme,
-  onToggleTheme = onToggleAdminTheme
+  onToggleTheme = onToggleAdminTheme,
+  showLeaderboard = true
 }) => {
   const currentTheme = theme || adminTheme || 'light';
   const handleToggleTheme = onToggleTheme || onToggleAdminTheme;
@@ -123,7 +123,7 @@ export const SidebarNav = ({
       id: 'leaderboard',
       label: 'Leaderboard',
       icon: Trophy,
-      show: true,
+      show: Boolean(showLeaderboard),
       badge: 'Live'
     },
     {
@@ -230,8 +230,8 @@ export const SidebarNav = ({
         </div>
       )}
 
-      {/* 2. Navigation Items */}
-      <nav className="flex-1 py-4 px-2.5 space-y-1.5 overflow-y-auto overflow-x-hidden">
+      {/* 2. Navigation Items — skiper87 scroll-fade-y applied */}
+      <nav className="flex-1 py-4 px-2.5 space-y-1.5 overflow-y-auto overflow-x-hidden scroll-fade-y">
         {navItems
           .filter(item => item.show)
           .map(item => {
@@ -359,11 +359,12 @@ export const SidebarNav = ({
                   }}
                 >
                   <div className="flex items-center gap-2 text-xs font-semibold text-on-surface">
-                    {currentTheme === 'dark' ? (
-                      <Moon className="w-3.5 h-3.5 text-primary" />
-                    ) : (
-                      <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    )}
+                    {/* Skiper4: animated sun/moon toggle icon */}
+                    <ThemeToggleButton
+                      isDark={currentTheme === 'dark'}
+                      size={14}
+                      className="text-on-surface pointer-events-none"
+                    />
                     <span>{currentTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
                   </div>
                   <div
@@ -376,19 +377,14 @@ export const SidebarNav = ({
                 </div>
               ) : (
                 <div className="mb-2.5 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={handleToggleTheme}
-                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center transition-colors shadow-xs border border-surface-container-high"
+                  {/* Skiper4: animated toggle button (collapsed) */}
+                  <ThemeToggleButton
+                    isDark={currentTheme === 'dark'}
+                    onToggle={handleToggleTheme}
+                    size={18}
+                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors shadow-xs border border-surface-container-high"
                     title={`Toggle Theme (${currentTheme === 'dark' ? 'Dark' : 'Light'})`}
-                    aria-label="Toggle Theme"
-                  >
-                    {currentTheme === 'dark' ? (
-                      <Moon className="w-4 h-4 text-primary" />
-                    ) : (
-                      <Sun className="w-4 h-4 text-amber-500" />
-                    )}
-                  </button>
+                  />
                 </div>
               )
             )}
