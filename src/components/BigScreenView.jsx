@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import NumberFlow, { NumberFlowGroup } from '@number-flow/react';
 import { useSharedTimer } from '../hooks/useSharedTimer';
 import { useAnnouncements } from '../hooks/useAnnouncements';
 import { subscribeAllScores } from '../services/scoreService';
+import { subscribeToPassConfig } from '../services/passApprovalService';
+import { VolumeIcon } from './AnimatedIcons';
 import { 
   Maximize, 
   Minimize, 
@@ -17,7 +20,6 @@ import {
   Play, 
   ArrowLeft,
   CheckCircle2,
-  Clock,
   Layers,
   MapPin,
   AlertTriangle,
@@ -84,11 +86,15 @@ function MultiRoomTimerCard({ activity, onClickRoom }) {
       </div>
 
       <div className="flex items-baseline justify-between mt-2 pt-3 border-t border-slate-100">
-        <div className={`font-mono text-3xl sm:text-4xl font-black tracking-tight tabular-nums ${
-          isZero ? 'text-rose-600' : isLast10Sec ? 'text-amber-600' : isRunning ? 'text-slate-950' : 'text-slate-400'
-        }`}>
-          {formattedTime}
-        </div>
+        <NumberFlowGroup>
+          <div className={`font-mono text-3xl sm:text-4xl font-black tracking-tight tabular-nums flex items-center ${
+            isZero ? 'text-rose-600' : isLast10Sec ? 'text-amber-600' : isRunning ? 'text-slate-950' : 'text-slate-400'
+          }`}>
+            <NumberFlow value={minutes} format={{ minimumIntegerDigits: 2 }} />
+            <span className="px-0.5">:</span>
+            <NumberFlow value={seconds} format={{ minimumIntegerDigits: 2 }} />
+          </div>
+        </NumberFlowGroup>
 
         <span className="text-xs text-slate-500 group-hover:text-emerald-700 font-semibold flex items-center gap-1 transition-colors">
           <span>Projector</span>
@@ -109,16 +115,17 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
     seconds,
     status,
     durationSeconds,
+    stageName,
     isLast10Sec,
     isZero
   } = useSharedTimer(activity.id, activity.defaultDuration || 60);
 
-  const formattedMinutes = String(minutes).padStart(2, '0');
-  const formattedSeconds = String(seconds).padStart(2, '0');
   const isRunning = status === 'running';
 
-  // Active stage matching for Reverse Prompt 120-min schedule
-  const activeTimeline = activity.scheduleTimeline || null;
+  // Determine current active part of the game to display inside the bubble
+  const activeStageTitle = (stageName && stageName.trim())
+    || activity?.scheduleTimeline?.find(s => s.durationSeconds === durationSeconds)?.stage
+    || (activity?.name ? `${activity.name} • Active Round` : 'Round in Progress');
 
   return (
     <div className="flex-1 flex flex-col justify-between items-center text-center p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none bg-slate-50">
@@ -162,9 +169,9 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
 
       {/* Giant Monospace Digital Timer (Screen-Dominant Projector Scale) */}
       <div className="z-10 my-auto py-2 sm:py-6 flex flex-col items-center justify-center">
-        {/* Status Pill */}
+        {/* Status Pill: Displays the specific active part of the game */}
         <div className="mb-2 sm:mb-4">
-          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-black uppercase tracking-wider shadow-sm ${
+          <span className={`inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs sm:text-sm font-black uppercase tracking-wider shadow-sm transition-all ${
             isZero
               ? 'bg-rose-100 text-rose-800 border-2 border-rose-400 animate-bounce'
               : isLast10Sec
@@ -178,85 +185,37 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
             {isRunning && <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping" />}
             {isLast10Sec && <AlertTriangle className="w-4 h-4 text-amber-600" />}
             <span>
-              {isZero ? "🚨 TIME'S UP — PENS DOWN / SUBMIT" : 
-               isLast10Sec ? "⚠️ FINAL 10 SECONDS — WRAP UP" : 
-               isRunning ? "ROUND IN PROGRESS" : 
-               status === 'paused' ? "TIMER PAUSED" : 
-               "READY — AWAITING COORDINATOR START"}
+              {isZero ? `🚨 TIME'S UP • ${activeStageTitle.toUpperCase()}` : 
+               isLast10Sec ? `⚠️ FINAL 10 SECONDS • ${activeStageTitle.toUpperCase()}` : 
+               isRunning ? activeStageTitle.toUpperCase() : 
+               status === 'paused' ? `PAUSED • ${activeStageTitle.toUpperCase()}` : 
+               `READY • ${activeStageTitle.toUpperCase()}`}
             </span>
           </span>
         </div>
 
-        {/* Huge Monospace Digits (Increased Font Size for Grand Display) */}
-        <div 
-          className={`font-mono font-black tabular-nums tracking-tighter leading-none transition-colors duration-300 drop-shadow-md select-none ${
-            isZero
-              ? 'text-rose-600 animate-bounce'
-              : isLast10Sec
-              ? 'text-amber-600 animate-pulse'
-              : isRunning
-              ? 'text-slate-950'
-              : status === 'paused'
-              ? 'text-amber-700'
-              : 'text-slate-400'
-          }`}
-          style={{ fontSize: 'clamp(6rem, 20vw, 22rem)', lineHeight: 0.88 }}
-        >
-          {formattedMinutes}:{formattedSeconds}
-        </div>
-
-        {/* Subtitle */}
-        <div className="text-xs sm:text-sm md:text-base font-extrabold uppercase tracking-[0.3em] text-slate-400 mt-3 sm:mt-5">
-          MINUTES : SECONDS
-        </div>
+        {/* Animated NumberFlow Digits (Screen-Dominant Projector Scale) */}
+        <NumberFlowGroup>
+          <div 
+            className={`font-mono font-black tabular-nums tracking-tighter leading-none transition-colors duration-300 drop-shadow-md select-none flex items-center justify-center ${
+              isZero
+                ? 'text-rose-600 animate-bounce'
+                : isLast10Sec
+                ? 'text-amber-600 animate-pulse'
+                : isRunning
+                ? 'text-slate-950'
+                : status === 'paused'
+                ? 'text-amber-700'
+                : 'text-slate-400'
+            }`}
+            style={{ fontSize: 'clamp(7rem, 24vw, 26rem)', lineHeight: 0.88 }}
+          >
+            <NumberFlow value={minutes} format={{ minimumIntegerDigits: 2 }} />
+            <span className="mx-1 select-none">:</span>
+            <NumberFlow value={seconds} format={{ minimumIntegerDigits: 2 }} />
+          </div>
+        </NumberFlowGroup>
       </div>
-
-      {/* Event Schedule at the Bottom */}
-      {activeTimeline && activeTimeline.length > 0 ? (
-        <div className="z-10 w-full max-w-5xl mx-auto pt-2 pb-1">
-          <div className="text-[11px] uppercase font-extrabold tracking-widest text-slate-500 mb-2 flex items-center justify-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Event Schedule &bull; {activity.totalDuration || '120 Minutes'}</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-left">
-            {activeTimeline.map((item, idx) => (
-              <div 
-                key={idx} 
-                className="bg-white border-2 border-slate-200 rounded-xl p-2.5 flex flex-col justify-between shadow-xs"
-              >
-                <div className="font-mono text-[10px] text-emerald-700 font-extrabold">{item.time}</div>
-                <div className="text-[11px] text-slate-900 font-bold line-clamp-2 my-1 leading-snug">{item.stage}</div>
-                <div className="text-[9px] font-mono font-semibold text-slate-500">{item.duration}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="z-10 w-full max-w-2xl mx-auto pt-2 pb-1">
-          <div className="bg-white border-2 border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-wrap items-center justify-around gap-3 shadow-xs text-center">
-            <div>
-              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Scheduled Time</div>
-              <div className="text-xs sm:text-sm font-bold font-mono text-slate-900 mt-0.5">{activity.scheduledTime}</div>
-            </div>
-            {activity.eventDate && (
-              <div className="border-l border-slate-200 pl-3">
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Date</div>
-                <div className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">{activity.eventDate}</div>
-              </div>
-            )}
-            <div className="border-l border-slate-200 pl-3">
-              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Venue</div>
-              <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5">{activity.room}</div>
-            </div>
-            {activity.totalDuration && (
-              <div className="border-l border-slate-200 pl-3">
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Duration</div>
-                <div className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">{activity.totalDuration}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -264,15 +223,23 @@ function BigScreenRoomMode({ activity, onSoundToggle, soundEnabled }) {
 /**
  * Hall / Stage Carousel Mode (Crisp Projector Light Theme)
  */
-function BigScreenHallMode({ activities, onSelectRoom }) {
+function BigScreenHallMode({ activities, onSelectRoom, showLeaderboard = true }) {
   const { announcements } = useAnnouncements();
   const [allScores, setAllScores] = useState([]);
   const [activeSlide, setActiveSlide] = useState(0); // 0: Live Timers, 1: Announcements, 2: Leaderboard
   const [isAutoPlaying, setIsAutoPlaying] = useState(false); // Off by default
   const [slideProgress, setSlideProgress] = useState(0);
 
-  const TOTAL_SLIDES = 3;
+  const TOTAL_SLIDES = showLeaderboard ? 3 : 2;
   const SLIDE_DURATION_MS = 12000; // 12 seconds per slide
+
+  // If leaderboard is toggled off while currently viewing slide 2, return immediately to slide 0
+  useEffect(() => {
+    if (!showLeaderboard && activeSlide >= 2) {
+      setActiveSlide(0);
+      setSlideProgress(0);
+    }
+  }, [showLeaderboard, activeSlide]);
 
   // Subscribe to real-time scores across all activities
   useEffect(() => {
@@ -385,8 +352,8 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
           </div>
         )}
 
-        {/* SLIDE 2: Live Leaderboard & Winners */}
-        {activeSlide === 2 && (
+        {/* SLIDE 2: Live Leaderboard & Winners (Rendered only when showLeaderboard is true) */}
+        {showLeaderboard && activeSlide === 2 && (
           <div className="space-y-6">
             <div className="text-center space-y-1.5">
               <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-950 tracking-tight font-skate-blade">
@@ -499,9 +466,9 @@ function BigScreenHallMode({ activities, onSelectRoom }) {
             {isAutoPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
           </button>
 
-          {/* Slide Indicator Dots */}
+          {/* Slide Indicator Dots (Dynamically matches active slides) */}
           <div className="flex items-center gap-2">
-            {[0, 1, 2].map((idx) => (
+            {Array.from({ length: TOTAL_SLIDES }).map((_, idx) => (
               <button
                 key={idx}
                 onClick={() => {
@@ -538,8 +505,29 @@ export default function BigScreenView({
   activities = [], 
   onExit, 
   initialMode = 'hall', 
-  initialActivityId = null 
+  initialActivityId = null,
+  showLeaderboard: propShowLeaderboard
 }) {
+  const [remoteShowLeaderboard, setRemoteShowLeaderboard] = useState(() => {
+    if (typeof propShowLeaderboard === 'boolean') return propShowLeaderboard;
+    try {
+      const cached = localStorage.getItem('cognisphere_pass_config');
+      return cached ? JSON.parse(cached).showLeaderboard ?? true : true;
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    const unsub = subscribeToPassConfig((cfg) => {
+      if (cfg && typeof cfg.showLeaderboard === 'boolean') {
+        setRemoteShowLeaderboard(cfg.showLeaderboard);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const showLeaderboard = typeof propShowLeaderboard === 'boolean' ? propShowLeaderboard : remoteShowLeaderboard;
   const [displayMode, setDisplayMode] = useState(initialMode); // 'room' | 'hall'
   const [selectedActivityId, setSelectedActivityId] = useState(
     initialActivityId || activities[0]?.id || 'reverse-prompt'
@@ -800,6 +788,7 @@ export default function BigScreenView({
         ) : (
           <BigScreenHallMode 
             activities={activities}
+            showLeaderboard={showLeaderboard}
             onSelectRoom={(actId) => {
               setSelectedActivityId(actId);
               setDisplayMode('room');

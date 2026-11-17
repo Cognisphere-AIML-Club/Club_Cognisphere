@@ -10,24 +10,14 @@ import {
   Clock, 
   XCircle, 
   AlertTriangle,
-  SlidersHorizontal,
-  Settings2,
   Calendar,
   CalendarDays,
-  X,
   ChevronDown,
-  ArrowRight,
-  Search,
-  Plus,
-  Shield,
-  ShieldCheck,
-  Eye,
-  EyeOff
+  ArrowRight
 } from 'lucide-react';
 import { 
   subscribeToUserPassRequests, 
-  subscribeToPassConfig, 
-  updatePassConfig 
+  subscribeToPassConfig 
 } from '../services/passApprovalService';
 import { getOrGenerateGamePass } from '../services/gamePassService';
 import { subscribeToUserAttendance } from '../services/attendanceService';
@@ -103,36 +93,8 @@ export default function ParticipantPass({
     if (initialActivityId && displayActivities.some(a => a.id === initialActivityId)) {
       return initialActivityId;
     }
-    return displayActivities[0]?.id || visibleActivities[0]?.id || allActivities[0].id;
+    return displayActivities[0]?.id || visibleActivities[0]?.id || allActivities[0]?.id || '';
   });
-
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [modalConfig, setModalConfig] = useState(passConfig);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configToast, setConfigToast] = useState(null);
-
-  // Search & add state inside Admin Control Panel
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const searchContainerRef = useRef(null);
-
-  // Click outside to dismiss search dropdown
-  useEffect(() => {
-    const handleOutsideClick = (e) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
-        setShowSearchDropdown(false);
-      }
-    };
-    if (showSearchDropdown) {
-      document.addEventListener('mousedown', handleOutsideClick);
-      document.addEventListener('touchstart', handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('touchstart', handleOutsideClick);
-    };
-  }, [showSearchDropdown]);
-
   // Keep selectedActivityId valid when displayActivities change
   useEffect(() => {
     if (displayActivities.length > 0) {
@@ -140,8 +102,8 @@ export default function ParticipantPass({
       if (!isCurrentVisible) {
         const matchInitial = initialActivityId && displayActivities.find(a => a.id === initialActivityId);
         const matchApproved = displayActivities.find(a => userRequests[a.id]?.status === 'approved');
-        const nextId = matchInitial?.id || matchApproved?.id || displayActivities[0].id;
-        setSelectedActivityId(nextId);
+        const nextId = matchInitial?.id || matchApproved?.id || displayActivities[0]?.id;
+        if (nextId) setSelectedActivityId(nextId);
       }
     }
   }, [displayActivities, selectedActivityId, initialActivityId, userRequests]);
@@ -189,7 +151,6 @@ export default function ParticipantPass({
           panelDismissedActivityIds: Array.isArray(remoteConfig.panelDismissedActivityIds) ? remoteConfig.panelDismissedActivityIds : []
         };
         setPassConfig(merged);
-        setModalConfig(merged);
         try {
           localStorage.setItem('cognisphere_pass_config', JSON.stringify(merged));
         } catch (e) {}
@@ -198,7 +159,10 @@ export default function ParticipantPass({
     return () => unsub();
   }, []);
 
-  const currentActivity = displayActivities.find(a => a.id === selectedActivityId) || displayActivities[0] || visibleActivities[0] || allActivities[0];
+  const currentActivity = (displayActivities.length > 0
+    ? (displayActivities.find(a => a.id === selectedActivityId) || displayActivities[0])
+    : (visibleActivities[0] || allActivities[0])) || null;
+
   const displayName = profile?.name || `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || user?.displayName || 'Participant';
 
   // Request status for this game
@@ -226,7 +190,7 @@ export default function ParticipantPass({
     const loadGamePass = async () => {
       try {
         const p = await getOrGenerateGamePass({
-          activityId: currentActivity.id,
+          activityId: currentActivity?.id,
           usn: currentUsn || `PART_${currentUserId.slice(0, 6)}`,
           participantId: currentUserId,
           name: displayName,
@@ -257,126 +221,21 @@ export default function ParticipantPass({
     return `${year}-${month}-${day}`;
   };
 
-  const activeEventDate = currentActivity.eventDate || '2026-11-24';
+  const activeEventDate = currentActivity?.eventDate || '2026-11-24';
   const todayStr = getTodayStr();
   const isExpired = Boolean(activeEventDate && todayStr > activeEventDate);
 
   // Active game pass for this USN (One USN gets only one active QR per game)
-  const fallbackQrId = profile?.qrId || (currentUserId ? `qr_${currentUserId.slice(0, 8)}_${currentActivity.id}` : 'pass_guest');
+  const actId = currentActivity?.id || 'pass';
+  const fallbackQrId = profile?.qrId || (currentUserId ? `qr_${currentUserId.slice(0, 8)}_${actId}` : 'pass_guest');
   const activeQrId = gamePass?.qrId || fallbackQrId;
-  const activityQrValue = gamePass?.qrValue || `${currentActivity.id}_${activeQrId}`;
-  const passIdSnippet = `${currentActivity.id.slice(0, 3).toUpperCase()}-${activeQrId.slice(-6).toUpperCase()}`;
+  const activityQrValue = gamePass?.qrValue || `${actId}_${activeQrId}`;
+  const passIdSnippet = `${actId.slice(0, 3).toUpperCase()}-${activeQrId.slice(-6).toUpperCase()}`;
 
   const isSystemActive = passConfig.passSystemEnabled ?? true;
 
-  // Admin Control Panel Activity Helpers
-  const modalHiddenIds = Array.isArray(modalConfig.hiddenActivityIds) ? modalConfig.hiddenActivityIds : [];
-  const modalDismissedIds = Array.isArray(modalConfig.panelDismissedActivityIds) ? modalConfig.panelDismissedActivityIds : [];
-
-  const panelActivities = allActivities.filter(a => !modalDismissedIds.includes(a.id));
-
-  const filteredSearchActivities = allActivities.filter(a => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      a.name.toLowerCase().includes(q) ||
-      (a.category && a.category.toLowerCase().includes(q)) ||
-      a.id.toLowerCase().includes(q)
-    );
-  });
-
-  const handleToggleActivityVisibility = (activityId) => {
-    setModalConfig(prev => {
-      const hidden = Array.isArray(prev.hiddenActivityIds) ? [...prev.hiddenActivityIds] : [];
-      const idx = hidden.indexOf(activityId);
-      if (idx > -1) {
-        hidden.splice(idx, 1);
-      } else {
-        hidden.push(activityId);
-      }
-      return { ...prev, hiddenActivityIds: hidden };
-    });
-  };
-
-  const handleDismissFromPanel = (activityId) => {
-    setModalConfig(prev => {
-      const dismissed = Array.isArray(prev.panelDismissedActivityIds) ? [...prev.panelDismissedActivityIds] : [];
-      const hidden = Array.isArray(prev.hiddenActivityIds) ? [...prev.hiddenActivityIds] : [];
-      if (!dismissed.includes(activityId)) {
-        dismissed.push(activityId);
-      }
-      if (!hidden.includes(activityId)) {
-        hidden.push(activityId);
-      }
-      return { ...prev, panelDismissedActivityIds: dismissed, hiddenActivityIds: hidden };
-    });
-  };
-
-  const handleRestoreToPanel = (activityId) => {
-    setModalConfig(prev => {
-      const dismissed = Array.isArray(prev.panelDismissedActivityIds) ? [...prev.panelDismissedActivityIds] : [];
-      const hidden = Array.isArray(prev.hiddenActivityIds) ? [...prev.hiddenActivityIds] : [];
-      return {
-        ...prev,
-        panelDismissedActivityIds: dismissed.filter(id => id !== activityId),
-        hiddenActivityIds: hidden.filter(id => id !== activityId)
-      };
-    });
-    setSearchQuery('');
-    setShowSearchDropdown(false);
-  };
-
-  const handleRestoreAllToPanel = () => {
-    setModalConfig(prev => ({
-      ...prev,
-      panelDismissedActivityIds: [],
-      hiddenActivityIds: []
-    }));
-  };
-
-  // Admin save pass layout configuration
-  const handleSaveConfig = async (e) => {
-    e.preventDefault();
-    try {
-      setSavingConfig(true);
-      await updatePassConfig(modalConfig, user?.email || 'admin');
-      setPassConfig(modalConfig);
-      try {
-        localStorage.setItem('cognisphere_pass_config', JSON.stringify(modalConfig));
-      } catch (err) {}
-      setShowConfigModal(false);
-      setConfigToast('Pass layout updated successfully!');
-      setTimeout(() => setConfigToast(null), 3500);
-    } catch (err) {
-      alert(err.message || 'Failed to save pass layout settings');
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
-  const handleResetConfig = async () => {
-    if (!window.confirm('Reset pass layout back to default settings?')) return;
-    try {
-      setSavingConfig(true);
-      await updatePassConfig(DEFAULT_PASS_CONFIG, user?.email || 'admin');
-      setPassConfig(DEFAULT_PASS_CONFIG);
-      setModalConfig(DEFAULT_PASS_CONFIG);
-      setSearchQuery('');
-      setShowSearchDropdown(false);
-      try {
-        localStorage.setItem('cognisphere_pass_config', JSON.stringify(DEFAULT_PASS_CONFIG));
-      } catch (err) {}
-      setShowConfigModal(false);
-      setConfigToast('Pass layout reset to defaults!');
-      setTimeout(() => setConfigToast(null), 3500);
-    } catch (err) {
-      alert(err.message || 'Failed to reset settings');
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
   const handleDownload = async () => {
+    if (!currentActivity) return;
     if (!isApproved) {
       alert('Only approved passes can be downloaded.');
       return;
@@ -478,7 +337,7 @@ export default function ParticipantPass({
       // 5. Activity Name
       ctx.fillStyle = isExpired ? '#ba1a1a' : '#004ac6';
       ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(currentActivity.name.toUpperCase(), canvas.width / 2, 106);
+      ctx.fillText(currentActivity?.name ? currentActivity.name.toUpperCase() : 'EVENT PASS', canvas.width / 2, 106);
 
       // 6. Participant Name
       ctx.fillStyle = '#0b1c30';
@@ -553,7 +412,7 @@ export default function ParticipantPass({
 
       ctx.fillStyle = '#0b1c30';
       ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(currentActivity.room || 'Main Venue', canvas.width / 2, infoY + 52);
+      ctx.fillText(currentActivity?.room || 'Main Venue', canvas.width / 2, infoY + 52);
 
       // Divider Line between Venue and Schedule
       ctx.strokeStyle = '#dbe2f1';
@@ -570,11 +429,11 @@ export default function ParticipantPass({
 
       ctx.fillStyle = '#004ac6';
       ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      const scheduleStr = `DATE: ${activeEventDate}  •  TIME: ${currentActivity.scheduledTime || 'Event Hours'}`;
+      const scheduleStr = `DATE: ${activeEventDate}  •  TIME: ${currentActivity?.scheduledTime || 'Event Hours'}`;
       ctx.fillText(scheduleStr, canvas.width / 2, infoY + 105);
 
       // 11. Trigger Download with Blob & dataURL fallback
-      const filename = `Pass_${currentActivity.id}_${displayName.replace(/[^a-zA-Z0-9]/g, '_')}${isExpired ? '_EXPIRED' : ''}.png`;
+      const filename = `Pass_${currentActivity?.id || 'event'}_${displayName.replace(/[^a-zA-Z0-9]/g, '_')}${isExpired ? '_EXPIRED' : ''}.png`;
 
       await new Promise((resolve) => {
         if (canvas.toBlob) {
@@ -652,43 +511,6 @@ export default function ParticipantPass({
           includeMargin={true}
         />
       </div>
-
-      {/* Admin Customization Toast */}
-      {configToast && (
-        <div className="bg-tertiary-container text-on-tertiary-container border border-tertiary/20 rounded-2xl p-3 text-xs font-semibold flex items-center justify-between shadow-xs">
-          <span>{configToast}</span>
-          <button onClick={() => setConfigToast(null)} className="text-on-tertiary-container font-bold px-1.5">✕</button>
-        </div>
-      )}
-
-      {/* Admin Pass Layout Controls Button */}
-      {isAdmin && (
-        <div className="flex items-center justify-between bg-surface-container-lowest border border-surface-container rounded-2xl p-3.5 shadow-xs">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-on-surface">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-primary" />
-              <span>Admin: Pass Customization</span>
-            </div>
-            <p className="text-[11px] text-secondary">
-              {!isSystemActive 
-                ? 'Status: Passes DISABLED for participants' 
-                : `${visibleActivities.length} of ${allActivities.length} activities active for passes`}
-            </p>
-          </div>
-          <button
-            onClick={() => {
-              setModalConfig(passConfig);
-              setSearchQuery('');
-              setShowSearchDropdown(false);
-              setShowConfigModal(true);
-            }}
-            className="py-1.5 px-3 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0"
-          >
-            <Settings2 className="w-3.5 h-3.5" />
-            <span>Edit Layout</span>
-          </button>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* DISABLED STATE: If Pass System is full-disabled by Admin                  */}
@@ -817,10 +639,10 @@ export default function ParticipantPass({
             <div className="flex items-center justify-between pb-4 border-b border-surface-container">
               <div className="space-y-0.5">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-primary block">
-                  {currentActivity.category} Activity
+                  {currentActivity?.category} Activity
                 </span>
                 <h3 className="text-base font-extrabold text-on-surface leading-tight">
-                  {currentActivity.name}
+                  {currentActivity?.name}
                 </h3>
                 <div className="flex items-center gap-1.5 text-xs text-secondary font-medium">
                   <Calendar className="w-3.5 h-3.5 text-primary" />
@@ -889,7 +711,7 @@ export default function ParticipantPass({
                     Pass Checked In &amp; Redeemed
                   </h4>
                   <p className="text-xs text-on-surface-variant leading-relaxed">
-                    Your attendance for <strong className="text-on-surface">{currentActivity.name}</strong> was scanned and marked by the room coordinator. The active QR code has been redeemed to avoid duplicate check-in.
+                    Your attendance for <strong className="text-on-surface">{currentActivity?.name}</strong> was scanned and marked by the room coordinator. The active QR code has been redeemed to avoid duplicate check-in.
                   </p>
                 </div>
                 <div className="p-2.5 rounded-2xl bg-surface-container-low border border-surface-container text-[11px] text-secondary font-mono inline-block">
@@ -923,7 +745,7 @@ export default function ParticipantPass({
                       This pass was valid until {activeEventDate}. Event has concluded.
                     </span>
                   ) : (
-                    <>Present this pass at the entrance to mark attendance for <span className="text-on-surface font-semibold">{currentActivity.name}</span>.</>
+                    <>Present this pass at the entrance to mark attendance for <span className="text-on-surface font-semibold">{currentActivity?.name}</span>.</>
                   )}
                 </p>
               </div>
@@ -941,7 +763,7 @@ export default function ParticipantPass({
                     Pass Awaiting Coordinator Approval
                   </h4>
                   <p className="text-xs text-on-surface-variant leading-relaxed">
-                    Your request for <strong className="text-primary">{currentActivity.name}</strong> has been submitted. Your active QR entry pass will be automatically unlocked and displayed here once approved by the event coordinator.
+                    Your request for <strong className="text-primary">{currentActivity?.name}</strong> has been submitted. Your active QR entry pass will be automatically unlocked and displayed here once approved by the event coordinator.
                   </p>
                 </div>
                 <div className="p-2.5 rounded-2xl bg-surface-container-low border border-surface-container text-[11px] text-secondary font-mono inline-block">
@@ -956,7 +778,7 @@ export default function ParticipantPass({
                 <div className="space-y-1">
                   <h4 className="text-sm font-bold text-on-surface">Not Registered for this Activity</h4>
                   <p className="text-xs text-on-surface-variant leading-relaxed max-w-xs mx-auto">
-                    Your registration was not approved for {currentActivity.name}. Please contact the event coordinator.
+                    Your registration was not approved for {currentActivity?.name}. Please contact the event coordinator.
                   </p>
                 </div>
               </div>
@@ -971,7 +793,7 @@ export default function ParticipantPass({
                     <span>Pass Locked</span>
                   </div>
                   <h4 className="text-base font-bold text-on-surface">
-                    {currentActivity.name}
+                    {currentActivity?.name}
                   </h4>
                   <p className="text-xs text-on-surface-variant leading-relaxed">
                     {isStaff ? 'Staff Preview: Pass is unrequested.' : 'You have not registered for this event yet. Visit the Events Hub to request participation.'}
@@ -1038,352 +860,9 @@ export default function ParticipantPass({
         </>
       )}
 
-      {/* ========================================================================= */}
-      {/* ADMIN PASS CUSTOMIZATION MODAL                                            */}
-      {/* ========================================================================= */}
-      {isAdmin && showConfigModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 sm:pt-16 bg-black/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-          <div className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 h-auto max-h-fit">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-surface-container pb-4">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                  <Settings2 className="w-4 h-4" />
-                  <span>Pass Page Layout Controls</span>
-                </div>
-                <p className="text-xs text-secondary">
-                  Manage pass system availability, activity visibility, and date overrides.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowConfigModal(false)}
-                className="text-secondary hover:text-on-surface p-1 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* Form */}
-            <form onSubmit={handleSaveConfig} className="space-y-4">
-              {/* Full Disable / Master Switch on Top */}
-              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-black text-on-surface uppercase tracking-wide">
-                      Pass System Active (Master Switch)
-                    </span>
-                    <p className="text-[11px] text-secondary">
-                      When turned OFF, passes are hidden and participants see &ldquo;No events taking place currently&rdquo; with a button to Events &amp; Hub.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalConfig.passSystemEnabled ?? true}
-                    onChange={(e) => setModalConfig({ ...modalConfig, passSystemEnabled: e.target.checked })}
-                    className="w-5 h-5 rounded text-primary focus:ring-primary cursor-pointer ml-3 shrink-0"
-                  />
-                </label>
-              </div>
 
-              {/* Show Download Button */}
-              <div className="bg-surface-container-low p-4 rounded-2xl border border-surface-container">
-                <label className="flex items-center justify-between cursor-pointer text-xs">
-                  <div className="space-y-0.5">
-                    <span className="font-bold text-on-surface">Download Pass Image Button</span>
-                    <p className="text-[11px] text-secondary">Allows saving high-res PNG pass badge</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalConfig.showDownloadButton}
-                    onChange={(e) => setModalConfig({ ...modalConfig, showDownloadButton: e.target.checked })}
-                    className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
-                  />
-                </label>
-              </div>
 
-              {/* Hide QR Pass After Attendance Marked */}
-              <div className="bg-surface-container-low p-4 rounded-2xl border border-surface-container">
-                <label className="flex items-center justify-between cursor-pointer text-xs">
-                  <div className="space-y-0.5">
-                    <span className="font-bold text-on-surface">Hide QR Pass Once Scanned &amp; Marked</span>
-                    <p className="text-[11px] text-secondary">
-                      When active, marked attendance hides the QR pass to avoid duplicate entry scans. Toggle off for testing.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalConfig.hidePassAfterAttendance ?? true}
-                    onChange={(e) => setModalConfig({ ...modalConfig, hidePassAfterAttendance: e.target.checked })}
-                    className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
-                  />
-                </label>
-              </div>
-
-              {/* Activity Visibility & Control Panel Management (NextDNS-style Active List) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between px-1">
-                  <div className="space-y-0.5">
-                    <label className="text-xs font-black text-on-surface uppercase tracking-wide block">
-                      Activity Status &amp; Visibility Controls
-                    </label>
-                    <p className="text-[11px] text-secondary">
-                      Toggle switch controls participant pass dropdown visibility. Dismiss with &ldquo;✕&rdquo; to remove from panel (searchable to restore).
-                    </p>
-                  </div>
-                  {modalDismissedIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleRestoreAllToPanel}
-                      className="text-[11px] font-bold text-primary hover:underline"
-                    >
-                      Restore All ({modalDismissedIds.length})
-                    </button>
-                  )}
-                </div>
-
-                {/* Dark NextDNS-Style Container */}
-                <div className="bg-[#121622] border border-[#23293e] rounded-2xl overflow-hidden shadow-xs">
-                  {/* Top Search / Add Bar */}
-                  <div ref={searchContainerRef} className="p-3 border-b border-[#23293e] relative">
-                    <div className="bg-[#1a2030] border border-[#2b334d] focus-within:border-primary rounded-xl px-3 py-2 flex items-center gap-2 transition-colors">
-                      <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                      <input
-                        type="text"
-                        placeholder="Search or add an event..."
-                        value={searchQuery}
-                        onChange={(e) => {
-                          setSearchQuery(e.target.value);
-                          setShowSearchDropdown(true);
-                        }}
-                        onFocus={() => setShowSearchDropdown(true)}
-                        className="w-full bg-transparent text-slate-100 placeholder-slate-400 text-xs focus:outline-none"
-                      />
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setSearchQuery('')}
-                          className="text-slate-400 hover:text-slate-100 p-0.5"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSearchDropdown((prev) => !prev);
-                        }}
-                        className="text-slate-400 hover:text-slate-100 p-0.5 transition-transform"
-                        title={showSearchDropdown ? 'Close dropdown' : 'Browse available events'}
-                      >
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showSearchDropdown ? 'rotate-180 text-primary' : ''}`} />
-                      </button>
-                    </div>
-
-                    {/* Search & Add Dropdown Menu */}
-                    {showSearchDropdown && (
-                      <div 
-                        className="absolute left-3 right-3 top-full mt-1.5 z-30 bg-[#161c2b] border border-[#2b334d] rounded-xl shadow-2xl max-h-56 overflow-y-auto divide-y divide-[#23293e]"
-                      >
-                        {filteredSearchActivities.length === 0 ? (
-                          <div className="p-3 text-center text-xs text-slate-400">
-                            No matching activities found
-                          </div>
-                        ) : (
-                          filteredSearchActivities.map((act) => {
-                            const isDismissed = modalDismissedIds.includes(act.id);
-                            const isTechnical = act.category === 'Technical';
-
-                            return (
-                              <div
-                                key={act.id}
-                                className="p-2.5 flex items-center justify-between gap-2 hover:bg-[#1f273d] transition-colors"
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                  <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${
-                                    isTechnical ? 'text-[#2979ff]' : 'text-[#ff9100]'
-                                  }`}>
-                                    {isTechnical ? (
-                                      <Shield className="w-3.5 h-3.5 fill-current" />
-                                    ) : (
-                                      <ShieldCheck className="w-3.5 h-3.5 fill-current" />
-                                    )}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="text-xs font-bold text-slate-100 truncate">
-                                      {act.name}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 font-mono">
-                                      {act.eventDate || '2026-11-24'}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {isDismissed ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRestoreToPanel(act.id)}
-                                    className="py-1 px-2.5 bg-primary hover:bg-primary-container text-on-primary rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-xs shrink-0 active:scale-95"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                    <span>Add to Panel</span>
-                                  </button>
-                                ) : (
-                                  <span className="text-[10px] text-slate-400 px-2 py-0.5 shrink-0">
-                                    In Panel
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* List of Panel Activities */}
-                  <div className="divide-y divide-[#23293e]">
-                    {panelActivities.length === 0 ? (
-                      <div className="p-6 text-center space-y-2">
-                        <p className="text-xs text-slate-400">
-                          All activities are currently dismissed from this panel view.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleRestoreAllToPanel}
-                          className="py-1.5 px-3 bg-[#1e2638] hover:bg-[#28324a] text-primary text-xs font-bold rounded-lg border border-[#2d374f] inline-flex items-center gap-1.5"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Restore All Activities</span>
-                        </button>
-                      </div>
-                    ) : (
-                      panelActivities.map((act) => {
-                        const isActivityVisible = !modalHiddenIds.includes(act.id);
-                        const isTechnical = act.category === 'Technical';
-
-                        return (
-                          <div
-                            key={act.id}
-                            className="relative flex items-center justify-between py-3 px-3.5 hover:bg-white/[0.02] transition-colors"
-                          >
-                            {/* Green Active (ON) / Red Inactive (OFF) Indicator Bar on Far Left */}
-                            <div
-                              className={`absolute left-0 top-0 bottom-0 w-1 transition-colors ${
-                                isActivityVisible ? 'bg-[#00e676]' : 'bg-red-500'
-                              }`}
-                              title={isActivityVisible ? 'Active (Pass visible to participants)' : 'Inactive (Pass hidden from participants)'}
-                            />
-
-                            {/* Left: Shield Icon & Name */}
-                            <div className="flex items-center gap-3 pl-2 min-w-0 flex-1 pr-3">
-                              <div
-                                className={`w-6 h-6 rounded flex items-center justify-center shrink-0 ${
-                                  isTechnical ? 'text-[#2979ff]' : 'text-[#ff9100]'
-                                }`}
-                              >
-                                {isTechnical ? (
-                                  <Shield className="w-4 h-4 fill-current" />
-                                ) : (
-                                  <ShieldCheck className="w-4 h-4 fill-current" />
-                                )}
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="text-xs sm:text-sm font-semibold text-slate-100 truncate">
-                                  {act.name}
-                                </div>
-                                <div className="text-[10px] text-slate-400 font-mono">
-                                  {act.eventDate || '2026-11-24'}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Right: Visibility Toggle Switch & Dismiss '✕' Button */}
-                            <div className="flex items-center gap-3 shrink-0">
-                              {/* Toggle Switch (Button for visibility) */}
-                              <button
-                                type="button"
-                                role="switch"
-                                aria-checked={isActivityVisible}
-                                onClick={() => handleToggleActivityVisibility(act.id)}
-                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
-                                  isActivityVisible ? 'bg-[#2979ff]' : 'bg-[#333c50]'
-                                }`}
-                                title={isActivityVisible ? 'Click to hide from participant selection dropdown' : 'Click to make visible in participant selection dropdown'}
-                              >
-                                <span
-                                  aria-hidden="true"
-                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ${
-                                    isActivityVisible ? 'translate-x-4 ml-0.5' : 'translate-x-0.5'
-                                  }`}
-                                />
-                              </button>
-
-                              {/* Dismiss '✕' button */}
-                              <button
-                                type="button"
-                                onClick={() => handleDismissFromPanel(act.id)}
-                                className="text-slate-400 hover:text-slate-100 p-1 rounded hover:bg-white/10 transition-colors"
-                                title="Dismiss from control panel (can be searched and added back)"
-                                aria-label={`Dismiss ${act.name} from control panel`}
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Buttons */}
-              <div className="flex items-center justify-between pt-3 border-t border-surface-container gap-2">
-                <button
-                  type="button"
-                  onClick={handleResetConfig}
-                  disabled={savingConfig}
-                  className="py-2 px-3 text-secondary hover:text-error text-xs font-semibold flex items-center gap-1"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset Defaults</span>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowConfigModal(false)}
-                    className="py-2 px-4 bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-bold rounded-xl"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={savingConfig}
-                    className="py-2 px-4 bg-primary hover:bg-primary-container text-on-primary text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {savingConfig ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Save Layout</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

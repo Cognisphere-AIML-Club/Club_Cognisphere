@@ -19,12 +19,22 @@ import {
   Trash2,
   X,
   QrCode,
-  Sun,
-  Moon,
-  ShieldCheck
+  ShieldCheck,
+  Trophy,
+  SlidersHorizontal,
+  Settings2,
+  Search,
+  RotateCcw,
+  Check,
+  Eye,
+  EyeOff,
+  Plus,
+  Video
 } from 'lucide-react';
 import { validateUSN } from '../hooks/useParticipantProfile';
 import { subscribeToPassConfig, updatePassConfig } from '../services/passApprovalService';
+import { ThemeToggleButton } from './ThemeToggleButton';
+import { ACTIVITIES } from '../data/activities';
 
 // Helper to decode branch and batch year from VTU/college USN (e.g. 1ST24AI045)
 function parseUsnMetadata(rawUsn) {
@@ -68,6 +78,7 @@ export default function ProfileEditPage({
   onCancelExit,
   role = 'participant',
   isAdmin = false,
+  activities = ACTIVITIES,
   theme = 'light',
   onToggleTheme
 }) {
@@ -104,6 +115,8 @@ export default function ProfileEditPage({
   }, [effectiveIsAdmin]);
 
   const hidePassAfterAttendance = passConfig.hidePassAfterAttendance ?? true;
+  const showLeaderboard = passConfig.showLeaderboard ?? true;
+  const showVideoShowcase = passConfig.showVideoShowcase ?? false;
 
   const handleToggleHidePassAfterAttendance = async () => {
     const nextVal = !hidePassAfterAttendance;
@@ -114,6 +127,158 @@ export default function ProfileEditPage({
       await updatePassConfig(updated, user?.email || 'admin');
     } catch (err) {
       console.warn('Failed to update passConfig:', err);
+    }
+  };
+
+  const handleToggleShowLeaderboard = async () => {
+    const nextVal = !showLeaderboard;
+    const updated = { ...passConfig, showLeaderboard: nextVal };
+    setPassConfig(updated);
+    try {
+      localStorage.setItem('cognisphere_pass_config', JSON.stringify(updated));
+      await updatePassConfig(updated, user?.email || 'admin');
+    } catch (err) {
+      console.warn('Failed to update leaderboard visibility:', err);
+    }
+  };
+
+  const handleToggleShowVideoShowcase = async () => {
+    const nextVal = !showVideoShowcase;
+    const updated = { ...passConfig, showVideoShowcase: nextVal };
+    setPassConfig(updated);
+    try {
+      localStorage.setItem('cognisphere_pass_config', JSON.stringify(updated));
+      await updatePassConfig(updated, user?.email || 'admin');
+    } catch (err) {
+      console.warn('Failed to update video showcase visibility:', err);
+    }
+  };
+
+  const DEFAULT_PASS_CONFIG = {
+    passSystemEnabled: true,
+    showDownloadButton: true,
+    hidePassAfterAttendance: true,
+    showLeaderboard: true,
+    showVideoShowcase: false,
+    hiddenActivityIds: [],
+    panelDismissedActivityIds: []
+  };
+
+  const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
+  const isSystemActive = passConfig.passSystemEnabled ?? true;
+  const hiddenIds = Array.isArray(passConfig.hiddenActivityIds) ? passConfig.hiddenActivityIds : [];
+  const dismissedIds = Array.isArray(passConfig.panelDismissedActivityIds) ? passConfig.panelDismissedActivityIds : [];
+  const visibleActivities = allActivities.filter(a => !hiddenIds.includes(a.id) && !dismissedIds.includes(a.id));
+
+  // Pass Layout Customization Modal State (for Admin)
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [modalConfig, setModalConfig] = useState(passConfig);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchContainerRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setShowSearchDropdown(false);
+      }
+    };
+    if (showSearchDropdown) {
+      document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('touchstart', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [showSearchDropdown]);
+
+  const modalHiddenIds = Array.isArray(modalConfig.hiddenActivityIds) ? modalConfig.hiddenActivityIds : [];
+  const modalDismissedIds = Array.isArray(modalConfig.panelDismissedActivityIds) ? modalConfig.panelDismissedActivityIds : [];
+  const panelActivities = allActivities.filter(a => !modalDismissedIds.includes(a.id));
+
+  const filteredSearchActivities = allActivities.filter(a => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      a.name.toLowerCase().includes(q) ||
+      (a.category && a.category.toLowerCase().includes(q)) ||
+      a.id.toLowerCase().includes(q)
+    );
+  });
+
+  const handleToggleActivityVisibility = (activityId) => {
+    setModalConfig(prev => {
+      const hidden = Array.isArray(prev.hiddenActivityIds) ? [...prev.hiddenActivityIds] : [];
+      const idx = hidden.indexOf(activityId);
+      if (idx > -1) {
+        hidden.splice(idx, 1);
+      } else {
+        hidden.push(activityId);
+      }
+      return { ...prev, hiddenActivityIds: hidden };
+    });
+  };
+
+  const handleDismissFromPanel = (activityId) => {
+    setModalConfig(prev => {
+      const dismissed = Array.isArray(prev.panelDismissedActivityIds) ? [...prev.panelDismissedActivityIds] : [];
+      const hidden = Array.isArray(prev.hiddenActivityIds) ? [...prev.hiddenActivityIds] : [];
+      if (!dismissed.includes(activityId)) dismissed.push(activityId);
+      if (!hidden.includes(activityId)) hidden.push(activityId);
+      return { ...prev, panelDismissedActivityIds: dismissed, hiddenActivityIds: hidden };
+    });
+  };
+
+  const handleRestoreToPanel = (activityId) => {
+    setModalConfig(prev => {
+      const dismissed = Array.isArray(prev.panelDismissedActivityIds) ? [...prev.panelDismissedActivityIds] : [];
+      const hidden = Array.isArray(prev.hiddenActivityIds) ? [...prev.hiddenActivityIds] : [];
+      return {
+        ...prev,
+        panelDismissedActivityIds: dismissed.filter(id => id !== activityId),
+        hiddenActivityIds: hidden.filter(id => id !== activityId)
+      };
+    });
+    setSearchQuery('');
+    setShowSearchDropdown(false);
+  };
+
+  const handleSaveConfig = async (e) => {
+    e.preventDefault();
+    try {
+      setSavingConfig(true);
+      await updatePassConfig(modalConfig, user?.email || 'admin');
+      setPassConfig(modalConfig);
+      try {
+        localStorage.setItem('cognisphere_pass_config', JSON.stringify(modalConfig));
+      } catch (err) {}
+      setShowConfigModal(false);
+    } catch (err) {
+      alert(err.message || 'Failed to save pass layout settings');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const handleResetConfig = async () => {
+    if (!window.confirm('Reset pass layout back to default settings?')) return;
+    try {
+      setSavingConfig(true);
+      await updatePassConfig(DEFAULT_PASS_CONFIG, user?.email || 'admin');
+      setPassConfig(DEFAULT_PASS_CONFIG);
+      setModalConfig(DEFAULT_PASS_CONFIG);
+      setSearchQuery('');
+      setShowSearchDropdown(false);
+      try {
+        localStorage.setItem('cognisphere_pass_config', JSON.stringify(DEFAULT_PASS_CONFIG));
+      } catch (err) {}
+      setShowConfigModal(false);
+    } catch (err) {
+      alert(err.message || 'Failed to reset settings');
+    } finally {
+      setSavingConfig(false);
     }
   };
 
@@ -870,7 +1035,12 @@ export default function ProfileEditPage({
                 <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1 max-w-lg">
                     <div className="flex items-center gap-2">
-                      {theme === 'dark' ? <Moon className="w-4 h-4 text-primary" /> : <Sun className="w-4 h-4 text-amber-500" />}
+                      {/* Skiper4: animated sun/moon icon */}
+                      <ThemeToggleButton
+                        isDark={theme === 'dark'}
+                        size={16}
+                        className="text-on-surface pointer-events-none"
+                      />
                       <span className="text-xs font-bold text-on-surface">
                         System Theme Mode
                       </span>
@@ -883,25 +1053,123 @@ export default function ProfileEditPage({
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={onToggleTheme}
-                    className="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-xl text-xs flex items-center gap-2 transition active:scale-95 shadow-xs"
-                  >
-                    {theme === 'dark' ? (
-                      <>
-                        <Sun className="w-4 h-4 text-amber-400" />
-                        <span>Switch to Light Mode</span>
-                      </>
-                    ) : (
-                      <>
-                        <Moon className="w-4 h-4 text-primary" />
-                        <span>Switch to Dark Mode</span>
-                      </>
-                    )}
-                  </button>
+                  {/* Skiper4: animated toggle button */}
+                  <ThemeToggleButton
+                    isDark={theme === 'dark'}
+                    onToggle={onToggleTheme}
+                    size={20}
+                    className="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface rounded-xl transition active:scale-95 shadow-xs"
+                  />
                 </div>
               )}
+
+              {/* Control 3: Competition Leaderboard Visibility Toggle (Admin Exclusive) */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-lg">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-on-surface">
+                      Competition Leaderboard Visibility
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      showLeaderboard ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
+                    }`}>
+                      {showLeaderboard ? 'Active (Visible)' : 'Hidden (App & Big Screen)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-secondary leading-relaxed">
+                    Controls whether the live competition leaderboard is visible across the app and on the Big Screen carousel. When disabled, the leaderboard is completely hidden from both the participant navigation and the projector carousel.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleToggleShowLeaderboard}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    showLeaderboard ? 'bg-primary' : 'bg-surface-container-high'
+                  }`}
+                  role="switch"
+                  aria-checked={showLeaderboard}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                      showLeaderboard ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Control 4: Home Page Video Showcase & Reels Visibility Toggle */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-lg">
+                  <div className="flex items-center gap-2">
+                    <Video className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-on-surface">
+                      Home Page Video Showcase &amp; Reels
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      showVideoShowcase ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
+                    }`}>
+                      {showVideoShowcase ? 'Active (Visible)' : 'Hidden (In Development)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-secondary leading-relaxed">
+                    Controls whether the video aftermovie player and social reels/shorts section are displayed on the home page. Keep hidden while under development.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleToggleShowVideoShowcase}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    showVideoShowcase ? 'bg-primary' : 'bg-surface-container-high'
+                  }`}
+                  role="switch"
+                  aria-checked={showVideoShowcase}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                      showVideoShowcase ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Control 4: Pass Customization & Layout Edit Card (Moved from ParticipantPass) */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-lg">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-on-surface">
+                      Pass Page Customization &amp; Layout Controls
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      isSystemActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600'
+                    }`}>
+                      {isSystemActive ? 'System Active' : 'Passes Disabled'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-secondary leading-relaxed">
+                    {!isSystemActive 
+                      ? 'Status: Passes DISABLED for participants. Participants see "No events taking place currently" with a redirect to Events Hub.' 
+                      : `Status: Active. ${visibleActivities.length} of ${allActivities.length} activities enabled for passes. Configure visibility, download button, and activity filters.`}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalConfig(passConfig);
+                    setSearchQuery('');
+                    setShowSearchDropdown(false);
+                    setShowConfigModal(true);
+                  }}
+                  className="py-2 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0 self-start sm:self-auto"
+                >
+                  <Settings2 className="w-4 h-4" />
+                  <span>Edit Layout</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1021,6 +1289,298 @@ export default function ProfileEditPage({
                 Keep Editing
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================================= */}
+      {/* ADMIN PASS CUSTOMIZATION MODAL (Moved from ParticipantPass)              */}
+      {/* ========================================================================= */}
+      {effectiveIsAdmin && showConfigModal && createPortal(
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 sm:pt-16 bg-black/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 h-auto max-h-fit">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-surface-container pb-4">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <Settings2 className="w-4 h-4" />
+                  <span>Pass Page Layout Controls</span>
+                </div>
+                <p className="text-xs text-secondary">
+                  Manage pass system availability, activity visibility, and date overrides.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="text-secondary hover:text-on-surface p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveConfig} className="space-y-4">
+              {/* Full Disable / Master Switch on Top */}
+              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-on-surface uppercase tracking-wide">
+                      Pass System Active (Master Switch)
+                    </span>
+                    <p className="text-[11px] text-secondary">
+                      When turned OFF, passes are hidden and participants see &ldquo;No events taking place currently&rdquo; with a button to Events &amp; Hub.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalConfig.passSystemEnabled ?? true}
+                    onChange={(e) => setModalConfig({ ...modalConfig, passSystemEnabled: e.target.checked })}
+                    className="w-5 h-5 rounded text-primary focus:ring-primary"
+                  />
+                </label>
+              </div>
+
+              {/* Download Pass Button Toggle */}
+              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-on-surface uppercase tracking-wide">
+                      Download Pass Button
+                    </span>
+                    <p className="text-[11px] text-secondary">
+                      Allow participants to download their high-resolution pass with venue details and QR code.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalConfig.showDownloadButton ?? true}
+                    onChange={(e) => setModalConfig({ ...modalConfig, showDownloadButton: e.target.checked })}
+                    className="w-5 h-5 rounded text-primary focus:ring-primary"
+                  />
+                </label>
+              </div>
+
+              {/* Hide Pass After Attendance Scanned Toggle */}
+              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-on-surface uppercase tracking-wide">
+                      Hide Pass Once Attendance Marked
+                    </span>
+                    <p className="text-[11px] text-secondary">
+                      After a coordinator scans the pass, replace the active QR code with a &ldquo;Redeemed / Checked-In&rdquo; status card.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalConfig.hidePassAfterAttendance ?? true}
+                    onChange={(e) => setModalConfig({ ...modalConfig, hidePassAfterAttendance: e.target.checked })}
+                    className="w-5 h-5 rounded text-primary focus:ring-primary"
+                  />
+                </label>
+              </div>
+
+              {/* Per-Activity Visibility Controls with Search & Dismiss */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-secondary">
+                    Individual Activity Visibility ({panelActivities.length} in panel)
+                  </span>
+                  {modalDismissedIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setModalConfig(prev => ({ ...prev, panelDismissedActivityIds: [] }))}
+                      className="text-[11px] text-primary hover:underline font-bold"
+                    >
+                      Restore All ({modalDismissedIds.length} dismissed)
+                    </button>
+                  )}
+                </div>
+
+                {/* Search & Add Bar */}
+                <div className="relative" ref={searchContainerRef}>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-secondary absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Search to add or toggle activities..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowSearchDropdown(true);
+                      }}
+                      onFocus={() => setShowSearchDropdown(true)}
+                      className="w-full pl-9 pr-4 py-2 bg-surface-container-low border border-surface-container rounded-xl text-xs text-on-surface placeholder:text-secondary focus:outline-none focus:ring-2 focus:ring-primary shadow-xs"
+                    />
+                  </div>
+
+                  {/* Search Dropdown Results */}
+                  {showSearchDropdown && searchQuery && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-xl z-20 max-h-48 overflow-y-auto p-1 divide-y divide-surface-container/50">
+                      {filteredSearchActivities.length === 0 ? (
+                        <div className="p-3 text-center text-xs text-secondary">
+                          No matching activities found
+                        </div>
+                      ) : (
+                        filteredSearchActivities.map((act) => {
+                          const isDismissed = modalDismissedIds.includes(act.id);
+                          const isHidden = modalHiddenIds.includes(act.id);
+
+                          return (
+                            <div 
+                              key={act.id}
+                              className="p-2 flex items-center justify-between hover:bg-surface-container-low rounded-xl transition-colors text-xs"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="font-bold text-on-surface truncate">{act.name}</div>
+                                <div className="text-[10px] text-secondary font-mono">{act.category} &bull; {act.room}</div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {isDismissed ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestoreToPanel(act.id)}
+                                    className="py-1 px-2.5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-lg text-[10px] flex items-center gap-1 shadow-xs"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>Add to Panel</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleActivityVisibility(act.id)}
+                                    className={`py-1 px-2.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                                      isHidden 
+                                        ? 'bg-surface-container text-secondary' 
+                                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                    }`}
+                                  >
+                                    {isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                    <span>{isHidden ? 'Hidden' : 'Visible'}</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Visible / Panel Activity Cards */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {panelActivities.length === 0 ? (
+                    <div className="text-center p-6 bg-surface-container-low rounded-2xl border border-surface-container space-y-2">
+                      <p className="text-xs text-secondary">All activities have been dismissed from the control panel.</p>
+                      <button
+                        type="button"
+                        onClick={() => setModalConfig(prev => ({ ...prev, panelDismissedActivityIds: [] }))}
+                        className="py-1 px-3 bg-primary text-on-primary rounded-xl text-xs font-bold"
+                      >
+                        Restore All Activities
+                      </button>
+                    </div>
+                  ) : (
+                    panelActivities.map((act) => {
+                      const isHidden = modalHiddenIds.includes(act.id);
+                      const isVisible = !isHidden;
+
+                      return (
+                        <div
+                          key={act.id}
+                          className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                            isVisible 
+                              ? 'bg-surface-container-low border-surface-container' 
+                              : 'bg-surface-container-lowest/60 border-dashed border-surface-container opacity-60'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-on-surface truncate flex items-center gap-1.5">
+                              <span>{act.name}</span>
+                              <span className="font-mono text-[9px] px-1.5 py-0.2 rounded bg-surface-container text-secondary">
+                                {act.room}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-secondary block mt-0.5">
+                              {isVisible ? 'Visible in pass selector' : 'Hidden from pass selector'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleActivityVisibility(act.id)}
+                              className={`py-1 px-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                                isVisible 
+                                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' 
+                                  : 'bg-surface-container text-secondary border border-surface-container'
+                              }`}
+                            >
+                              {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                              <span>{isVisible ? 'Visible' : 'Hidden'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDismissFromPanel(act.id)}
+                              className="p-1 text-secondary hover:text-error rounded-lg hover:bg-surface-container transition-colors"
+                              title="Dismiss from control panel"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-surface-container gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetConfig}
+                  disabled={savingConfig}
+                  className="py-2 px-3 text-secondary hover:text-error text-xs font-semibold flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Defaults</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfigModal(false)}
+                    className="py-2 px-4 bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-bold rounded-xl"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={savingConfig}
+                    className="py-2 px-4 bg-primary hover:bg-primary-container text-on-primary text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {savingConfig ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Save Layout</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>,
         document.body

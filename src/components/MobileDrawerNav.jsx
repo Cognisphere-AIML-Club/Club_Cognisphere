@@ -41,7 +41,8 @@ export default function MobileDrawerNav({
   onSignIn,
   onLaunchBigScreen,
   theme = 'light',
-  onToggleTheme
+  onToggleTheme,
+  showLeaderboard = true
 }) {
   // Lock body scroll when mobile drawer is open
   useEffect(() => {
@@ -101,7 +102,7 @@ export default function MobileDrawerNav({
       id: 'leaderboard',
       label: 'Leaderboard',
       icon: Trophy,
-      show: true,
+      show: Boolean(showLeaderboard),
       badge: 'Live'
     },
     {

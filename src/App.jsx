@@ -19,6 +19,8 @@ import LeaderboardPage from './components/LeaderboardPage';
 import { SidebarNav } from './components/SidebarNav';
 import MobileDrawerNav from './components/MobileDrawerNav';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
+import { subscribeToPassConfig } from './services/passApprovalService';
+import { MenuIcon } from './components/AnimatedIcons';
 import {
   ShieldCheck,
   LogOut,
@@ -240,6 +242,38 @@ export default function App() {
     applyThemeToDOM(next);
   };
 
+  // Competition Leaderboard Visibility State (Admin controlled via passConfig)
+  const [showLeaderboard, setShowLeaderboard] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cognisphere_pass_config');
+      return cached ? JSON.parse(cached).showLeaderboard ?? true : true;
+    } catch {
+      return true;
+    }
+  });
+
+  // Home Page Video Showcase Visibility State (Admin controlled via passConfig)
+  const [showVideoShowcase, setShowVideoShowcase] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cognisphere_pass_config');
+      return cached ? JSON.parse(cached).showVideoShowcase ?? false : false;
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const unsub = subscribeToPassConfig((cfg) => {
+      if (cfg && typeof cfg.showLeaderboard === 'boolean') {
+        setShowLeaderboard(cfg.showLeaderboard);
+      }
+      if (cfg && typeof cfg.showVideoShowcase === 'boolean') {
+        setShowVideoShowcase(cfg.showVideoShowcase);
+      }
+    });
+    return () => unsub();
+  }, []);
+
   const handleOpenBigScreen = (mode = 'hall', activityId = null) => {
     setBigScreenMode(mode);
     setBigScreenActivityId(activityId);
@@ -373,6 +407,13 @@ export default function App() {
       path: activityId ? `/leaderboard?game=${activityId}` : '/leaderboard'
     });
   };
+
+  // Automatically navigate away from leaderboard if it gets hidden by an admin
+  useEffect(() => {
+    if (!showLeaderboard && activeTab === 'leaderboard') {
+      navigateToTab('home');
+    }
+  }, [showLeaderboard, activeTab]);
 
   // Back Navigation: Moves back along the layer stack, restoring the remembered scroll position
   const triggerBackAction = () => {
@@ -637,6 +678,7 @@ export default function App() {
         onExit={handleExitBigScreen}
         initialMode={bigScreenMode}
         initialActivityId={bigScreenActivityId}
+        showLeaderboard={showLeaderboard}
       />
     );
   }
@@ -665,6 +707,7 @@ export default function App() {
         theme={theme}
         onToggleAdminTheme={toggleTheme}
         onToggleTheme={toggleTheme}
+        showLeaderboard={showLeaderboard}
       />
 
       {/* 2. Main Content Area */}
@@ -733,7 +776,7 @@ export default function App() {
                 </button>
               )}
 
-              {/* Hamburger Menu Button */}
+              {/* Hamburger Menu Button — Skiper99 animated MenuIcon */}
               <button
                 onClick={() => setMobileMenuOpen(prev => !prev)}
                 className="p-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container transition-all active:scale-95"
@@ -741,11 +784,12 @@ export default function App() {
                 aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={mobileMenuOpen}
               >
-                {mobileMenuOpen ? (
-                  <X className="w-5 h-5 text-on-surface" />
-                ) : (
-                  <Menu className="w-5 h-5 text-on-surface" />
-                )}
+                <MenuIcon
+                  size={20}
+                  isOpen={mobileMenuOpen}
+                  onToggle={() => {}}
+                  className="w-5 h-5"
+                />
               </button>
             </div>
           </div>
@@ -773,10 +817,11 @@ export default function App() {
           onLaunchBigScreen={(mode, actId) => handleOpenBigScreen(mode, actId)}
           theme={theme}
           onToggleTheme={toggleTheme}
+          showLeaderboard={showLeaderboard}
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 max-w-7xl xl:max-w-[1400px] w-full mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6">
           {/* Banner if Firebase is not yet configured */}
           {!isConfigured && (
             <div className="bg-error-container text-on-error-container border border-error/20 rounded-2xl p-4 text-xs flex items-start gap-3 shadow-xs mb-6">
@@ -805,6 +850,7 @@ export default function App() {
               {activeTab === 'home' && (
                 <ClubHomePage
                   user={user}
+                  showVideoShowcase={showVideoShowcase}
                   onSignIn={signInWithGoogle}
                   onExploreGames={() => navigateToTab('events')}
                   onOpenPass={() => navigateToTab('pass')}
@@ -825,10 +871,11 @@ export default function App() {
                     profile={profile}
                     onBack={triggerBackAction}
                     onOpenPass={handleOpenPassForGame}
-                    onOpenLeaderboard={handleOpenLeaderboardForGame}
+                    onOpenLeaderboard={showLeaderboard ? handleOpenLeaderboardForGame : null}
                     onUpdateActivity={updateActivity}
                     onOpenBigScreen={(actId) => handleOpenBigScreen('room', actId)}
                     onSignIn={signInWithGoogle}
+                    showLeaderboard={showLeaderboard}
                   />
                 ) : (
                   <EventLandingPage
@@ -846,19 +893,21 @@ export default function App() {
 
               {/* Tab: Dedicated Leaderboard Page with Multi-Event Selector */}
               {activeTab === 'leaderboard' && (
-                <LeaderboardPage
-                  activities={activities}
-                  initialActivityId={selectedLeaderboardGameId}
-                  user={user}
-                  isAdmin={effectiveIsAdmin}
-                  isCoordinator={effectiveIsCoordinator}
-                  isStaff={effectiveIsStaff}
-                  onBack={triggerBackAction}
-                  onNavigateToEvent={(actId) => {
-                    const act = activities.find(a => a.id === actId);
-                    if (act) navigateToGame(act);
-                  }}
-                />
+                showLeaderboard ? (
+                  <LeaderboardPage
+                    activities={activities}
+                    initialActivityId={selectedLeaderboardGameId}
+                    user={user}
+                    isAdmin={effectiveIsAdmin}
+                    isCoordinator={effectiveIsCoordinator}
+                    isStaff={effectiveIsStaff}
+                    onBack={triggerBackAction}
+                    onNavigateToEvent={(actId) => {
+                      const act = activities.find(a => a.id === actId);
+                      if (act) navigateToGame(act);
+                    }}
+                  />
+                ) : null
               )}
 
               {/* Tab: Dedicated Event Registrations & Approvals Portal */}
@@ -922,6 +971,7 @@ export default function App() {
                   profile={profile}
                   role={effectiveRole}
                   isAdmin={effectiveIsAdmin}
+                  activities={activities}
                   theme={theme}
                   onToggleTheme={toggleTheme}
                   onBack={() => {

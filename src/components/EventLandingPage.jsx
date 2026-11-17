@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  Sparkles, 
-  MapPin, 
-  Clock, 
-  Tag, 
-  Edit3, 
-  QrCode, 
-  ShieldCheck, 
-  ChevronRight, 
+import {
+  Sparkles,
+  MapPin,
+  Clock,
+  Tag,
+  Edit3,
+  QrCode,
+  ShieldCheck,
+  ChevronRight,
   ChevronDown,
   Calendar,
-  Radio, 
+  Radio,
   ArrowRight,
   ArrowDown,
   CheckCircle2,
@@ -27,6 +27,9 @@ import {
 } from 'lucide-react';
 import { subscribeToUserPassRequests } from '../services/passApprovalService';
 import { useAnnouncements } from '../hooks/useAnnouncements';
+import AdminTimePicker from './AdminTimePicker';
+import AdminDatePicker from './AdminDatePicker';
+import { getActivityStatus } from '../utils/activityStatus';
 
 /**
  * Inline Announcement Editor: Tracks position inside announcements feed and occupies only required height
@@ -153,29 +156,91 @@ function InlineAnnouncementEditor({ initialData = null, onSave, onCancel }) {
   );
 }
 
+const VENUE_ROOM_OPTIONS = [
+  'Room A107',
+  'Room A108',
+  'AIML Lab',
+];
+
+function parseTimeRange(str) {
+  if (!str) return { startTime: '10:00', endTime: '11:30' };
+  const timeRegex = /(\d{1,2}):(\d{2})\s*(AM|PM)?/gi;
+  const matches = [...str.matchAll(timeRegex)];
+
+  function to24h(h, m, meridiem) {
+    let hours = parseInt(h, 10);
+    const isPM = meridiem && meridiem.toUpperCase() === 'PM';
+    const isAM = meridiem && meridiem.toUpperCase() === 'AM';
+    if (isPM && hours < 12) hours += 12;
+    if (!isPM && hours === 12) hours = 0;
+    return String(hours).padStart(2, '0') + ':' + m;
+  }
+
+  let startTime = '10:00';
+  let endTime = '11:30';
+
+  if (matches.length >= 1) {
+    startTime = to24h(matches[0][1], matches[0][2], matches[0][3] || 'AM');
+  }
+  if (matches.length >= 2) {
+    endTime = to24h(matches[1][1], matches[1][2], matches[1][3] || 'AM');
+  }
+  return { startTime, endTime };
+}
+
+function formatTimeRange(start24, end24) {
+  function to12h(time24) {
+    if (!time24) return '';
+    const [h, m] = time24.split(':').map(Number);
+    const meridiem = h >= 12 ? 'PM' : 'AM';
+    const hours = h % 12 || 12;
+    return `${hours}:${String(m).padStart(2, '0')} ${meridiem}`;
+  }
+  if (start24 && end24) {
+    return `${to12h(start24)} – ${to12h(end24)}`;
+  }
+  if (start24) {
+    return to12h(start24);
+  }
+  return '';
+}
+
 /**
  * Inline Activity Card Editor: Replaces the card directly in the grid, tracking its position and occupying only required height
  */
 function InlineActivityCardEditor({ activity, onSave, onCancel }) {
   const [eventDate, setEventDate] = useState(activity.eventDate || '2026-11-24');
-  const [scheduledTime, setScheduledTime] = useState(activity.scheduledTime || '10:00 AM');
-  const [room, setRoom] = useState(activity.room || '');
-  const [status, setStatus] = useState(activity.status || 'Upcoming');
-  const [description, setDescription] = useState(activity.description || '');
+
+  // Time Picker states
+  const initialTimes = parseTimeRange(activity.scheduledTime);
+  const [startTime, setStartTime] = useState(initialTimes.startTime);
+  const [endTime, setEndTime] = useState(initialTimes.endTime);
+
+  // Room / Venue Dropdown states
+  const isCustom = activity.room && !VENUE_ROOM_OPTIONS.includes(activity.room);
+  const [room, setRoom] = useState(isCustom ? 'CUSTOM_OTHER' : (activity.room || VENUE_ROOM_OPTIONS[0]));
+  const [isCustomRoom, setIsCustomRoom] = useState(isCustom);
+  const [customRoomValue, setCustomRoomValue] = useState(isCustom ? activity.room : '');
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const formattedTime = formatTimeRange(startTime, endTime);
+  const effectiveRoom = isCustomRoom ? customRoomValue.trim() : room;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!effectiveRoom) {
+      setError('Please select or specify a room/venue');
+      return;
+    }
     try {
       setSaving(true);
       setError('');
       await onSave(activity.id, {
-        room: room.trim(),
-        scheduledTime: scheduledTime.trim(),
-        eventDate: eventDate.trim(),
-        status,
-        description: description.trim(),
+        room: effectiveRoom,
+        scheduledTime: formattedTime,
+        eventDate: eventDate.trim()
       });
       onCancel();
     } catch (err) {
@@ -218,80 +283,76 @@ function InlineActivityCardEditor({ activity, onSave, onCancel }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2.5">
+        {/* Top Row: Left is Date Picker (MUI), Right is Room/Venue Selection */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
           <div>
             <label className="block text-[11px] font-bold text-on-surface mb-1 flex items-center gap-1">
               <Calendar className="w-3 h-3 text-primary" />
               <span>Event Date</span>
             </label>
-            <input
-              type="date"
-              required
+            <AdminDatePicker
               value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-              className="w-full bg-surface-container border border-surface-container-high focus:border-primary rounded-xl py-1.5 px-2.5 text-xs text-on-surface focus:outline-none"
+              onChange={setEventDate}
+              label="Select Date"
             />
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-on-surface mb-1 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-secondary" />
-              <span>Scheduled Time</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
-              placeholder="e.g. 10:00 AM – 12:00 PM"
-              className="w-full bg-surface-container border border-surface-container-high focus:border-primary rounded-xl py-1.5 px-2.5 text-xs text-on-surface focus:outline-none"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2.5">
           <div>
             <label className="block text-[11px] font-bold text-on-surface mb-1 flex items-center gap-1">
               <MapPin className="w-3 h-3 text-primary" />
               <span>Room / Venue</span>
             </label>
-            <input
-              type="text"
-              required
-              value={room}
-              onChange={(e) => setRoom(e.target.value)}
-              placeholder="e.g. Lab 301"
-              className="w-full bg-surface-container border border-surface-container-high focus:border-primary rounded-xl py-1.5 px-2.5 text-xs text-on-surface focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-on-surface mb-1 flex items-center gap-1">
-              <Tag className="w-3 h-3 text-secondary" />
-              <span>Round Status</span>
-            </label>
             <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full bg-surface-container border border-surface-container-high focus:border-primary rounded-xl py-1.5 px-2.5 text-xs text-on-surface focus:outline-none cursor-pointer"
+              value={isCustomRoom ? 'CUSTOM_OTHER' : room}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'CUSTOM_OTHER') {
+                  setIsCustomRoom(true);
+                } else {
+                  setIsCustomRoom(false);
+                  setRoom(val);
+                }
+              }}
+              className="w-full bg-surface-container border border-surface-container-high focus:border-primary rounded-xl py-1.5 px-2 text-xs text-on-surface focus:outline-none cursor-pointer"
             >
-              <option value="Upcoming">Upcoming</option>
-              <option value="In Progress">In Progress (Live)</option>
-              <option value="Paused">Paused</option>
-              <option value="Completed">Completed</option>
+              {VENUE_ROOM_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+              <option value="CUSTOM_OTHER">+ Other / Custom Room...</option>
             </select>
+
+            {isCustomRoom && (
+              <input
+                type="text"
+                required
+                value={customRoomValue}
+                onChange={(e) => setCustomRoomValue(e.target.value)}
+                placeholder="Custom venue name..."
+                className="mt-1.5 w-full bg-surface-container border border-surface-container-high focus:border-primary rounded-xl py-1 px-2 text-xs text-on-surface focus:outline-none animate-fadeIn"
+                autoFocus
+              />
+            )}
           </div>
         </div>
 
-        <div>
-          <label className="block text-[11px] font-bold text-on-surface mb-1">
-            Description
+        {/* Entire Bottom Half: Scheduled Time with MUI TimePicker */}
+        <div className="pt-0.5">
+          <label className="block text-[11px] font-bold text-on-surface mb-0.5 flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3 text-secondary" />
+              <span>Scheduled Time (Start &amp; End)</span>
+            </span>
+            <span className="text-[10px] text-primary font-mono font-bold truncate max-w-[130px]">
+              {formattedTime}
+            </span>
           </label>
-          <textarea
-            rows={2}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full bg-surface-container border border-surface-container-high focus:border-primary rounded-xl py-1.5 px-2.5 text-xs text-on-surface focus:outline-none resize-none"
+          <AdminTimePicker
+            startTime={startTime}
+            endTime={endTime}
+            onChangeStart={setStartTime}
+            onChangeEnd={setEndTime}
           />
         </div>
       </div>
@@ -318,12 +379,12 @@ function InlineActivityCardEditor({ activity, onSave, onCancel }) {
   );
 }
 
-export default function EventLandingPage({ 
-  activities = [], 
-  isAdmin = false, 
-  user = null, 
-  profile = null, 
-  onViewPass, 
+export default function EventLandingPage({
+  activities = [],
+  isAdmin = false,
+  user = null,
+  profile = null,
+  onViewPass,
   onSelectGame,
   onUpdateActivity,
   onSignIn
@@ -344,7 +405,7 @@ export default function EventLandingPage({
     longPressTimerRef.current = setTimeout(() => {
       togglePinAnnouncement(item.id, item.pinned);
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(50); } catch (_) {}
+        try { navigator.vibrate(50); } catch (_) { }
       }
     }, 550);
   };
@@ -365,15 +426,15 @@ export default function EventLandingPage({
     return () => unsubscribe();
   }, [user?.uid]);
 
-  // Priority Logic for Current Game
+  // Priority Logic for Current Game calculated dynamically from date and time
   const approvedInProgress = activities.find(
-    a => userRequests[a.id]?.status === 'approved' && a.status === 'In Progress'
+    a => userRequests[a.id]?.status === 'approved' && getActivityStatus(a).isLive
   );
   const approvedUpcoming = activities.find(
-    a => userRequests[a.id]?.status === 'approved' && a.status !== 'Completed'
+    a => userRequests[a.id]?.status === 'approved' && getActivityStatus(a).status !== 'Completed'
   );
-  const generalLive = activities.find(a => a.status === 'In Progress');
-  const generalUpcoming = activities.find(a => a.status !== 'Completed');
+  const generalLive = activities.find(a => getActivityStatus(a).isLive);
+  const generalUpcoming = activities.find(a => getActivityStatus(a).status !== 'Completed');
 
   let targetGame = null;
   let targetMode = 'unregistered';
@@ -478,11 +539,10 @@ export default function EventLandingPage({
                     Where You Should Be Right Now
                   </span>
 
-                  <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${
-                    targetGame.status === 'In Progress' 
-                      ? 'bg-error-container text-on-error-container' 
+                  <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${targetGame.status === 'In Progress'
+                      ? 'bg-error-container text-on-error-container'
                       : 'bg-tertiary-container text-on-tertiary-container'
-                  }`}>
+                    }`}>
                     {targetGame.status === 'In Progress' ? 'LIVE NOW' : (targetGame.scheduledTime || 'Approved • Upcoming')}
                   </span>
                 </div>
@@ -653,8 +713,8 @@ export default function EventLandingPage({
               }
 
               return (
-                <div 
-                  key={item.id} 
+                <div
+                  key={item.id}
                   onContextMenu={(e) => {
                     if (!isAdmin) return;
                     e.preventDefault();
@@ -663,11 +723,10 @@ export default function EventLandingPage({
                   onTouchStart={() => handleTouchStart(item)}
                   onTouchEnd={handleTouchEnd}
                   onTouchCancel={handleTouchEnd}
-                  className={`p-3.5 rounded-2xl border text-xs flex items-start justify-between gap-3 transition-colors ${
-                    item.pinned 
-                      ? 'bg-surface-container border-primary/30 text-on-surface' 
+                  className={`p-3.5 rounded-2xl border text-xs flex items-start justify-between gap-3 transition-colors ${item.pinned
+                      ? 'bg-surface-container border-primary/30 text-on-surface'
                       : 'bg-surface-container-low border-surface-container text-on-surface-variant'
-                  } ${isAdmin ? 'cursor-pointer select-none' : ''}`}
+                    } ${isAdmin ? 'cursor-pointer select-none' : ''}`}
                   title={isAdmin ? 'Right-click on desktop or press & hold on mobile to pin/unpin' : undefined}
                 >
                   <div className="space-y-1 flex-1">
@@ -695,11 +754,10 @@ export default function EventLandingPage({
                           e.stopPropagation();
                           togglePinAnnouncement(item.id, item.pinned);
                         }}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          item.pinned 
-                            ? 'text-primary bg-surface-container' 
+                        className={`p-1.5 rounded-lg transition-colors ${item.pinned
+                            ? 'text-primary bg-surface-container'
                             : 'text-secondary hover:text-primary hover:bg-surface-container'
-                        }`}
+                          }`}
                         title={item.pinned ? 'Unpin Announcement' : 'Pin Announcement'}
                         aria-label={item.pinned ? 'Unpin announcement' : 'Pin announcement'}
                       >
@@ -761,9 +819,8 @@ export default function EventLandingPage({
           {/* IGNITE Full-Width Dropdown Header Bar */}
           <div
             onClick={() => setExpandedEventId(prev => prev === 'ignite' ? null : 'ignite')}
-            className={`w-full p-5 sm:p-6 flex items-center justify-between gap-4 cursor-pointer select-none transition-colors ${
-              expandedEventId === 'ignite' ? 'bg-surface-container-low border-b border-surface-container' : 'hover:bg-surface-container-low'
-            }`}
+            className={`w-full p-5 sm:p-6 flex items-center justify-between gap-4 cursor-pointer select-none transition-colors ${expandedEventId === 'ignite' ? 'bg-surface-container-low border-b border-surface-container' : 'hover:bg-surface-container-low'
+              }`}
           >
             {/* Left: Event Title, Date & Badges */}
             <div className="space-y-1.5 flex-1">
@@ -830,11 +887,10 @@ export default function EventLandingPage({
                       <div className="space-y-3">
                         {/* Top Badges */}
                         <div className="flex items-center justify-between gap-2">
-                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
-                            act.category === 'Technical'
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${act.category === 'Technical'
                               ? 'bg-surface-container border-surface-container-high text-primary'
                               : 'bg-secondary-container/40 border-secondary/20 text-secondary'
-                          }`}>
+                            }`}>
                             <Tag className="w-3 h-3" />
                             <span>{act.category}</span>
                           </span>
@@ -849,18 +905,28 @@ export default function EventLandingPage({
                               <Clock className="w-3 h-3 text-secondary" />
                               <span>Pending</span>
                             </span>
-                          ) : (
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              act.status === 'In Progress'
-                                ? 'bg-error-container text-on-error-container'
-                                : 'bg-surface-container text-secondary'
-                            }`}>
-                              {act.status === 'In Progress' && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
-                              )}
-                              <span>{act.status || 'Upcoming'}</span>
-                            </span>
-                          )}
+                          ) : (() => {
+                            const actStatus = getActivityStatus(act);
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                                actStatus.isLive
+                                  ? 'bg-error-container text-on-error-container border-error/30'
+                                  : actStatus.status === 'Completed'
+                                    ? 'bg-surface-container text-secondary border-surface-container'
+                                    : actStatus.isCountdown
+                                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 font-extrabold'
+                                      : 'bg-surface-container text-secondary border-surface-container'
+                              }`}>
+                                {actStatus.isLive && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
+                                )}
+                                {actStatus.isCountdown && (
+                                  <Clock className="w-3 h-3 text-amber-500 animate-pulse" />
+                                )}
+                                <span>{actStatus.label}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
 
                         {/* Activity Name */}
@@ -872,23 +938,28 @@ export default function EventLandingPage({
                         </h4>
 
                         {/* Specific Date Along with Room and Scheduled Time */}
-                        <div className="flex flex-wrap items-center gap-2.5 text-xs text-secondary">
-                          <div className="flex items-center gap-1.5 font-bold text-primary bg-surface-container px-2 py-0.5 rounded-lg border border-surface-container-high">
-                            <Calendar className="w-3 h-3 text-primary" />
-                            <span>
-                              {act.eventDate === '2026-11-24' 
-                                ? 'Nov 24, 2026' 
-                                : act.eventDate === '2026-11-25' 
-                                ? 'Nov 25, 2026' 
-                                : act.eventDate === '2026-11-26' 
-                                ? 'Nov 26, 2026' 
-                                : act.eventDate || 'Nov 24, 2026'}
-                            </span>
+                        <div className="space-y-1.5 text-xs">
+                          {/* Date and Scheduled Time */}
+                          <div className="flex flex-wrap items-center gap-2.5 text-secondary">
+                            <div className="flex items-center gap-1.5 font-bold text-primary bg-surface-container px-2 py-0.5 rounded-lg border border-surface-container-high">
+                              <Calendar className="w-3 h-3 text-primary" />
+                              <span>
+                                {act.eventDate === '2026-11-24'
+                                  ? 'Nov 24, 2026'
+                                  : act.eventDate === '2026-11-25'
+                                    ? 'Nov 25, 2026'
+                                    : act.eventDate === '2026-11-26'
+                                      ? 'Nov 26, 2026'
+                                      : act.eventDate || 'Nov 24, 2026'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 font-semibold text-on-surface">
+                              <Clock className="w-3.5 h-3.5 text-secondary" />
+                              <span>{act.scheduledTime || 'TBD'}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5 font-semibold text-on-surface">
-                            <Clock className="w-3.5 h-3.5 text-secondary" />
-                            <span>{act.scheduledTime || 'TBD'}</span>
-                          </div>
+
+                          {/* Venue on Next Line */}
                           <div className="flex items-center gap-1.5 text-secondary font-medium">
                             <MapPin className="w-3.5 h-3.5 text-secondary" />
                             <span>{act.room}</span>

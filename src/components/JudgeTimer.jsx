@@ -10,13 +10,15 @@ import {
   Plus, 
   Minus,
   Lock,
-  CalendarDays
+  CalendarDays,
+  Tv
 } from 'lucide-react';
 
 export default function JudgeTimer({ 
   activity, 
   canControl = false, 
-  userEmail = 'coordinator' 
+  userEmail = 'coordinator',
+  onOpenBigScreen
 }) {
   const defaultSec = activity?.defaultDuration || 60;
   const {
@@ -65,7 +67,7 @@ export default function JudgeTimer({
     return defMatch ? defMatch.id : defaultPresets[0].id;
   });
 
-  // Keep single active preset in sync when switching activities
+    // Keep single active preset in sync when switching activities
   useEffect(() => {
     if (timelinePresets && timelinePresets.length > 0) {
       const match = timelinePresets.find(p => p.seconds === defaultSec);
@@ -75,6 +77,10 @@ export default function JudgeTimer({
       setActivePresetId(defMatch ? defMatch.id : defaultPresets[0].id);
     }
   }, [activity?.id, defaultSec]);
+
+  const currentActiveStage = timelinePresets?.find(p => p.id === activePresetId)?.desc
+    || defaultPresets.find(p => p.id === activePresetId)?.label
+    || activity?.name || 'Active Round';
 
   return (
     <div className={`rounded-3xl border p-6 sm:p-8 transition-all shadow-xs relative overflow-hidden ${
@@ -111,8 +117,19 @@ export default function JudgeTimer({
           </div>
         </div>
 
-        {/* Status Pill and Sound Toggle */}
+        {/* Status Pill, Launch Big Screen, and Sound Toggle */}
         <div className="flex items-center gap-2">
+          {canControl && onOpenBigScreen && (
+            <button
+              onClick={onOpenBigScreen}
+              className="px-3 py-1.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+              title="Launch Big Screen Projector Mode"
+            >
+              <Tv className="w-3.5 h-3.5 text-primary" />
+              <span className="hidden sm:inline">Launch Big Screen</span>
+            </button>
+          )}
+
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             title={soundEnabled ? 'Sound alerts enabled' : 'Sound alerts muted'}
@@ -191,7 +208,7 @@ export default function JudgeTimer({
               </button>
             ) : (
               <button
-                onClick={() => startTimer(null, userEmail)}
+                onClick={() => startTimer(null, userEmail, currentActiveStage)}
                 className="py-3 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-2xl text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-xs col-span-2 sm:col-span-2"
               >
                 <Play className="w-4 h-4" />
@@ -201,7 +218,7 @@ export default function JudgeTimer({
 
             {/* Reset Button: Always available to reset or stop */}
             <button
-              onClick={() => resetTimer(null, userEmail)}
+              onClick={() => resetTimer(null, userEmail, currentActiveStage)}
               className="py-3 px-4 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest text-on-surface font-semibold rounded-2xl text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 col-span-2 sm:col-span-2 shadow-xs"
             >
               <RotateCcw className="w-4 h-4" />
@@ -233,7 +250,7 @@ export default function JudgeTimer({
                       disabled={isRunning}
                       onClick={() => {
                         setActivePresetId(p.id);
-                        resetTimer(p.seconds, userEmail);
+                        resetTimer(p.seconds, userEmail, p.desc);
                       }}
                       title={p.desc}
                       className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-colors border flex items-center gap-1.5 ${
@@ -269,7 +286,7 @@ export default function JudgeTimer({
                     disabled={isRunning}
                     onClick={() => {
                       setActivePresetId(p.id);
-                      resetTimer(p.seconds, userEmail);
+                      resetTimer(p.seconds, userEmail, `${p.label} Round`);
                     }}
                     className={`px-3 py-1 rounded-xl text-xs font-mono font-bold transition-colors border ${
                       isRunning
