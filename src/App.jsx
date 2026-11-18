@@ -724,22 +724,6 @@ export default function App() {
 
       {/* 2. Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        {/* Admin Mode Active Floating Banner */}
-        {isAdmin && adminMode && (
-          <div className="bg-primary text-on-primary px-4 py-2 text-xs font-bold flex items-center justify-between shadow-xs sticky top-0 z-50 animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-on-primary shrink-0" />
-              <span>Admin Mode is ON: Administrative controls and editing are active</span>
-            </div>
-            <button
-              onClick={toggleAdminMode}
-              className="bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all active:scale-95"
-            >
-              Switch to Participant View
-            </button>
-          </div>
-        )}
-
         {/* Mobile-Only Header */}
         <header className="md:hidden border-b border-surface-container bg-surface-container-lowest sticky top-0 z-40 transition-colors">
           <div className="px-4 h-16 flex items-center justify-between">
