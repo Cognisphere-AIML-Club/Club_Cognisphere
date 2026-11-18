@@ -371,6 +371,18 @@ export default function App() {
     pushNavEntry({ tab, game: null, passGameId: null, leaderboardGameId: null });
   };
 
+  const navigateToHomeContact = () => {
+    if (activeTab !== 'home') {
+      navigateToTab('home');
+    }
+    setTimeout(() => {
+      const el = document.getElementById('contact');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 150);
+  };
+
   const handleProfileNavigate = (targetTab) => {
     setProfileDirty(false);
     currentNavRef.current.profileDirty = false;
@@ -918,6 +930,7 @@ export default function App() {
                   isAdmin={effectiveIsAdmin}
                   isCoordinator={effectiveIsCoordinator}
                   isStaff={effectiveIsStaff}
+                  activities={activities}
                   onViewPass={handleOpenPassForGame}
                   onSignIn={signInWithGoogle}
                 />
@@ -952,7 +965,10 @@ export default function App() {
 
               {/* Tab 4: Coordinator Scanner */}
               {activeTab === 'scan' && user && effectiveIsStaff && (
-                <CoordinatorScanner user={user} />
+                <CoordinatorScanner 
+                  user={user} 
+                  activities={activities} 
+                />
               )}
 
               {/* Tab 5: Participant Certificates with Admin Release Switch */}
@@ -961,6 +977,7 @@ export default function App() {
                   user={user}
                   profile={profile}
                   isAdmin={effectiveIsAdmin}
+                  activities={activities}
                 />
               )}
 
@@ -1051,14 +1068,15 @@ export default function App() {
             Cognisphere &bull; AI & Machine Learning Club
           </div>
           <div className="text-xs text-secondary flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-            <span className="text-secondary">Contact info:</span>
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">LinkedIn</a>
-            <span className="text-outline-variant">&bull;</span>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">GitHub</a>
-            <span className="text-outline-variant">&bull;</span>
-            <a href="mailto:cognisphere.club@gmail.com" className="hover:text-primary transition-colors">Mail</a>
-            <span className="text-outline-variant">&bull;</span>
-            <a href="https://instagram.com/cognisphereaiml" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Instagram</a>
+            <span className="text-secondary">Have questions or want to reach out?</span>
+            <button
+              type="button"
+              onClick={navigateToHomeContact}
+              className="text-primary font-bold hover:underline cursor-pointer transition-colors inline-flex items-center gap-1"
+            >
+              <span>Contact Us</span>
+              <span>&rarr;</span>
+            </button>
           </div>
         </footer>
       </div>

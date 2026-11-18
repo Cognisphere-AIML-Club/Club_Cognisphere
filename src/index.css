@@ -303,6 +303,13 @@ body.dark,
   .scroll-fade-y {
     --ft: 0px;
     --fb: 40px;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--ft),
+      #000 calc(100% - var(--fb)),
+      transparent 100%
+    );
     mask-image: linear-gradient(
       to bottom,
       transparent 0,
@@ -310,7 +317,9 @@ body.dark,
       #000 calc(100% - var(--fb)),
       transparent 100%
     );
+    -webkit-mask-size: 100% 100%;
     mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     animation: skiper87-fadeTop 1 linear both,
                skiper87-fadeBottom 1 linear both;

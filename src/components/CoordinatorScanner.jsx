@@ -18,12 +18,18 @@ import {
   Search, 
   RefreshCw, 
   ChevronRight,
-  SwitchCamera
+  SwitchCamera,
+  MapPin,
+  Calendar,
+  Clock
 } from 'lucide-react';
 
-export default function CoordinatorScanner({ user }) {
+export default function CoordinatorScanner({ user, activities = ACTIVITIES }) {
+  const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
+  const getActivity = (id) => allActivities.find(a => a.id === id) || allActivities[0];
+
   const [selectedActivityId, setSelectedActivityId] = useState(() => {
-    return localStorage.getItem('club_games_selected_activity') || ACTIVITIES[0].id;
+    return localStorage.getItem('club_games_selected_activity') || allActivities[0].id;
   });
 
   const [scanning, setScanning] = useState(false);
@@ -38,6 +44,7 @@ export default function CoordinatorScanner({ user }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [searchExecuted, setSearchExecuted] = useState(false);
 
   // Offline queue state
   const [offlineCount, setOfflineCount] = useState(() => getOfflineQueue().length);
@@ -60,9 +67,11 @@ export default function CoordinatorScanner({ user }) {
     const val = e.target.value;
     setSelectedActivityId(val);
     localStorage.setItem('club_games_selected_activity', val);
+    setSearchResults([]);
+    setSearchExecuted(false);
   };
 
-  const currentActivity = ACTIVITIES.find(a => a.id === selectedActivityId) || ACTIVITIES[0];
+  const currentActivity = allActivities.find(a => a.id === selectedActivityId) || allActivities[0];
 
   useEffect(() => {
     const handleOnline = async () => {
@@ -313,7 +322,7 @@ export default function CoordinatorScanner({ user }) {
         return `${year}-${month}-${day}`;
       };
       const todayStr = getTodayStr();
-      const targetAct = participant.passActivityId ? getActivityById(participant.passActivityId) : currentActivity;
+      const targetAct = participant.passActivityId ? getActivity(participant.passActivityId) : currentActivity;
       const isDateExpired = Boolean(targetAct?.eventDate && todayStr > targetAct.eventDate);
       const isFlaggedExpired = Boolean(participant.isExpired || participant.status === 'expired');
 
@@ -337,7 +346,7 @@ export default function CoordinatorScanner({ user }) {
       // Check if scanned pass was generated for a different activity -> WARNING
       let passMismatchedNotice = null;
       if (participant.passActivityId && participant.passActivityId !== selectedActivityId) {
-        const passAct = getActivityById(participant.passActivityId);
+        const passAct = getActivity(participant.passActivityId);
         passMismatchedNotice = `Pass was issued for ${passAct.name} (${passAct.room}), but checking in for ${currentActivity.name} (${currentActivity.room}).`;
       }
 
@@ -433,8 +442,9 @@ export default function CoordinatorScanner({ user }) {
     if (!searchQuery.trim()) return;
 
     setSearching(true);
+    setSearchExecuted(true);
     try {
-      const results = await searchParticipantsForCoordinator(searchQuery);
+      const results = await searchParticipantsForCoordinator(searchQuery, selectedActivityId);
       setSearchResults(results);
     } catch (err) {
       setSearchResults([]);
@@ -496,12 +506,30 @@ export default function CoordinatorScanner({ user }) {
             onChange={handleActivityChange}
             className="w-full bg-surface-container-low border border-surface-container text-on-surface font-semibold rounded-xl p-3 text-xs focus:outline-none focus:border-primary cursor-pointer"
           >
-            {ACTIVITIES.map((act) => (
+            {allActivities.map((act) => (
               <option key={act.id} value={act.id}>
-                {act.name} — {act.room} ({act.category})
+                {act.name} — {act.room} • {act.scheduledTime || ''}
               </option>
             ))}
           </select>
+
+          {/* Active Activity Details: Venue, Date, Time */}
+          <div className="flex items-center gap-3 text-[11px] text-secondary mt-2 px-1 flex-wrap">
+            <span className="flex items-center gap-1 font-semibold text-on-surface">
+              <MapPin className="w-3.5 h-3.5 text-primary" />
+              {currentActivity.room}
+            </span>
+            <span>&bull;</span>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-primary" />
+              {currentActivity.eventDate || 'Nov 24, 2026'}
+            </span>
+            <span>&bull;</span>
+            <span className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-primary" />
+              <span>{currentActivity.scheduledTime}</span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -715,7 +743,14 @@ export default function CoordinatorScanner({ user }) {
             type="text"
             placeholder="Search USN or Name (e.g. 1ST24 or Srujan)"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchQuery(val);
+              if (!val.trim()) {
+                setSearchResults([]);
+                setSearchExecuted(false);
+              }
+            }}
             className="flex-1 bg-surface-container-low border border-surface-container focus:border-primary rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-outline focus:outline-none"
           />
           <button
@@ -727,15 +762,37 @@ export default function CoordinatorScanner({ user }) {
           </button>
         </form>
 
+        {/* Empty state: No participants found for the selected activity & room */}
+        {searchExecuted && !searching && searchResults.length === 0 && (
+          <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container text-center space-y-1">
+            <div className="text-xs font-bold text-on-surface">No participant found for {currentActivity.name}</div>
+            <div className="text-[11px] text-secondary">
+              Only participants registered for <strong className="text-on-surface">{currentActivity.name}</strong> ({currentActivity.room}) can be checked in here.
+            </div>
+          </div>
+        )}
+
+        {/* Results matching the active activity and room */}
         {searchResults.length > 0 && (
           <div className="space-y-2 pt-2 border-t border-surface-container">
+            <div className="text-[11px] font-semibold text-secondary flex items-center justify-between">
+              <span>Matching Registered ({searchResults.length})</span>
+              <span className="text-primary font-bold">{currentActivity.room}</span>
+            </div>
             {searchResults.map((p) => (
               <div 
                 key={p.participantId} 
                 className="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-surface-container hover:bg-surface-container transition-colors"
               >
                 <div>
-                  <div className="text-xs font-bold text-on-surface">{p.name}</div>
+                  <div className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+                    <span>{p.name}</span>
+                    {p.status === 'approved' && (
+                      <span className="text-[9px] font-bold text-tertiary bg-tertiary-fixed/30 px-1.5 py-0.5 rounded-full">
+                        Approved
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] font-mono text-primary font-bold">USN: {p.usn || 'N/A'}</div>
                 </div>
 

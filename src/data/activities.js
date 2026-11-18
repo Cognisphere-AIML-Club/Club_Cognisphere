@@ -105,4 +105,19 @@ export const ACTIVITIES = [
   }
 ];
 
-export const getActivityById = (id) => ACTIVITIES.find(a => a.id === id) || ACTIVITIES[0];
+let currentActivities = [...ACTIVITIES];
+
+export function setCurrentActivities(newActs) {
+  if (Array.isArray(newActs) && newActs.length > 0) {
+    currentActivities = newActs;
+  }
+}
+
+export function getCurrentActivities() {
+  return currentActivities;
+}
+
+export const getActivityById = (id, dynamicActivities = null) => {
+  const list = (dynamicActivities && dynamicActivities.length > 0) ? dynamicActivities : currentActivities;
+  return list.find(a => a.id === id) || list[0] || ACTIVITIES[0];
+};

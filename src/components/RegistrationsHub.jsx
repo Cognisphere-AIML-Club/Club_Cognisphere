@@ -27,13 +27,13 @@ import {
   RefreshCw,
   Users,
   Sparkles,
-  LogIn,
-  FileSpreadsheet
+  LogIn
 } from 'lucide-react';
-import { 
-  pushParticipantToGoogleSheet, 
-  pushBulkParticipantsToGoogleSheet 
-} from '../services/googleSheetsService';
+import {
+  queueApprovalForSheetsSync,
+  queueBulkApprovalsForSheetsSync,
+  useSheetsBatchSync
+} from '../services/sheetsBatchSyncService';
 
 export default function RegistrationsHub({
   user,
@@ -42,8 +42,12 @@ export default function RegistrationsHub({
   isCoordinator = false,
   isStaff = false,
   onViewPass,
-  onSignIn
+  onSignIn,
+  activities = ACTIVITIES
 }) {
+  const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
+  const getActivity = (id) => allActivities.find(a => a.id === id) || allActivities[0];
+
   // Staff view mode toggle: 'desk' (Approvals queue) or 'participant' (Student Pass view)
   const [activeStaffMode, setActiveStaffMode] = useState('desk');
 
@@ -108,7 +112,7 @@ export default function RegistrationsHub({
         participantName: displayName,
         participantUsn: profile?.usn || '',
       });
-      setSuccessBanner(`Pass requested for ${getActivityById(activityId)?.name}!`);
+      setSuccessBanner(`Pass requested for ${getActivity(activityId)?.name}!`);
     } catch (err) {
       alert(err.message || 'Failed to request pass');
     } finally {
@@ -117,28 +121,35 @@ export default function RegistrationsHub({
   };
 
   const [syncingToSheets, setSyncingToSheets] = useState(false);
+  const {
+    hasBatch,
+    itemCount: batchQueueCount,
+    remainingFormatted: batchRemainingFormatted,
+    isSyncing: batchSyncing,
+    flushNow: flushSheetsBatchNow
+  } = useSheetsBatchSync();
 
-  // Staff action: Approve or reject single request (2-Way sync pushes approved name & usn)
+  // Staff action: Approve or reject single request
   const handleReviewRequest = async (requestId, status) => {
     try {
       setActionInProgressId(requestId);
       const req = allRequests.find(r => r.id === requestId);
       await reviewPassRequest(requestId, status, user?.email || 'staff');
 
-      // 2-Way Sync: If approved, automatically add participant (Name & USN) to linked Google Sheet tab!
+      // 10-Minute Debounced Batch Queue: If approved, buffer for single consolidated batch sync
       if (status === 'approved' && req) {
-        try {
-          await pushParticipantToGoogleSheet({
-            activityId: req.activityId,
-            participantName: req.participantName,
-            participantUsn: req.participantUsn
-          });
-        } catch (sheetErr) {
-          console.warn('Google Sheet participant push notice:', sheetErr);
-        }
+        queueApprovalForSheetsSync({
+          activityId: req.activityId,
+          participantName: req.participantName,
+          participantUsn: req.participantUsn
+        });
       }
 
-      setSuccessBanner(status === 'approved' ? 'Pass Approved & Pushed to Google Sheet!' : 'Pass Declined.');
+      setSuccessBanner(
+        status === 'approved'
+          ? 'Pass Approved & Queued for Google Sheets auto-sync (10m batch)!'
+          : 'Pass Declined.'
+      );
     } catch (err) {
       alert(err.message || 'Failed to update request');
     } finally {
@@ -161,30 +172,18 @@ export default function RegistrationsHub({
       setBulkActionLoading(true);
       await bulkReviewPassRequests(pendingIds, 'approved', user?.email || 'staff');
 
-      // 2-Way Sync: Group and bulk push to respective Google Sheet tabs!
-      try {
-        const byActivity = {};
-        pendingList.forEach(r => {
-          if (!byActivity[r.activityId]) byActivity[r.activityId] = [];
-          byActivity[r.activityId].push({
-            participantName: r.participantName,
-            participantUsn: r.participantUsn
-          });
-        });
+      // 10-Minute Debounced Batch Queue: Buffer all approved participants into batch
+      queueBulkApprovalsForSheetsSync(
+        pendingList.map(r => ({
+          activityId: r.activityId,
+          participantName: r.participantName,
+          participantUsn: r.participantUsn
+        }))
+      );
 
-        await Promise.all(
-          Object.entries(byActivity).map(([actId, participants]) =>
-            pushBulkParticipantsToGoogleSheet({
-              activityId: actId,
-              participants
-            })
-          )
-        );
-      } catch (sheetErr) {
-        console.warn('Google Sheet bulk push notice:', sheetErr);
-      }
-
-      setSuccessBanner(`Successfully approved ${pendingIds.length} pass requests & synced to Google Sheets!`);
+      setSuccessBanner(
+        `Successfully approved ${pendingIds.length} pass requests & queued for Google Sheets auto-sync (10m batch)!`
+      );
     } catch (err) {
       alert(err.message || 'Failed to approve all requests');
     } finally {
@@ -192,35 +191,16 @@ export default function RegistrationsHub({
     }
   };
 
-  // Staff action: On-demand bulk push of all approved participants to Google Sheet tabs
-  const handleSyncApprovedToSheets = async () => {
-    const approvedList = allRequests.filter(r => r.status === 'approved');
-    if (approvedList.length === 0) {
-      alert('No approved participants found to sync.');
-      return;
-    }
-
+  // Staff action: Immediate manual flush of current 10-minute debounced queue
+  const handleFlushBatchToSheets = async () => {
     try {
       setSyncingToSheets(true);
-      const byActivity = {};
-      approvedList.forEach(r => {
-        if (!byActivity[r.activityId]) byActivity[r.activityId] = [];
-        byActivity[r.activityId].push({
-          participantName: r.participantName,
-          participantUsn: r.participantUsn
-        });
-      });
-
-      await Promise.all(
-        Object.entries(byActivity).map(([actId, participants]) =>
-          pushBulkParticipantsToGoogleSheet({
-            activityId: actId,
-            participants
-          })
-        )
-      );
-
-      setSuccessBanner(`Synced ${approvedList.length} approved participants to their Google Sheet tabs!`);
+      const result = await flushSheetsBatchNow();
+      if (result.success) {
+        setSuccessBanner(`Successfully synced ${result.count || 0} queued approvals to Google Sheet tabs!`);
+      } else {
+        alert(result.error || 'Failed to sync batch to Google Sheets');
+      }
     } catch (err) {
       alert(`Google Sheet Sync Error: ${err.message}`);
     } finally {
@@ -261,26 +241,26 @@ export default function RegistrationsHub({
 
   // Participant statistics
   const participantStats = useMemo(() => {
-    const total = ACTIVITIES.length;
+    const total = allActivities.length;
     let approved = 0;
     let pending = 0;
-    ACTIVITIES.forEach(act => {
+    allActivities.forEach(act => {
       const status = userRequests[act.id]?.status;
       if (status === 'approved') approved++;
       else if (status === 'pending') pending++;
     });
     return { total, approved, pending, unrequested: total - (approved + pending) };
-  }, [userRequests]);
+  }, [userRequests, allActivities]);
 
   // Filtered activities for Participant View
   const filteredActivities = useMemo(() => {
-    return ACTIVITIES.filter(act => {
+    return allActivities.filter(act => {
       const status = userRequests[act.id]?.status;
       if (participantFilter === 'approved') return status === 'approved';
       if (participantFilter === 'pending') return status === 'pending';
       return true;
     });
-  }, [userRequests, participantFilter]);
+  }, [userRequests, participantFilter, allActivities]);
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -416,27 +396,34 @@ export default function RegistrationsHub({
                   onChange={(e) => setSelectedActivityFilter(e.target.value)}
                   className="bg-surface-container border border-surface-container-high text-on-surface text-xs rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
                 >
-                  <option value="all">All Activities (5)</option>
-                  {ACTIVITIES.map(act => (
+                  <option value="all">All Activities ({allActivities.length})</option>
+                  {allActivities.map(act => (
                     <option key={act.id} value={act.id}>
-                      {act.name} ({act.room})
+                      {act.name} — {act.room} • {act.scheduledTime || ''}
                     </option>
                   ))}
                 </select>
               </div>
 
               {/* Right: Actions (Bulk Approve & Push to Sheets) */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSyncApprovedToSheets}
-                  disabled={syncingToSheets || metrics.approved === 0}
-                  className="py-2 px-3.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap active:scale-95 disabled:opacity-50"
-                  title="Push all approved participants (Name & USN) into their Google Sheet tabs"
-                >
-                  <FileSpreadsheet className={`w-3.5 h-3.5 text-emerald-600 ${syncingToSheets ? 'animate-spin' : ''}`} />
-                  <span>{syncingToSheets ? 'Syncing...' : `Push Approved to Sheets (${metrics.approved})`}</span>
-                </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {hasBatch && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-semibold shadow-xs">
+                    <Clock className={`w-3.5 h-3.5 text-amber-600 dark:text-amber-400 ${batchSyncing ? 'animate-spin' : ''}`} />
+                    <span>
+                      Sheets Batch: <strong>{batchQueueCount}</strong> queued &bull; Auto-sync in <strong className="font-mono">{batchRemainingFormatted}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleFlushBatchToSheets}
+                      disabled={batchSyncing}
+                      className="ml-1 px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50"
+                      title="Sync queued approvals to Google Sheets immediately"
+                    >
+                      {batchSyncing ? 'Syncing...' : 'Sync Now'}
+                    </button>
+                  </div>
+                )}
 
                 {selectedStatusFilter === 'pending' && filteredRequests.filter(r => r.status === 'pending').length > 0 && (
                   <button
@@ -511,7 +498,7 @@ export default function RegistrationsHub({
             ) : (
               <div className="divide-y divide-surface-container">
                 {filteredRequests.map(req => {
-                  const act = getActivityById(req.activityId);
+                  const act = getActivity(req.activityId);
                   const isActioning = actionInProgressId === req.id;
                   const isApproved = req.status === 'approved';
                   const isPending = req.status === 'pending';
@@ -554,6 +541,15 @@ export default function RegistrationsHub({
                             <MapPin className="w-3 h-3 text-primary" />
                             {act?.room || 'Room TBD'}
                           </span>
+                          {act?.scheduledTime && (
+                            <>
+                              <span>&bull;</span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-secondary" />
+                                <span>{act.scheduledTime}</span>
+                              </span>
+                            </>
+                          )}
                           {req.requestedAt && (
                             <>
                               <span>&bull;</span>
@@ -769,7 +765,7 @@ export default function RegistrationsHub({
                       <span>&bull;</span>
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5 text-primary" />
-                        {act.eventDate || '2026-11-14'}
+                        {act.eventDate || '2026-11-24'}
                       </span>
                       <span>&bull;</span>
                       <span>{act.scheduledTime}</span>

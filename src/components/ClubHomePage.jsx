@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import QuoteOfTheDayCard from './QuoteOfTheDayCard';
+import SecurePhoneContact from './SecurePhoneContact';
 import {
   ArrowRight,
   CalendarDays,
@@ -10,8 +11,13 @@ import {
   ChevronDown,
   Play,
   ExternalLink,
-  Youtube
+  Youtube,
+  Mail,
+  Github,
+  PhoneCall
 } from 'lucide-react';
+
+const contactPhone = (import.meta.env.VITE_CLUB_CONTACT_PHONE || import.meta.env.VITE_CONTACT_PHONE || '').trim();
 
 const VIDEO_SHORTS = [
   {
@@ -125,7 +131,7 @@ export default function ClubHomePage({
   );
 
   return (
-    <div className="space-y-10 animate-fadeIn max-w-7xl xl:max-w-[1400px] mx-auto w-full pb-12">
+    <div className="h-[calc(100dvh-5.5rem)] md:h-[calc(100dvh-3.5rem)] overflow-y-auto scroll-fade-y scroll-smooth pr-1 sm:pr-2 space-y-10 animate-fadeIn max-w-7xl xl:max-w-[1400px] mx-auto w-full pb-16">
       {/* 1. Hero Showcase Section (Background strictly contained here) */}
       {/* 🎛️ TRANSPARENCY CONTROL #1: Card Base Opacity (edit /50 or /40 below) */}
       <section className="relative overflow-hidden bg-surface-container-lowest/50 dark:bg-surface-container-lowest/40 backdrop-blur-sm border border-surface-container/80 rounded-3xl p-6 sm:p-10 shadow-lg group">
@@ -179,7 +185,7 @@ export default function ClubHomePage({
               className="w-full sm:w-auto py-3 px-5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 active:scale-95"
             >
               <CalendarDays className="w-4 h-4 text-on-primary" />
-              <span>Club Games</span>
+              <span>Event Hub</span>
               <ArrowRight className="w-4 h-4 text-on-primary" />
             </button>
 
@@ -396,6 +402,105 @@ export default function ClubHomePage({
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* Contact & Connect Section (Full Length) */}
+      <section id="contact" className="w-full bg-surface-container-lowest border border-surface-container rounded-3xl p-6 sm:p-10 shadow-xs space-y-6 scroll-mt-24">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-surface-container">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-1">
+              Contact &amp; Connect
+            </p>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-on-surface">
+              Get in Touch with Cognisphere
+            </h2>
+            <p className="text-xs sm:text-sm text-secondary mt-1">
+              Have questions about events, passes, or club activities? Reach out to our organizing team.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 1. Phone (Bot & Scraper Protected) */}
+          <div className="bg-surface-container-low border border-surface-container rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <PhoneCall className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-wider block">Phone Contact</span>
+                <span className="text-xs font-bold text-on-surface">Direct Coordinator Line</span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-surface-container/60 flex items-center justify-between flex-wrap gap-2">
+              <SecurePhoneContact rawPhone={contactPhone} />
+            </div>
+          </div>
+
+          {/* 2. Email */}
+          <a
+            href="mailto:cognisphere.club@gmail.com"
+            className="bg-surface-container-low border border-surface-container rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3 hover:border-primary/50 hover:bg-surface-container transition-all group"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Mail className="w-4 h-4 text-primary" />
+              </div>
+              <div className="truncate">
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-wider block">Email Support</span>
+                <span className="text-xs font-bold text-on-surface truncate block">cognisphere.club@gmail.com</span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-surface-container/60 flex items-center justify-between text-xs text-primary font-bold">
+              <span>Send Message</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </a>
+
+          {/* 3. Instagram */}
+          <a
+            href="https://instagram.com/cognisphereaiml"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-surface-container-low border border-surface-container rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3 hover:border-pink-500/50 hover:bg-surface-container transition-all group"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Instagram className="w-4 h-4 text-pink-500" />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-wider block">Social Hub</span>
+                <span className="text-xs font-bold text-on-surface">@cognisphereaiml</span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-surface-container/60 flex items-center justify-between text-xs text-pink-500 font-bold">
+              <span>Follow &amp; DM</span>
+              <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </div>
+          </a>
+
+          {/* 4. GitHub */}
+          <a
+            href="https://github.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-surface-container-low border border-surface-container rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3 hover:border-primary/50 hover:bg-surface-container transition-all group"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Github className="w-4 h-4 text-on-surface" />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-wider block">Open Source</span>
+                <span className="text-xs font-bold text-on-surface">GitHub Community</span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-surface-container/60 flex items-center justify-between text-xs text-primary font-bold">
+              <span>View Repositories</span>
+              <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </div>
+          </a>
         </div>
       </section>
     </div>

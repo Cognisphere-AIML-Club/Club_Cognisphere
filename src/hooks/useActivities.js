@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { ACTIVITIES as DEFAULT_ACTIVITIES } from '../data/activities';
+import { ACTIVITIES as DEFAULT_ACTIVITIES, setCurrentActivities } from '../data/activities';
 
 export function useActivities() {
   const [activities, setActivities] = useState(DEFAULT_ACTIVITIES);
@@ -26,14 +26,17 @@ export function useActivities() {
             }
             return def;
           });
+          setCurrentActivities(merged);
           setActivities(merged);
         } else {
+          setCurrentActivities(DEFAULT_ACTIVITIES);
           setActivities(DEFAULT_ACTIVITIES);
         }
         setLoading(false);
       },
       (err) => {
         // Fallback to static defaults if offline or permission pending
+        setCurrentActivities(DEFAULT_ACTIVITIES);
         setActivities(DEFAULT_ACTIVITIES);
         setLoading(false);
       }

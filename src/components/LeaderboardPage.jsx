@@ -147,6 +147,7 @@ export default function LeaderboardPage({
       {/* Complete Leaderboard Podium & Complete Standings Table */}
       <LeaderboardPodium
         activity={currentActivity}
+        activities={allActivities}
         scores={scores}
         attendees={attendees}
         isAdmin={isAdmin}
