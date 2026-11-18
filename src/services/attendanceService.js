@@ -260,31 +260,97 @@ export async function syncOfflineQueue() {
 }
 
 /**
- * Manual search fallback by USN or Name
+ * Manual search fallback by USN or Name for Coordinator desk.
+ * Strictly verifies that the participant belongs to the room & activity selected in the top dropdown.
+ * If they do not belong to selectedActivityId, they are not returned.
  */
-export async function searchParticipantsForCoordinator(searchTerm) {
+export async function searchParticipantsForCoordinator(searchTerm, selectedActivityId = null) {
   if (!searchTerm || searchTerm.trim().length < 2) return [];
 
   const term = searchTerm.trim().toUpperCase();
-  const passesSnap = await getDocs(collection(db, 'qrPasses'));
-  const results = [];
+  const participantMap = new Map();
 
-  passesSnap.forEach(docSnap => {
-    const data = docSnap.data();
-    const nameUpper = (data.name || '').toUpperCase();
-    const usnUpper = (data.usn || '').toUpperCase();
+  // 1. Primary lookup: passRequests for the selected activity
+  // This indexes all participants who registered or were approved for THIS activity/room.
+  if (selectedActivityId) {
+    try {
+      const q = query(
+        collection(db, 'passRequests'),
+        where('activityId', '==', selectedActivityId)
+      );
+      const reqSnap = await getDocs(q);
 
-    if (usnUpper.includes(term) || nameUpper.includes(term)) {
-      results.push({
-        participantId: data.participantId,
-        name: data.name,
-        usn: data.usn || '',
-        qrId: data.qrId
+      reqSnap.forEach(docSnap => {
+        const data = docSnap.data();
+        // Ignore rejected requests
+        if (data.status === 'rejected') return;
+
+        const nameUpper = (data.participantName || '').toUpperCase();
+        const usnUpper = (data.participantUsn || '').toUpperCase();
+
+        if (usnUpper.includes(term) || nameUpper.includes(term)) {
+          const participantId = data.participantId;
+          participantMap.set(participantId, {
+            participantId,
+            name: data.participantName || 'Participant',
+            usn: data.participantUsn || '',
+            qrId: `${selectedActivityId}_${participantId}`,
+            passActivityId: selectedActivityId,
+            status: data.status || 'pending',
+          });
+        }
       });
+    } catch (err) {
+      console.warn('passRequests query notice in coordinator search:', err);
     }
-  });
+  }
 
-  return results.slice(0, 10);
+  // 2. Secondary lookup: qrPasses collection
+  // Only include passes that belong to selectedActivityId (or resolve their active qrId)
+  try {
+    const passesSnap = await getDocs(collection(db, 'qrPasses'));
+
+    passesSnap.forEach(docSnap => {
+      const data = docSnap.data();
+
+      // If an activity is selected, STRICTLY exclude passes from another activity
+      if (selectedActivityId && data.activityId && data.activityId !== selectedActivityId) {
+        return;
+      }
+
+      // Ignore expired passes
+      if (data.isExpired || data.status === 'expired') {
+        return;
+      }
+
+      const nameUpper = (data.name || '').toUpperCase();
+      const usnUpper = (data.usn || '').toUpperCase();
+
+      if (usnUpper.includes(term) || nameUpper.includes(term)) {
+        const pId = data.participantId;
+        if (participantMap.has(pId)) {
+          // Update existing with the exact active qrId from qrPasses
+          const existing = participantMap.get(pId);
+          if (data.qrId) existing.qrId = data.qrId;
+          if (data.status) existing.status = data.status;
+        } else if (!selectedActivityId || data.activityId === selectedActivityId) {
+          // Only add if it explicitly matches selectedActivityId
+          participantMap.set(pId, {
+            participantId: pId,
+            name: data.name || 'Participant',
+            usn: data.usn || '',
+            qrId: data.qrId || docSnap.id,
+            passActivityId: data.activityId || selectedActivityId,
+            status: data.status || 'active',
+          });
+        }
+      }
+    });
+  } catch (err) {
+    console.warn('qrPasses query notice in coordinator search:', err);
+  }
+
+  return Array.from(participantMap.values()).slice(0, 10);
 }
 
 /**

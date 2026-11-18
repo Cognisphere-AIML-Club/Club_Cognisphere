@@ -32,7 +32,8 @@ export default function LeaderboardPodium({
   isStaff = false,
   onPublishScore, 
   onUnpublishScore, 
-  adminEmail = 'admin' 
+  adminEmail = 'admin',
+  activities = []
 }) {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showSheetsModal, setShowSheetsModal] = useState(false);
@@ -431,6 +432,7 @@ export default function LeaderboardPodium({
           isOpen={showSheetsModal}
           onClose={() => setShowSheetsModal(false)}
           activity={activity}
+          activities={activities}
           existingConfig={{
             ...sheetConfig,
             sheetUrl: effectiveSheetUrl,

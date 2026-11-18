@@ -109,7 +109,7 @@ export default function JudgeTimer({
           </div>
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-secondary block">
-              Coordinator Timer &bull; {activity?.room}
+              Coordinator Timer &bull; {activity?.room} {activity?.scheduledTime ? `• ${activity.scheduledTime}` : ''}
             </span>
             <h3 className="text-sm font-extrabold text-on-surface">
               {activity?.name}

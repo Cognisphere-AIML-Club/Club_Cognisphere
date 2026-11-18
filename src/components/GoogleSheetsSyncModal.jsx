@@ -35,11 +35,13 @@ export default function GoogleSheetsSyncModal({
   isOpen,
   onClose,
   activity,
+  activities = ACTIVITIES,
   existingConfig = null,
   adminEmail = 'admin',
   onSyncSuccess,
   initialViewMode = 'single'
 }) {
+  const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
   const [activeViewMode, setActiveViewMode] = useState(initialViewMode); // 'settings' | 'single' | 'all_tabs' | 'two_way'
 
   useEffect(() => {
@@ -124,7 +126,7 @@ export default function GoogleSheetsSyncModal({
       setPreviewError('');
       const candidates = [
         ...Object.values(sheetTabsMap),
-        ...ACTIVITIES.map(a => a.name)
+        ...allActivities.map(a => a.name)
       ];
       const tabs = await detectAvailableSheetTabs({ sheetId: info.sheetId, candidateNames: candidates });
       setDetectedTabs(tabs);
@@ -241,7 +243,7 @@ export default function GoogleSheetsSyncModal({
       const res = await syncAllActivitiesFromMasterSheet({
         masterSheetUrl: sheetUrl,
         sheetTabs: sheetTabsMap,
-        activities: ACTIVITIES,
+        activities: allActivities,
         adminEmail
       });
 
@@ -800,7 +802,7 @@ export default function GoogleSheetsSyncModal({
 
             {/* List of 5 activities with their sheet name inputs */}
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {ACTIVITIES.map((act) => {
+              {allActivities.map((act) => {
                 const assignedTab = sheetTabsMap[act.id] || DEFAULT_SHEET_TABS[act.id] || act.name;
                 const result = syncAllResults?.results?.find(r => r.activityId === act.id);
 

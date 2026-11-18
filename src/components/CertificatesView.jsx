@@ -158,7 +158,8 @@ function CertificateCard({ item, participantName, participantUsn }) {
 /**
  * Main Certificates View
  */
-export default function CertificatesView({ user, profile, isAdmin = false }) {
+export default function CertificatesView({ user, profile, isAdmin = false, activities = ACTIVITIES }) {
+  const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
   const [settings, setSettings] = useState({ enabled: false });
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [toggling, setToggling] = useState(false);
@@ -189,7 +190,7 @@ export default function CertificatesView({ user, profile, isAdmin = false }) {
 
         // Map attendance to activity definitions and attach scores
         const items = attendanceRecords.map((att) => {
-          const act = ACTIVITIES.find(a => a.id === att.activityId) || {
+          const act = allActivities.find(a => a.id === att.activityId) || {
             id: att.activityId,
             name: att.activityId,
             room: 'Campus Room'
@@ -211,7 +212,7 @@ export default function CertificatesView({ user, profile, isAdmin = false }) {
     };
 
     loadRecords();
-  }, [user?.uid]);
+  }, [user?.uid, allActivities]);
 
   const handleToggle = async () => {
     if (!isAdmin) return;
