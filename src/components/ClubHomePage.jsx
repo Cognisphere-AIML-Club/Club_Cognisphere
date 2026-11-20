@@ -136,23 +136,33 @@ export default function ClubHomePage({
       {/* 🎛️ TRANSPARENCY CONTROL #1: Card Base Opacity (edit /50 or /40 below) */}
       <section className="relative overflow-hidden bg-surface-container-lowest/50 dark:bg-surface-container-lowest/40 backdrop-blur-sm border border-surface-container/80 rounded-3xl p-6 sm:p-10 shadow-lg group">
 
-        {/* Dynamic Arena Artwork Background Layer */}
+        {/* Dynamic Arena Artwork Background Layer (Responsive Mobile + Desktop) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
-          {/* 🎛️ TRANSPARENCY CONTROL #2: Light Theme Image Opacity (edit opacity-85 sm:opacity-90) */}
-          <img
-            src="/cognisphere-hero-bg-light.jpg"
-            alt="Cognisphere AI Arena Light"
-            className="w-full h-full object-cover object-center dark:hidden opacity-5 sm:opacity-90 transition-transform duration-1000 ease-out group-hover:scale-[1.08]"
-          />
-          {/* 🎛️ TRANSPARENCY CONTROL #3: Dark Theme Image Opacity (edit opacity-85 sm:opacity-95) */}
-          <img
-            src="/cognisphere-hero-bg-dark.jpg"
-            alt="Cognisphere AI Arena Dark"
-            className="w-full h-full object-cover object-center hidden dark:block opacity-85 sm:opacity-95 transition-transform duration-1000 ease-out group-hover:scale-[1.08]"
-          />
-          {/* 🎛️ TRANSPARENCY CONTROL #4: Vertical Gradient Scrim (edit /60 and /50 to soften/harden contrast) */}
+          {/* Light Theme: Mobile & Desktop */}
+          <picture className="dark:hidden absolute inset-0 w-full h-full">
+            <source media="(max-width: 639px)" srcSet="/cognisphere-hero-bg-mobile-light.jpg" />
+            <source media="(min-width: 640px)" srcSet="/cognisphere-hero-bg-light.jpg" />
+            <img
+              src="/cognisphere-hero-bg-light.jpg"
+              alt="Cognisphere AI Arena Light"
+              className="w-full h-full object-cover object-center opacity-85 sm:opacity-90 transition-transform duration-1000 ease-out group-hover:scale-[1.08]"
+            />
+          </picture>
+
+          {/* Dark Theme: Mobile & Desktop */}
+          <picture className="hidden dark:block absolute inset-0 w-full h-full">
+            <source media="(max-width: 639px)" srcSet="/cognisphere-hero-bg-mobile-dark.jpg" />
+            <source media="(min-width: 640px)" srcSet="/cognisphere-hero-bg-dark.jpg" />
+            <img
+              src="/cognisphere-hero-bg-dark.jpg"
+              alt="Cognisphere AI Arena Dark"
+              className="w-full h-full object-cover object-center opacity-85 sm:opacity-95 transition-transform duration-1000 ease-out group-hover:scale-[1.08]"
+            />
+          </picture>
+
+          {/* Vertical Gradient Scrim */}
           <div className="absolute inset-0 bg-gradient-to-t from-surface-container-lowest/60 via-transparent to-surface-container-lowest/50 dark:from-surface-container-lowest/65 dark:via-transparent dark:to-surface-container-lowest/50" />
-          {/* 🎛️ TRANSPARENCY CONTROL #5: Horizontal Lateral Vignette (edit /40) */}
+          {/* Horizontal Lateral Vignette */}
           <div className="absolute inset-0 bg-gradient-to-r from-surface-container-lowest/40 via-transparent to-surface-container-lowest/40" />
         </div>
 

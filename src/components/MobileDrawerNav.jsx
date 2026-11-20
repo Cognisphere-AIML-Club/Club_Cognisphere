@@ -157,50 +157,50 @@ export default function MobileDrawerNav({
 
       {/* Drawer Panel */}
       <div
-        className={`fixed inset-y-0 right-0 w-[84%] max-w-sm bg-surface-container-lowest border-l border-surface-container text-on-surface shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 right-0 w-1/2 max-w-xs bg-surface-container-lowest border-l border-surface-container text-on-surface shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* 1. Header with App Info & Close Button */}
-        <div className="h-16 px-4 border-b border-surface-container flex items-center justify-between bg-surface-container-low shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg overflow-hidden border border-surface-container shadow-xs shrink-0 bg-white/5 flex items-center justify-center p-0.5">
+        <div className="h-14 px-3 border-b border-surface-container flex items-center justify-between bg-surface-container-low shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg overflow-hidden border border-surface-container shadow-xs shrink-0 bg-white/5 flex items-center justify-center p-0.5">
               <img
                 src="/cognisphere-emblem.png"
                 alt="Cognisphere Logo"
                 className="w-full h-full object-contain"
               />
             </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-xs tracking-wider leading-none">
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-xs tracking-wider leading-none truncate">
                 <span className="text-on-surface">COGNI</span>
                 <span className="text-primary">SPHERE</span>
               </span>
-              <span className="text-[7.5px] font-bold text-secondary tracking-widest uppercase mt-0.5 leading-none">
-                AI &amp; ML CLUB
+              <span className="text-[7px] font-bold text-secondary tracking-widest uppercase mt-0.5 leading-none truncate">
+                AI &amp; ML
               </span>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-secondary hover:text-on-surface hover:bg-surface-container transition-colors active:scale-95"
+            className="p-1.5 rounded-xl text-secondary hover:text-on-surface hover:bg-surface-container transition-colors active:scale-95 shrink-0 ml-1"
             title="Close menu"
             aria-label="Close menu"
           >
-            <X className="w-5 h-5 text-on-surface" />
+            <X className="w-4 h-4 text-on-surface" />
           </button>
         </div>
 
         {/* 2. User Info Card */}
-        <div className="p-3.5 border-b border-surface-container bg-surface-container-low/50 shrink-0">
+        <div className="p-2.5 border-b border-surface-container bg-surface-container-low/50 shrink-0">
           {user ? (
             <div
               onClick={() => {
                 onClose();
                 onSelectTab('profile');
               }}
-              className="flex items-center gap-3 p-2 rounded-2xl bg-surface-container hover:bg-surface-container-high border border-surface-container cursor-pointer transition-all active:scale-[0.98] group"
+              className="flex items-center gap-2 p-1.5 rounded-2xl bg-surface-container hover:bg-surface-container-high border border-surface-container cursor-pointer transition-all active:scale-[0.98] group"
               title="View & Edit Profile"
             >
               {/* Avatar with Role Badge */}
@@ -209,18 +209,18 @@ export default function MobileDrawerNav({
                   <img
                     src={user.photoURL}
                     alt={user.displayName || 'User'}
-                    className="w-10 h-10 rounded-xl object-cover border border-surface-container-high group-hover:border-primary transition-all shadow-xs"
+                    className="w-8 h-8 rounded-xl object-cover border border-surface-container-high group-hover:border-primary transition-all shadow-xs"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                  <div className="w-8 h-8 rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
                     {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
                   </div>
                 )}
 
                 {(isAdmin || isCoordinator || isJudge) && (
                   <span
-                    className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${
+                    className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7.5px] font-black uppercase shadow-xs border border-surface-container-lowest ${
                       isAdmin
                         ? 'bg-amber-600 text-white'
                         : isCoordinator
@@ -236,13 +236,13 @@ export default function MobileDrawerNav({
               {/* User text details */}
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-bold text-on-surface truncate">
-                  {profile?.name || user.displayName || 'Club Participant'}
+                  {profile?.name || user.displayName || 'Participant'}
                 </div>
-                <div className="text-[10px] font-mono text-secondary truncate mt-0.5">
+                <div className="text-[9.5px] font-mono text-secondary truncate mt-0.5">
                   {profile?.usn || user.email}
                 </div>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className={`px-1 py-0.2 rounded text-[8px] font-bold uppercase tracking-wider truncate ${
                     isAdmin
                       ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                       : isCoordinator
@@ -255,30 +255,28 @@ export default function MobileDrawerNav({
                   </span>
                 </div>
               </div>
-
-              <ChevronRight className="w-4 h-4 text-secondary group-hover:text-on-surface group-hover:translate-x-0.5 transition-all shrink-0" />
             </div>
           ) : (
-            <div className="p-3 rounded-2xl bg-surface-container border border-surface-container text-center space-y-2">
-              <p className="text-xs font-semibold text-on-surface">Sign in to participate &amp; get your pass</p>
+            <div className="p-2.5 rounded-2xl bg-surface-container border border-surface-container text-center space-y-1.5">
+              <p className="text-[11px] font-semibold text-on-surface leading-tight">Sign in to participate</p>
               <button
                 onClick={() => {
                   onClose();
                   onSignIn();
                 }}
-                className="w-full py-2 px-3 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-xs active:scale-95"
+                className="w-full py-1.5 px-2 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs active:scale-95"
               >
-                <LogIn className="w-4 h-4" />
-                <span>Sign In with Google</span>
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
               </button>
             </div>
           )}
         </div>
 
         {/* 3. Navigation List (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5 no-scrollbar">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-secondary px-3 py-1">
-            Menu Navigation
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 no-scrollbar">
+          <div className="text-[9px] font-bold uppercase tracking-widest text-secondary px-2 py-1">
+            Navigation
           </div>
 
           {navItems
@@ -293,19 +291,19 @@ export default function MobileDrawerNav({
                     onClose();
                     onSelectTab(item.id);
                   }}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
+                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                     isActive
-                      ? 'bg-surface-container text-primary font-bold border-l-4 border-primary shadow-xs'
+                      ? 'bg-surface-container text-primary font-bold border-l-2 border-primary shadow-xs'
                       : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low active:bg-surface-container'
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary' : 'text-secondary'}`} />
-                    <span className="truncate">{item.label}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-secondary'}`} />
+                    <span className="truncate text-[11px]">{item.label}</span>
                   </div>
 
                   {item.badge && (
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${
+                    <span className={`px-1.5 py-0.2 rounded text-[8.5px] font-bold tracking-wider shrink-0 ml-1 ${
                       isActive
                         ? 'bg-primary-container text-on-primary'
                         : item.badge === 'Ready'
@@ -323,7 +321,7 @@ export default function MobileDrawerNav({
         </div>
 
         {/* 4. Bottom Section: Logout */}
-        <div className="p-3.5 border-t border-surface-container bg-surface-container-low space-y-2 shrink-0">
+        <div className="p-2.5 border-t border-surface-container bg-surface-container-low space-y-1.5 shrink-0">
           {/* Sign Out Button */}
           {user && (
             <button
@@ -331,9 +329,9 @@ export default function MobileDrawerNav({
                 onClose();
                 onLogout();
               }}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-secondary hover:text-error hover:bg-error-container/20 border border-transparent hover:border-error/20 transition-all active:scale-95"
+              className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-secondary hover:text-error hover:bg-error-container/20 border border-transparent hover:border-error/20 transition-all active:scale-95"
             >
-              <LogOut className="w-4 h-4 text-error" />
+              <LogOut className="w-3.5 h-3.5 text-error" />
               <span>Sign Out</span>
             </button>
           )}
