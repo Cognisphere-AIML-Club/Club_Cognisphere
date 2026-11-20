@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import QuoteOfTheDayCard from './QuoteOfTheDayCard';
 import SecurePhoneContact from './SecurePhoneContact';
 import {
-  openEmail,
-  openInstagram,
-  openInstagramLink,
-  openGitHub,
-  openYouTubeVideo,
-  openYouTubeChannel
+  getEmailHref,
+  getInstagramHref,
+  getInstagramLinkHref,
+  getGitHubHref,
+  getYouTubeVideoHref,
+  isMobileDevice,
+  isAndroid
 } from '../utils/deepLinks';
 import {
   ArrowRight,
@@ -22,7 +23,9 @@ import {
   Youtube,
   Mail,
   Github,
-  PhoneCall
+  PhoneCall,
+  Copy,
+  Check
 } from 'lucide-react';
 
 const contactPhone = (import.meta.env.VITE_CLUB_CONTACT_PHONE || import.meta.env.VITE_CONTACT_PHONE || '').trim();
@@ -124,6 +127,36 @@ export default function ClubHomePage({
   showVideoShowcase = false
 }) {
   const [openFaq, setOpenFaq] = useState(null);
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [deviceLinks, setDeviceLinks] = useState({
+    email: 'mailto:cognisphere.club@gmail.com?subject=Inquiry%20-%20Cognisphere%20AIML%20Club',
+    instagram: 'https://instagram.com/cognisphereaiml',
+    github: 'https://github.com/Cognisphere-AIML-Club',
+    youtubeVideo: 'https://www.youtube.com/watch?v=ScMzIvxBSi4',
+    isMobile: false,
+  });
+
+  useEffect(() => {
+    setDeviceLinks({
+      email: getEmailHref('cognisphere.club@gmail.com', 'Inquiry - Cognisphere AIML Club'),
+      instagram: getInstagramHref('cognisphereaiml'),
+      github: getGitHubHref('Cognisphere-AIML-Club'),
+      youtubeVideo: getYouTubeVideoHref('ScMzIvxBSi4'),
+      isMobile: isMobileDevice(),
+    });
+  }, []);
+
+  const handleCopyEmail = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText('cognisphere.club@gmail.com');
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 2000);
+    } catch (err) {
+      console.warn('Copy failed', err);
+    }
+  };
 
   // Controlled via Admin toggle in ProfileEditPage (passConfig)
   const isVideoShowcaseVisible = Boolean(
@@ -271,13 +304,9 @@ export default function ClubHomePage({
                 </span>
               </div>
               <a
-                href="https://www.youtube.com/watch?v=ScMzIvxBSi4"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => {
-                  e.preventDefault();
-                  openYouTubeVideo('ScMzIvxBSi4');
-                }}
+                href={deviceLinks.youtubeVideo}
+                target={deviceLinks.isMobile ? undefined : '_blank'}
+                rel={deviceLinks.isMobile ? undefined : 'noopener noreferrer'}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-surface-container bg-surface-container-lowest hover:bg-surface-container text-xs font-semibold text-secondary hover:text-on-surface transition-all active:scale-95 cursor-pointer"
               >
                 <span>WATCH ON YOUTUBE</span>
@@ -303,24 +332,20 @@ export default function ClubHomePage({
             </p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              {VIDEO_SHORTS.map((short, idx) => (
-                <a
-                  key={idx}
-                  href={short.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (short.platform === 'instagram') {
-                      openInstagramLink(short.link);
-                    } else if (short.platform === 'youtube') {
-                      openYouTubeChannel(short.link);
-                    } else {
-                      window.open(short.link, '_blank', 'noopener,noreferrer');
-                    }
-                  }}
-                  className="group relative rounded-2xl overflow-hidden border border-surface-container bg-surface-container-lowest hover:border-primary/50 transition-all duration-300 shadow-xs flex flex-col aspect-[9/14] cursor-pointer"
-                >
+              {VIDEO_SHORTS.map((short, idx) => {
+                const shortHref = short.platform === 'instagram'
+                  ? (deviceLinks.isMobile ? getInstagramLinkHref(short.link) : short.link)
+                  : (deviceLinks.isMobile && isAndroid()
+                      ? `intent://www.youtube.com#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(short.link)};end`
+                      : short.link);
+                return (
+                  <a
+                    key={idx}
+                    href={shortHref}
+                    target={deviceLinks.isMobile ? undefined : '_blank'}
+                    rel={deviceLinks.isMobile ? undefined : 'noopener noreferrer'}
+                    className="group relative rounded-2xl overflow-hidden border border-surface-container bg-surface-container-lowest hover:border-primary/50 transition-all duration-300 shadow-xs flex flex-col aspect-[9/14] cursor-pointer"
+                  >
                   {/* Visual Poster / Thumbnail */}
                   <div className="relative flex-1 bg-gradient-to-b from-slate-800 to-slate-950 overflow-hidden flex items-center justify-center p-4">
                     <div className={`absolute inset-0 bg-gradient-to-br ${short.gradient} transition-transform duration-500 group-hover:scale-105`} />
@@ -359,7 +384,8 @@ export default function ClubHomePage({
                     </div>
                   </div>
                 </a>
-              ))}
+              );
+            })}
             </div>
           </div>
         </section>
@@ -471,41 +497,52 @@ export default function ClubHomePage({
           </div>
 
           {/* 2. Email */}
-          <a
-            href="mailto:cognisphere.club@gmail.com"
-            onClick={(e) => {
-              e.preventDefault();
-              openEmail({
-                email: 'cognisphere.club@gmail.com',
-                subject: 'Inquiry - Cognisphere AIML Club',
-              });
-            }}
-            className="bg-surface-container-low border border-surface-container rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3 hover:border-primary/50 hover:bg-surface-container transition-all group cursor-pointer"
-          >
+          <div className="bg-surface-container-low border border-surface-container rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3 hover:border-primary/50 transition-all group">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                 <Mail className="w-4 h-4 text-primary" />
               </div>
               <div className="truncate">
                 <span className="text-[11px] font-bold text-secondary uppercase tracking-wider block">Email Support</span>
-                <span className="text-xs font-bold text-on-surface truncate block">cognisphere.club@gmail.com</span>
+                <span className="text-xs font-bold text-on-surface truncate block select-all">cognisphere.club@gmail.com</span>
               </div>
             </div>
-            <div className="pt-2 border-t border-surface-container/60 flex items-center justify-between text-xs text-primary font-bold">
-              <span>Send Message</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            <div className="pt-2 border-t border-surface-container/60 flex items-center justify-between gap-2">
+              <a
+                href={deviceLinks.email}
+                target={deviceLinks.isMobile ? undefined : '_blank'}
+                rel={deviceLinks.isMobile ? undefined : 'noopener noreferrer'}
+                className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline"
+              >
+                <span>Send Message</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </a>
+              <button
+                type="button"
+                onClick={handleCopyEmail}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-[11px] font-medium text-secondary hover:text-on-surface transition-colors active:scale-95"
+                title="Copy email address"
+              >
+                {emailCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-emerald-500 font-bold">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
             </div>
-          </a>
+          </div>
 
           {/* 3. Instagram */}
           <a
-            href="https://instagram.com/cognisphereaiml"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => {
-              e.preventDefault();
-              openInstagram('cognisphereaiml');
-            }}
+            href={deviceLinks.instagram}
+            target={deviceLinks.isMobile ? undefined : '_blank'}
+            rel={deviceLinks.isMobile ? undefined : 'noopener noreferrer'}
             className="bg-surface-container-low border border-surface-container rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3 hover:border-pink-500/50 hover:bg-surface-container transition-all group cursor-pointer"
           >
             <div className="flex items-center gap-2.5">
@@ -525,13 +562,9 @@ export default function ClubHomePage({
 
           {/* 4. GitHub */}
           <a
-            href="https://github.com/Cognisphere-AIML-Club"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => {
-              e.preventDefault();
-              openGitHub('Cognisphere-AIML-Club');
-            }}
+            href={deviceLinks.github}
+            target={deviceLinks.isMobile ? undefined : '_blank'}
+            rel={deviceLinks.isMobile ? undefined : 'noopener noreferrer'}
             className="bg-surface-container-low border border-surface-container rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3 hover:border-primary/50 hover:bg-surface-container transition-all group cursor-pointer"
           >
             <div className="flex items-center gap-2.5">
