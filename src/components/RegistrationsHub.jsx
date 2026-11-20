@@ -230,13 +230,22 @@ export default function RegistrationsHub({
     });
   }, [allRequests, selectedActivityFilter, selectedStatusFilter, searchQuery]);
 
-  // Aggregate metrics for Staff
+  // Aggregate metrics for Staff (dynamically scoped to selected activity)
   const metrics = useMemo(() => {
-    const total = allRequests.length;
-    const pending = allRequests.filter(r => r.status === 'pending').length;
-    const approved = allRequests.filter(r => r.status === 'approved').length;
-    const rejected = allRequests.filter(r => r.status === 'rejected').length;
+    const relevantRequests = selectedActivityFilter === 'all'
+      ? allRequests
+      : allRequests.filter(r => r.activityId === selectedActivityFilter);
+
+    const total = relevantRequests.length;
+    const pending = relevantRequests.filter(r => r.status === 'pending').length;
+    const approved = relevantRequests.filter(r => r.status === 'approved').length;
+    const rejected = relevantRequests.filter(r => r.status === 'rejected').length;
     return { total, pending, approved, rejected };
+  }, [allRequests, selectedActivityFilter]);
+
+  // Overall desk-wide pending counter for the top navigation switcher
+  const totalPendingDesk = useMemo(() => {
+    return allRequests.filter(r => r.status === 'pending').length;
   }, [allRequests]);
 
   // Participant statistics
@@ -313,9 +322,9 @@ export default function RegistrationsHub({
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Approvals Desk</span>
-                {metrics.pending > 0 && (
+                {totalPendingDesk > 0 && (
                   <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                    {metrics.pending}
+                    {totalPendingDesk}
                   </span>
                 )}
               </button>
@@ -366,10 +375,10 @@ export default function RegistrationsHub({
       {isStaff && activeStaffMode === 'desk' && (
         <div className="space-y-5">
           {/* Filters & Actions Toolbar */}
-          <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 shadow-xs space-y-3">
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 shadow-xs space-y-3 max-w-full overflow-hidden">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 min-w-0">
               {/* Left: Search input */}
-              <div className="relative flex-1 max-w-md">
+              <div className="relative flex-1 w-full md:max-w-md min-w-0">
                 <Search className="w-4 h-4 text-secondary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
@@ -389,24 +398,27 @@ export default function RegistrationsHub({
               </div>
 
               {/* Center: Activity Filter Dropdown */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-secondary font-semibold whitespace-nowrap">Event:</span>
+              <div className="flex items-center gap-2 w-full md:w-auto min-w-0">
+                <span className="text-xs text-secondary font-semibold whitespace-nowrap shrink-0">Event:</span>
                 <select
                   value={selectedActivityFilter}
                   onChange={(e) => setSelectedActivityFilter(e.target.value)}
-                  className="bg-surface-container border border-surface-container-high text-on-surface text-xs rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="flex-1 md:flex-initial w-full md:w-auto md:max-w-xs min-w-0 bg-surface-container border border-surface-container-high text-on-surface text-xs rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer truncate"
                 >
-                  <option value="all">All Activities ({allActivities.length})</option>
-                  {allActivities.map(act => (
-                    <option key={act.id} value={act.id}>
-                      {act.name} — {act.room} • {act.scheduledTime || ''}
-                    </option>
-                  ))}
+                  <option value="all">All Activities ({allRequests.length})</option>
+                  {allActivities.map(act => {
+                    const count = allRequests.filter(r => r.activityId === act.id).length;
+                    return (
+                      <option key={act.id} value={act.id}>
+                        {act.name} — {act.room} ({count})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
               {/* Right: Actions (Bulk Approve & Push to Sheets) */}
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
                 {hasBatch && (
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-semibold shadow-xs">
                     <Clock className={`w-3.5 h-3.5 text-amber-600 dark:text-amber-400 ${batchSyncing ? 'animate-spin' : ''}`} />
@@ -448,13 +460,13 @@ export default function RegistrationsHub({
             </div>
 
             {/* Status Pills Bar */}
-            <div className="flex items-center gap-1.5 pt-2 border-t border-surface-container overflow-x-auto no-scrollbar">
-              <span className="text-xs text-secondary font-semibold mr-1">Status:</span>
+            <div className="flex items-center gap-1.5 pt-2 border-t border-surface-container overflow-x-auto no-scrollbar max-w-full">
+              <span className="text-xs text-secondary font-semibold mr-1 shrink-0">Status:</span>
               {[
                 { id: 'all', label: 'All Requests', count: metrics.total },
-                { id: 'pending', label: 'Pending Only', count: metrics.pending },
-                { id: 'approved', label: 'Approved Only', count: metrics.approved },
-                { id: 'rejected', label: 'Declined Only', count: metrics.rejected }
+                { id: 'pending', label: 'Pending', count: metrics.pending },
+                { id: 'approved', label: 'Approved', count: metrics.approved },
+                { id: 'rejected', label: 'Declined', count: metrics.rejected }
               ].map(pill => (
                 <button
                   key={pill.id}

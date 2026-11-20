@@ -21,6 +21,7 @@ import MobileDrawerNav from './components/MobileDrawerNav';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { subscribeToPassConfig } from './services/passApprovalService';
 import { MenuIcon } from './components/AnimatedIcons';
+import { ThemeToggleButton } from './components/ThemeToggleButton';
 import {
   ShieldCheck,
   LogOut,
@@ -771,6 +772,15 @@ export default function App() {
                   <span className="text-[11px]">{adminMode ? 'Admin ON' : 'Admin'}</span>
                 </button>
               )}
+
+              {/* Theme Switch Button (placed to the left of menu button) */}
+              <ThemeToggleButton
+                isDark={theme === 'dark'}
+                onToggle={toggleTheme}
+                size={18}
+                className="w-9 h-9 !rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container transition-all active:scale-95 shadow-xs"
+                title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              />
 
               {/* Hamburger Menu Button — Skiper99 animated MenuIcon */}
               <button
