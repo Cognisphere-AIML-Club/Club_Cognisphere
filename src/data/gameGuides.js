@@ -5,7 +5,7 @@ export const GAME_GUIDES = {
     theme: 'Test Your Mind. Beat the Clock.',
     category: 'Technical',
     eventType: 'Technical Competition',
-    participation: 'Individual / Duo (Teams of up to 2)',
+    participation: 'Individual Participation',
     totalDuration: '90 Minutes',
     roundsCount: '3 Rounds',
     description: 'Tech Quiz is a fast-paced intellectual competition designed to test participants\' depth of knowledge, logical deduction, and quick-fire recall across Artificial Intelligence, Machine Learning, Computer Science, and modern technological breakthroughs.',
@@ -44,7 +44,7 @@ export const GAME_GUIDES = {
           'Top-performing participants qualify for Round 2.'
         ],
         rules: [
-          'No communication between different teams or participants.',
+          'No communication between participants.',
           'Electronic devices and external internet lookups are strictly prohibited.',
           'Answers must be submitted within the allotted countdown window.'
         ]
@@ -81,7 +81,7 @@ export const GAME_GUIDES = {
       }
     ],
     rulesAndRegulations: [
-      'Participation is individual or in registered teams of two.',
+      'Participation is strictly individual.',
       'Mobile phones, smartwatches, and external browser lookup are strictly prohibited.',
       'All answers must be submitted within the active stage timers.',
       'Misconduct, cross-talk, or unauthorized assistance will lead to immediate disqualification.',
