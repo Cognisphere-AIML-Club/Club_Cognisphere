@@ -540,8 +540,8 @@ export default function EventLandingPage({
                   </span>
 
                   <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${targetGame.status === 'In Progress'
-                      ? 'bg-error-container text-on-error-container'
-                      : 'bg-tertiary-container text-on-tertiary-container'
+                    ? 'bg-error-container text-on-error-container'
+                    : 'bg-tertiary-container text-on-tertiary-container'
                     }`}>
                     {targetGame.status === 'In Progress' ? 'LIVE NOW' : (targetGame.scheduledTime || 'Approved • Upcoming')}
                   </span>
@@ -724,8 +724,8 @@ export default function EventLandingPage({
                   onTouchEnd={handleTouchEnd}
                   onTouchCancel={handleTouchEnd}
                   className={`p-3.5 rounded-2xl border text-xs flex items-start justify-between gap-3 transition-colors ${item.pinned
-                      ? 'bg-surface-container border-primary/30 text-on-surface'
-                      : 'bg-surface-container-low border-surface-container text-on-surface-variant'
+                    ? 'bg-surface-container border-primary/30 text-on-surface'
+                    : 'bg-surface-container-low border-surface-container text-on-surface-variant'
                     } ${isAdmin ? 'cursor-pointer select-none' : ''}`}
                   title={isAdmin ? 'Right-click on desktop or press & hold on mobile to pin/unpin' : undefined}
                 >
@@ -755,8 +755,8 @@ export default function EventLandingPage({
                           togglePinAnnouncement(item.id, item.pinned);
                         }}
                         className={`p-1.5 rounded-lg transition-colors ${item.pinned
-                            ? 'text-primary bg-surface-container'
-                            : 'text-secondary hover:text-primary hover:bg-surface-container'
+                          ? 'text-primary bg-surface-container'
+                          : 'text-secondary hover:text-primary hover:bg-surface-container'
                           }`}
                         title={item.pinned ? 'Unpin Announcement' : 'Pin Announcement'}
                         aria-label={item.pinned ? 'Unpin announcement' : 'Pin announcement'}
@@ -825,10 +825,10 @@ export default function EventLandingPage({
             {/* Left: Event Title, Date & Badges */}
             <div className="space-y-1.5 flex-1">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary text-on-primary shadow-xs">
+                {/* <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary text-on-primary shadow-xs">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>IGNITE 2026</span>
-                </span>
+                </span> */}
 
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-primary font-mono border border-surface-container-high">
                   <Calendar className="w-3.5 h-3.5 text-primary" />
@@ -841,10 +841,10 @@ export default function EventLandingPage({
               </div>
 
               <h3 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight">
-                IGNITE — Annual Technical &amp; Non-Technical Championship
+                IGNITE — Technical &amp; Non-Technical Activities
               </h3>
               <p className="text-xs text-secondary leading-relaxed max-w-2xl">
-                The flagship 3-day championship (Nov 24 – 26, 2026). Days 1 &amp; 2 feature AI Prompting, UI/UX Makeover, Tech Quiz, Product Pitching, and JAM; Day 3 concludes with the Grand Finale &amp; Final Prize Distribution!
+                Days 1 &amp; 2 feature Prompt Decoding, UI/UX Makeover, Tech Quiz, Product Pitching and JAM!<br />Day 3 Concludes with the Valedictory Ceremony &amp; Final Prize Distribution!
               </p>
             </div>
 
@@ -888,8 +888,8 @@ export default function EventLandingPage({
                         {/* Top Badges */}
                         <div className="flex items-center justify-between gap-2">
                           <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${act.category === 'Technical'
-                              ? 'bg-surface-container border-surface-container-high text-primary'
-                              : 'bg-secondary-container/40 border-secondary/20 text-secondary'
+                            ? 'bg-surface-container border-surface-container-high text-primary'
+                            : 'bg-secondary-container/40 border-secondary/20 text-secondary'
                             }`}>
                             <Tag className="w-3 h-3" />
                             <span>{act.category}</span>
@@ -908,15 +908,14 @@ export default function EventLandingPage({
                           ) : (() => {
                             const actStatus = getActivityStatus(act);
                             return (
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                                actStatus.isLive
-                                  ? 'bg-error-container text-on-error-container border-error/30'
-                                  : actStatus.status === 'Completed'
-                                    ? 'bg-surface-container text-secondary border-surface-container'
-                                    : actStatus.isCountdown
-                                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 font-extrabold'
-                                      : 'bg-surface-container text-secondary border-surface-container'
-                              }`}>
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${actStatus.isLive
+                                ? 'bg-error-container text-on-error-container border-error/30'
+                                : actStatus.status === 'Completed'
+                                  ? 'bg-surface-container text-secondary border-surface-container'
+                                  : actStatus.isCountdown
+                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 font-extrabold'
+                                    : 'bg-surface-container text-secondary border-surface-container'
+                                }`}>
                                 {actStatus.isLive && (
                                   <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
                                 )}
