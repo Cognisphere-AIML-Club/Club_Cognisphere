@@ -2,6 +2,7 @@ import {
   doc, 
   getDoc, 
   setDoc, 
+  deleteDoc,
   collection, 
   getDocs, 
   serverTimestamp, 
@@ -379,3 +380,54 @@ export function subscribeToUserAttendance(participantId, callback) {
     callback({});
   });
 }
+
+/**
+ * Real-time listener for all attendance records across all activities (for Admin/Staff attendance hub)
+ */
+export function subscribeToAllAttendance(callback) {
+  const colRef = collection(db, 'attendance');
+  return onSnapshot(colRef, (snapshot) => {
+    const list = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      let ts = null;
+      if (data.timestamp?.toDate) {
+        ts = data.timestamp.toDate();
+      } else if (data.scannedAt) {
+        ts = new Date(data.scannedAt);
+      } else if (data.clientTimestamp) {
+        ts = new Date(data.clientTimestamp);
+      } else {
+        ts = new Date();
+      }
+
+      list.push({
+        id: docSnap.id,
+        ...data,
+        timestamp: ts
+      });
+    });
+
+    // Sort descending by scan timestamp (newest scans first)
+    list.sort((a, b) => {
+      const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+      const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+      return timeB - timeA;
+    });
+
+    callback(list);
+  }, (err) => {
+    console.warn('subscribeToAllAttendance notice:', err);
+    callback([]);
+  });
+}
+
+/**
+ * Delete an attendance record (Admin only)
+ */
+export async function deleteAttendanceRecord(attendanceId) {
+  if (!attendanceId) return;
+  const docRef = doc(db, 'attendance', attendanceId);
+  await deleteDoc(docRef);
+}
+

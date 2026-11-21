@@ -30,11 +30,13 @@ export default function LeaderboardPodium({
   isAdmin = false, 
   isCoordinator = false,
   isStaff = false,
+  canEditLeaderboard = false,
   onPublishScore, 
   onUnpublishScore, 
   adminEmail = 'admin',
   activities = []
 }) {
+  const canManageScores = isAdmin || canEditLeaderboard;
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showSheetsModal, setShowSheetsModal] = useState(false);
   const [sheetConfig, setSheetConfig] = useState(null);
@@ -102,14 +104,14 @@ export default function LeaderboardPodium({
 
   // Background Auto-Sync if enabled
   useEffect(() => {
-    if (!isAdmin || !effectiveAutoSync || !effectiveSheetUrl) return;
+    if (!canManageScores || !effectiveAutoSync || !effectiveSheetUrl) return;
 
     const interval = setInterval(() => {
       handleQuickSync();
     }, 30000); // Poll every 30 seconds
 
     return () => clearInterval(interval);
-  }, [isAdmin, effectiveAutoSync, effectiveSheetUrl, effectiveSheetName, activity?.id]);
+  }, [canManageScores, effectiveAutoSync, effectiveSheetUrl, effectiveSheetName, activity?.id]);
 
   // Normalize scores: safely parse integer rank and fallback to array order
   // "If no score is found in the sheet - hold the display of that participant from leaderboard, make it visible only once the score is uploaded"
@@ -154,7 +156,7 @@ export default function LeaderboardPodium({
           </div>
         </div>
 
-        {isAdmin && (
+        {canManageScores && (
           <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
             {effectiveSheetUrl ? (
               <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 p-1 rounded-xl">
@@ -390,7 +392,7 @@ export default function LeaderboardPodium({
           <p className="text-xs text-secondary max-w-md mx-auto leading-relaxed">
             Rounds are currently ongoing in <strong className="text-on-surface">{activity.room}</strong>. Winners and verified rankings will appear here immediately after organizers finalize evaluations.
           </p>
-          {isAdmin && (
+          {canManageScores && (
             <div className="pt-3 flex flex-wrap items-center justify-center gap-2.5">
               {effectiveSheetUrl ? (
                 <button

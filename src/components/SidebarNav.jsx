@@ -43,7 +43,12 @@ export const SidebarNav = ({
   theme = adminTheme,
   onToggleAdminTheme,
   onToggleTheme = onToggleAdminTheme,
-  showLeaderboard = true
+  showLeaderboard = true,
+  enableThemeToggle = true,
+  canScan = true,
+  canTimers = true,
+  canDesk = true,
+  canBigScreen = true
 }) => {
   const currentTheme = theme || adminTheme || 'light';
   const handleToggleTheme = onToggleTheme || onToggleAdminTheme;
@@ -128,10 +133,10 @@ export const SidebarNav = ({
     },
     {
       id: 'registrations',
-      label: isStaff ? 'Registrations & Approvals' : 'Event Registrations',
+      label: (isAdmin || (isCoordinator && canDesk)) ? 'Registrations & Approvals' : 'Event Registrations',
       icon: ClipboardCheck,
       show: true,
-      badge: isStaff ? 'Desk' : null
+      badge: (isAdmin || (isCoordinator && canDesk)) ? 'Desk' : null
     },
     {
       id: 'pass',
@@ -151,14 +156,14 @@ export const SidebarNav = ({
       id: 'timers',
       label: 'Timers Hub',
       icon: Timer,
-      show: isStaff || isJudge,
+      show: isAdmin || (isCoordinator ? canTimers : false) || isJudge,
       badge: 'Live'
     },
     {
       id: 'scan',
       label: 'Room Scanner',
       icon: ScanLine,
-      show: isStaff,
+      show: isAdmin || (isCoordinator ? canScan : false),
       badge: 'Staff'
     },
   ];
@@ -274,7 +279,7 @@ export const SidebarNav = ({
           })}
 
         {/* Staff Quick Action: Launch Projector Big Screen */}
-        {isStaff && (
+        {(isAdmin || (isCoordinator && canBigScreen)) && (
           <div className="pt-2">
             <button
               onClick={() => onLaunchBigScreen('hall')}
@@ -342,8 +347,8 @@ export const SidebarNav = ({
               )
             )}
 
-            {/* Theme Toggle Switch (Admin Only) */}
-            {isAdmin && handleToggleTheme && (
+            {/* Theme Toggle Switch (Controlled by admin enableThemeToggle setting) */}
+            {enableThemeToggle && handleToggleTheme && (
               !isCollapsed ? (
                 <div 
                   onClick={handleToggleTheme}

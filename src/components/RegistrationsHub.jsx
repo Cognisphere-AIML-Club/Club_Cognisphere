@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { ACTIVITIES, getActivityById } from '../data/activities';
 import { 
   subscribeToAllPassRequests, 
@@ -7,6 +8,12 @@ import {
   reviewPassRequest, 
   bulkReviewPassRequests 
 } from '../services/passApprovalService';
+import {
+  subscribeToAllAttendance,
+  deleteAttendanceRecord,
+  getOfflineQueue,
+  syncOfflineQueue
+} from '../services/attendanceService';
 import { 
   ClipboardCheck, 
   UserCheck, 
@@ -27,7 +34,11 @@ import {
   RefreshCw,
   Users,
   Sparkles,
-  LogIn
+  LogIn,
+  Download,
+  Trash2,
+  ArrowUpDown,
+  X
 } from 'lucide-react';
 import {
   queueApprovalForSheetsSync,
@@ -35,21 +46,60 @@ import {
   useSheetsBatchSync
 } from '../services/sheetsBatchSyncService';
 
+// Format scan timestamp for display
+function formatAttendanceTime(timestamp) {
+  if (!timestamp) return 'Just now';
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (isNaN(date.getTime())) return 'Recently';
+
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' • ' + 
+    date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+// Relative time helper
+function getRelativeTime(timestamp) {
+  if (!timestamp) return null;
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (isNaN(date.getTime())) return null;
+
+  const diffMs = Date.now() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+
+  if (diffSec < 60) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 export default function RegistrationsHub({
   user,
   profile,
   isAdmin = false,
   isCoordinator = false,
   isStaff = false,
+  canManageDesk = true,
   onViewPass,
   onSignIn,
   activities = ACTIVITIES
 }) {
+  const effectiveIsStaff = isAdmin || (isStaff && canManageDesk);
   const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
   const getActivity = (id) => allActivities.find(a => a.id === id) || allActivities[0];
 
-  // Staff view mode toggle: 'desk' (Approvals queue) or 'participant' (Student Pass view)
+  // Staff view mode toggle: 'desk' (Approvals queue) or 'attendance' (Activity attendance records)
   const [activeStaffMode, setActiveStaffMode] = useState('desk');
+
+  // Attendance records state (Staff / Admin)
+  const [allAttendance, setAllAttendance] = useState([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(true);
+  const [selectedAttendanceActivity, setSelectedAttendanceActivity] = useState('all');
+  const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
+  const [attendanceSort, setAttendanceSort] = useState('newest'); // 'newest' | 'oldest' | 'name'
+  const [deletingAttendanceId, setDeletingAttendanceId] = useState(null);
+  const [offlineQueueCount, setOfflineQueueCount] = useState(() => getOfflineQueue().length);
+  const [syncingOffline, setSyncingOffline] = useState(false);
 
   // Participant state
   const [userRequests, setUserRequests] = useState({});
@@ -77,7 +127,7 @@ export default function RegistrationsHub({
 
   // Subscribe to all pass requests if user is staff (Admin or Coordinator)
   useEffect(() => {
-    if (!isStaff) {
+    if (!effectiveIsStaff) {
       setLoadingRequests(false);
       return;
     }
@@ -88,7 +138,60 @@ export default function RegistrationsHub({
       setLoadingRequests(false);
     });
     return () => unsub();
-  }, [isStaff]);
+  }, [effectiveIsStaff]);
+
+  // Subscribe to all door attendance records if user is staff (Admin or Coordinator)
+  useEffect(() => {
+    if (!effectiveIsStaff) {
+      setLoadingAttendance(false);
+      return;
+    }
+
+    setLoadingAttendance(true);
+    const unsub = subscribeToAllAttendance((list) => {
+      setAllAttendance(list);
+      setLoadingAttendance(false);
+    });
+    return () => unsub();
+  }, [effectiveIsStaff]);
+
+  // Sync offline queue handler
+  const handleSyncOfflineAttendance = async () => {
+    try {
+      setSyncingOffline(true);
+      const res = await syncOfflineQueue();
+      setOfflineQueueCount(res.remaining || 0);
+      if (res.synced > 0) {
+        setSuccessBanner(`Successfully synced ${res.synced} offline attendance scan(s)!`);
+      } else {
+        alert('Offline queue is already clear.');
+      }
+    } catch (err) {
+      alert(`Sync error: ${err.message}`);
+    } finally {
+      setSyncingOffline(false);
+    }
+  };
+
+  // Remove attendance record handler (Admin only)
+  const handleDeleteAttendance = async (attendanceId, studentName, eventName) => {
+    if (!isAdmin) {
+      alert('Only administrators can remove attendance records.');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to remove the attendance record for ${studentName || 'this student'} in ${eventName || 'this event'}?`)) {
+      return;
+    }
+    try {
+      setDeletingAttendanceId(attendanceId);
+      await deleteAttendanceRecord(attendanceId);
+      setSuccessBanner(`Attendance record for ${studentName || 'student'} removed.`);
+    } catch (err) {
+      alert(err.message || 'Failed to remove attendance record');
+    } finally {
+      setDeletingAttendanceId(null);
+    }
+  };
 
   // Auto-dismiss success toast
   useEffect(() => {
@@ -248,6 +351,129 @@ export default function RegistrationsHub({
     return allRequests.filter(r => r.status === 'pending').length;
   }, [allRequests]);
 
+  // Filtered & sorted attendance records for Activity Attendance Hub
+  const filteredAttendance = useMemo(() => {
+    let list = allAttendance.filter(item => {
+      // Activity filter
+      if (selectedAttendanceActivity !== 'all' && item.activityId !== selectedAttendanceActivity) {
+        return false;
+      }
+      // Search filter
+      if (attendanceSearchQuery.trim()) {
+        const q = attendanceSearchQuery.toLowerCase().trim();
+        const nameMatch = (item.participantName || '').toLowerCase().includes(q);
+        const usnMatch = (item.participantUsn || '').toLowerCase().includes(q);
+        const scannedByMatch = (item.scannedBy || '').toLowerCase().includes(q);
+        const act = getActivity(item.activityId);
+        const eventMatch = (act?.name || '').toLowerCase().includes(q) || (act?.room || '').toLowerCase().includes(q);
+        if (!nameMatch && !usnMatch && !scannedByMatch && !eventMatch) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Sorting
+    list.sort((a, b) => {
+      if (attendanceSort === 'newest') {
+        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+        return timeB - timeA;
+      }
+      if (attendanceSort === 'oldest') {
+        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+        return timeA - timeB;
+      }
+      if (attendanceSort === 'name') {
+        return (a.participantName || '').localeCompare(b.participantName || '');
+      }
+      return 0;
+    });
+
+    return list;
+  }, [allAttendance, selectedAttendanceActivity, attendanceSearchQuery, attendanceSort]);
+
+  // Aggregate metrics for Activity Attendance
+  const attendanceMetrics = useMemo(() => {
+    const totalScans = allAttendance.length;
+    const uniqueStudents = new Set(
+      allAttendance.map(a => (a.participantUsn || a.participantId || '').toLowerCase()).filter(Boolean)
+    ).size;
+
+    // Per-activity attendance count map
+    const countByActivity = {};
+    allActivities.forEach(act => {
+      countByActivity[act.id] = 0;
+    });
+    allAttendance.forEach(att => {
+      if (countByActivity[att.activityId] !== undefined) {
+        countByActivity[att.activityId]++;
+      }
+    });
+
+    // Find top activity
+    let topAct = null;
+    let maxCount = -1;
+    allActivities.forEach(act => {
+      const count = countByActivity[act.id] || 0;
+      if (count > maxCount && count > 0) {
+        maxCount = count;
+        topAct = act;
+      }
+    });
+
+    const latestScan = allAttendance[0] || null;
+
+    return {
+      totalScans,
+      uniqueStudents,
+      countByActivity,
+      topAct,
+      topActCount: maxCount > 0 ? maxCount : 0,
+      latestScan
+    };
+  }, [allAttendance, allActivities]);
+
+  // Export filtered attendance records to CSV
+  const handleExportAttendanceCsv = () => {
+    if (filteredAttendance.length === 0) {
+      alert('No attendance records to export.');
+      return;
+    }
+
+    const headers = ['#', 'Participant Name', 'USN', 'Activity Name', 'Room', 'Category', 'Check-In Time', 'Scanned By', 'Status'];
+    const rows = filteredAttendance.map((rec, idx) => {
+      const act = getActivity(rec.activityId);
+      const timeStr = rec.timestamp instanceof Date
+        ? rec.timestamp.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+        : (rec.scannedAt || '');
+      return [
+        idx + 1,
+        `"${(rec.participantName || 'Participant').replace(/"/g, '""')}"`,
+        `"${(rec.participantUsn || '').replace(/"/g, '""')}"`,
+        `"${(act?.name || rec.activityId).replace(/"/g, '""')}"`,
+        `"${(act?.room || '').replace(/"/g, '""')}"`,
+        `"${(act?.category || '').replace(/"/g, '""')}"`,
+        `"${timeStr.replace(/"/g, '""')}"`,
+        `"${(rec.scannedBy || 'coordinator').replace(/"/g, '""')}"`,
+        '"Present"'
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const actSlug = selectedAttendanceActivity === 'all' ? 'all-events' : selectedAttendanceActivity;
+    link.href = url;
+    link.setAttribute('download', `Cognisphere_Attendance_${actSlug}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Participant statistics
   const participantStats = useMemo(() => {
     const total = allActivities.length;
@@ -272,22 +498,31 @@ export default function RegistrationsHub({
   }, [userRequests, participantFilter, allActivities]);
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
-      {/* Success Notification Banner */}
-      {successBanner && (
-        <div className="bg-tertiary-container text-on-tertiary-container border border-tertiary/20 rounded-2xl p-4 text-xs font-semibold flex items-center justify-between shadow-xs transition-all">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-tertiary" />
-            <span>{successBanner}</span>
+    <>
+      {/* Floating Success Notification Toast — Portaled directly to document.body so it NEVER touches component layout or triggers sibling margins */}
+      {successBanner && typeof document !== 'undefined' && createPortal(
+        <div className="fixed top-20 sm:top-6 left-1/2 -translate-x-1/2 z-[9999] max-w-lg w-[calc(100%-2rem)] sm:w-auto pointer-events-none">
+          <div className="animate-fadeIn pointer-events-auto bg-surface-container-lowest/95 dark:bg-surface-container-high/95 backdrop-blur-md text-on-surface border border-emerald-500/30 rounded-2xl p-3 sm:px-4 sm:py-2.5 shadow-2xl ring-1 ring-emerald-500/20 flex items-center justify-between gap-3 text-xs font-semibold">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <span className="truncate">{successBanner}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccessBanner(null)}
+              className="text-secondary hover:text-on-surface hover:bg-surface-container rounded-lg p-1 transition-colors shrink-0"
+              aria-label="Dismiss notification"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button 
-            onClick={() => setSuccessBanner(null)}
-            className="text-on-tertiary-container hover:opacity-75 font-bold px-2 py-0.5"
-          >
-            ✕
-          </button>
-        </div>
+        </div>,
+        document.body
       )}
+
+      <div className="space-y-6 animate-fadeIn pb-12">
 
       {/* Header Banner */}
       <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-6 sm:p-8 shadow-xs">
@@ -298,19 +533,23 @@ export default function RegistrationsHub({
               <span>Event Pass & Registrations Portal</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-on-surface">
-              {isStaff && activeStaffMode === 'desk' 
+              {effectiveIsStaff && activeStaffMode === 'desk' 
                 ? 'Pass Approvals Desk' 
+                : effectiveIsStaff && activeStaffMode === 'attendance'
+                ? 'Activity Attendance Records'
                 : 'Event Registrations'}
             </h1>
             <p className="text-xs sm:text-sm text-secondary max-w-xl">
-              {isStaff && activeStaffMode === 'desk'
+              {effectiveIsStaff && activeStaffMode === 'desk'
                 ? 'Review, verify, and approve incoming participant pass requests for all upcoming club events.'
+                : effectiveIsStaff && activeStaffMode === 'attendance'
+                ? 'View, monitor, and export live door attendance check-in records across all club competitions and activities.'
                 : 'Select your events, request digital entry passes, and check real-time approval status.'}
             </p>
           </div>
 
-          {/* Staff Mode Switcher (Desk vs Student View) */}
-          {isStaff && (
+          {/* Staff Mode Switcher (Desk vs Attendance View) */}
+          {effectiveIsStaff && (
             <div className="flex items-center bg-surface-container-low p-1 rounded-2xl border border-surface-container self-start sm:self-center shrink-0">
               <button
                 onClick={() => setActiveStaffMode('desk')}
@@ -330,15 +569,20 @@ export default function RegistrationsHub({
               </button>
 
               <button
-                onClick={() => setActiveStaffMode('participant')}
+                onClick={() => setActiveStaffMode('attendance')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  activeStaffMode === 'participant'
+                  activeStaffMode === 'attendance'
                     ? 'bg-primary text-on-primary shadow-xs'
                     : 'text-secondary hover:text-on-surface'
                 }`}
               >
-                <Users className="w-3.5 h-3.5" />
-                <span>Participant View</span>
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Activity Attendance</span>
+                {allAttendance.length > 0 && (
+                  <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                    {allAttendance.length}
+                  </span>
+                )}
               </button>
             </div>
           )}
@@ -372,13 +616,14 @@ export default function RegistrationsHub({
       {/* ========================================================================= */}
       {/* SECTION A: STAFF APPROVALS DESK                                           */}
       {/* ========================================================================= */}
-      {isStaff && activeStaffMode === 'desk' && (
+      {effectiveIsStaff && activeStaffMode === 'desk' && (
         <div className="space-y-5">
-          {/* Filters & Actions Toolbar */}
+          {/* Filters & Actions Toolbar (Rock-solid layout with zero height jumping) */}
           <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 shadow-xs space-y-3 max-w-full overflow-hidden">
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 min-w-0">
+            {/* Top Row: Search input + Activity Filter Dropdown */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 min-w-0">
               {/* Left: Search input */}
-              <div className="relative flex-1 w-full md:max-w-md min-w-0">
+              <div className="relative flex-1 min-w-0">
                 <Search className="w-4 h-4 text-secondary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
@@ -397,13 +642,13 @@ export default function RegistrationsHub({
                 )}
               </div>
 
-              {/* Center: Activity Filter Dropdown */}
-              <div className="flex items-center gap-2 w-full md:w-auto min-w-0">
+              {/* Right: Activity Filter Dropdown */}
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 min-w-0">
                 <span className="text-xs text-secondary font-semibold whitespace-nowrap shrink-0">Event:</span>
                 <select
                   value={selectedActivityFilter}
                   onChange={(e) => setSelectedActivityFilter(e.target.value)}
-                  className="flex-1 md:flex-initial w-full md:w-auto md:max-w-xs min-w-0 bg-surface-container border border-surface-container-high text-on-surface text-xs rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer truncate"
+                  className="w-full sm:w-auto sm:max-w-xs min-w-0 bg-surface-container border border-surface-container-high text-on-surface text-xs rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer truncate"
                 >
                   <option value="all">All Activities ({allRequests.length})</option>
                   {allActivities.map(act => {
@@ -416,20 +661,51 @@ export default function RegistrationsHub({
                   })}
                 </select>
               </div>
+            </div>
 
-              {/* Right: Actions (Bulk Approve & Push to Sheets) */}
-              <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
+            {/* Bottom Row: Status Pills & Action Controls (Independent dedicated row) */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pt-2.5 border-t border-surface-container">
+              {/* Status Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-full">
+                <span className="text-xs text-secondary font-semibold mr-1 shrink-0">Status:</span>
+                {[
+                  { id: 'all', label: 'All Requests', count: metrics.total },
+                  { id: 'pending', label: 'Pending', count: metrics.pending },
+                  { id: 'approved', label: 'Approved', count: metrics.approved },
+                  { id: 'rejected', label: 'Declined', count: metrics.rejected }
+                ].map(pill => (
+                  <button
+                    key={pill.id}
+                    onClick={() => setSelectedStatusFilter(pill.id)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      selectedStatusFilter === pill.id
+                        ? 'bg-primary text-on-primary shadow-xs'
+                        : 'bg-surface-container text-secondary hover:text-on-surface'
+                    }`}
+                  >
+                    <span>{pill.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                      selectedStatusFilter === pill.id ? 'bg-white/20 text-white' : 'bg-surface-container-high text-secondary'
+                    }`}>
+                      {pill.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Actions: Sheets Batch Status & Bulk Approve Button */}
+              <div className="flex items-center gap-2 flex-wrap sm:shrink-0 w-full sm:w-auto justify-end">
                 {hasBatch && (
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-semibold shadow-xs">
                     <Clock className={`w-3.5 h-3.5 text-amber-600 dark:text-amber-400 ${batchSyncing ? 'animate-spin' : ''}`} />
                     <span>
-                      Sheets Batch: <strong>{batchQueueCount}</strong> queued &bull; Auto-sync in <strong className="font-mono">{batchRemainingFormatted}</strong>
+                      Sheets: <strong>{batchQueueCount}</strong> &bull; <strong className="font-mono">{batchRemainingFormatted}</strong>
                     </span>
                     <button
                       type="button"
                       onClick={handleFlushBatchToSheets}
                       disabled={batchSyncing}
-                      className="ml-1 px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50"
+                      className="ml-1 px-2 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50"
                       title="Sync queued approvals to Google Sheets immediately"
                     >
                       {batchSyncing ? 'Syncing...' : 'Sync Now'}
@@ -441,7 +717,7 @@ export default function RegistrationsHub({
                   <button
                     onClick={handleBulkApprovePending}
                     disabled={bulkActionLoading}
-                    className="py-2 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap active:scale-95 disabled:opacity-50"
+                    className="py-1.5 px-3.5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap active:scale-95 disabled:opacity-50"
                   >
                     {bulkActionLoading ? (
                       <>
@@ -458,38 +734,10 @@ export default function RegistrationsHub({
                 )}
               </div>
             </div>
-
-            {/* Status Pills Bar */}
-            <div className="flex items-center gap-1.5 pt-2 border-t border-surface-container overflow-x-auto no-scrollbar max-w-full">
-              <span className="text-xs text-secondary font-semibold mr-1 shrink-0">Status:</span>
-              {[
-                { id: 'all', label: 'All Requests', count: metrics.total },
-                { id: 'pending', label: 'Pending', count: metrics.pending },
-                { id: 'approved', label: 'Approved', count: metrics.approved },
-                { id: 'rejected', label: 'Declined', count: metrics.rejected }
-              ].map(pill => (
-                <button
-                  key={pill.id}
-                  onClick={() => setSelectedStatusFilter(pill.id)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                    selectedStatusFilter === pill.id
-                      ? 'bg-primary text-on-primary shadow-xs'
-                      : 'bg-surface-container text-secondary hover:text-on-surface'
-                  }`}
-                >
-                  <span>{pill.label}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                    selectedStatusFilter === pill.id ? 'bg-white/20 text-white' : 'bg-surface-container-high text-secondary'
-                  }`}>
-                    {pill.count}
-                  </span>
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* Requests Queue Table / Cards */}
-          <div className="bg-surface-container-lowest border border-surface-container rounded-2xl overflow-hidden shadow-xs">
+          {/* Requests Queue Table / Cards (Stable minimum height prevents collapse jumps) */}
+          <div className="bg-surface-container-lowest border border-surface-container rounded-2xl overflow-hidden shadow-xs min-h-[320px]">
             {loadingRequests ? (
               <div className="p-12 text-center space-y-3">
                 <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
@@ -588,7 +836,7 @@ export default function RegistrationsHub({
                             <button
                               onClick={() => handleReviewRequest(req.id, 'approved')}
                               disabled={isActioning}
-                              className="py-1.5 px-3.5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center gap-1 shadow-xs active:scale-95 disabled:opacity-50"
+                              className="py-1.5 px-3.5 min-w-[88px] justify-center bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center gap-1 shadow-xs active:scale-95 disabled:opacity-50"
                               title="Approve pass request"
                             >
                               {isActioning ? (
@@ -602,7 +850,7 @@ export default function RegistrationsHub({
                             <button
                               onClick={() => handleReviewRequest(req.id, 'rejected')}
                               disabled={isActioning}
-                              className="py-1.5 px-3 bg-error-container hover:bg-error/20 text-on-error-container font-bold rounded-xl text-xs transition-all flex items-center gap-1 border border-error/20 active:scale-95 disabled:opacity-50"
+                              className="py-1.5 px-3 min-w-[76px] justify-center bg-error-container hover:bg-error/20 text-on-error-container font-bold rounded-xl text-xs transition-all flex items-center gap-1 border border-error/20 active:scale-95 disabled:opacity-50"
                               title="Decline pass request"
                             >
                               <span>Decline</span>
@@ -648,9 +896,382 @@ export default function RegistrationsHub({
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION B: PARTICIPANT VIEW (Pass Requests & Direct Access)               */}
+      {/* SECTION B: ACTIVITY ATTENDANCE RECORDS (Admin / Staff)                     */}
       {/* ========================================================================= */}
-      {(!isStaff || activeStaffMode === 'participant') && (
+      {effectiveIsStaff && activeStaffMode === 'attendance' && (
+        <div className="space-y-5">
+          {/* Top 4 Metrics Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {/* Card 1: Total Verified Attendance Scans */}
+            <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-wider">
+                  Total Check-Ins
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl sm:text-3xl font-black text-on-surface">
+                  {loadingAttendance ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-secondary" />
+                  ) : (
+                    attendanceMetrics.totalScans
+                  )}
+                </div>
+                <p className="text-[11px] text-secondary mt-0.5">
+                  Across all {allActivities.length} club activities
+                </p>
+              </div>
+            </div>
+
+            {/* Card 2: Unique Participants Present */}
+            <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-wider">
+                  Unique Students
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <Users className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                  {loadingAttendance ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-secondary" />
+                  ) : (
+                    attendanceMetrics.uniqueStudents
+                  )}
+                </div>
+                <p className="text-[11px] text-secondary mt-0.5">
+                  Distinct USNs checked in
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Top Event by Attendance */}
+            <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-wider">
+                  Top Turnout
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm sm:text-base font-extrabold text-on-surface truncate">
+                  {attendanceMetrics.topAct ? attendanceMetrics.topAct.name : 'No scans yet'}
+                </div>
+                <p className="text-[11px] text-secondary truncate mt-0.5">
+                  {attendanceMetrics.topAct ? (
+                    <>
+                      <strong>{attendanceMetrics.topActCount}</strong> present &bull; {attendanceMetrics.topAct.room}
+                    </>
+                  ) : (
+                    'Waiting for door scans'
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Card 4: Latest Door Scan */}
+            <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-secondary uppercase tracking-wider">
+                  Latest Scan
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm sm:text-base font-extrabold text-on-surface truncate flex items-center gap-1.5">
+                  {attendanceMetrics.latestScan && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />}
+                  <span>
+                    {attendanceMetrics.latestScan 
+                      ? getRelativeTime(attendanceMetrics.latestScan.timestamp) || 'Just now'
+                      : 'No scans yet'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-secondary truncate mt-0.5">
+                  {attendanceMetrics.latestScan 
+                    ? `${attendanceMetrics.latestScan.participantName || 'Participant'} (${getActivity(attendanceMetrics.latestScan.activityId)?.room || 'Entrance'})`
+                    : 'Awaiting coordinator scan'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Activity Breakdown Chips */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-primary" />
+                <span>Filter by Competition Activity:</span>
+              </span>
+              <span className="text-[11px] text-secondary">
+                {selectedAttendanceActivity === 'all' 
+                  ? `Showing all (${allAttendance.length})` 
+                  : `${getActivity(selectedAttendanceActivity)?.name} (${filteredAttendance.length})`}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              <button
+                type="button"
+                onClick={() => setSelectedAttendanceActivity('all')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                  selectedAttendanceActivity === 'all'
+                    ? 'bg-primary text-on-primary shadow-xs'
+                    : 'bg-surface-container-lowest border border-surface-container text-secondary hover:text-on-surface'
+                }`}
+              >
+                <span>All Activities</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  selectedAttendanceActivity === 'all' ? 'bg-white/20 text-white' : 'bg-surface-container text-secondary'
+                }`}>
+                  {allAttendance.length}
+                </span>
+              </button>
+
+              {allActivities.map(act => {
+                const count = attendanceMetrics.countByActivity[act.id] || 0;
+                const isSelected = selectedAttendanceActivity === act.id;
+                return (
+                  <button
+                    key={act.id}
+                    type="button"
+                    onClick={() => setSelectedAttendanceActivity(act.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 ${
+                      isSelected
+                        ? 'bg-primary text-on-primary shadow-xs'
+                        : 'bg-surface-container-lowest border border-surface-container text-secondary hover:text-on-surface'
+                    }`}
+                  >
+                    <span>{act.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-surface-container text-secondary'
+                    }`}>
+                      {count}
+                    </span>
+                    <span className="text-[10px] opacity-75 font-normal">&bull; {act.room}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Search, Sort & Export Toolbar */}
+          <div className="bg-surface-container-lowest border border-surface-container rounded-2xl p-4 shadow-xs space-y-3">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 min-w-0">
+              {/* Search bar */}
+              <div className="relative flex-1 w-full md:max-w-md min-w-0">
+                <Search className="w-4 h-4 text-secondary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={attendanceSearchQuery}
+                  onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                  placeholder="Search attendee name, USN, or coordinator..."
+                  className="w-full pl-10 pr-8 py-2 rounded-xl bg-surface-container text-on-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary border border-surface-container-high transition-all"
+                />
+                {attendanceSearchQuery && (
+                  <button
+                    onClick={() => setAttendanceSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-secondary hover:text-on-surface"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Sort & Actions */}
+              <div className="flex items-center gap-2 flex-wrap justify-between md:justify-end">
+                {/* Sort selector */}
+                <div className="flex items-center gap-1.5 bg-surface-container border border-surface-container-high rounded-xl px-2.5 py-1.5 text-xs text-secondary">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <select
+                    value={attendanceSort}
+                    onChange={(e) => setAttendanceSort(e.target.value)}
+                    className="bg-transparent text-on-surface text-xs font-semibold focus:outline-none cursor-pointer pr-1"
+                  >
+                    <option value="newest">Newest Scans First</option>
+                    <option value="oldest">Oldest Scans First</option>
+                    <option value="name">Participant Name (A-Z)</option>
+                  </select>
+                </div>
+
+                {/* Offline Queue Sync Button if queued items exist */}
+                {offlineQueueCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleSyncOfflineAttendance}
+                    disabled={syncingOffline}
+                    className="py-1.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
+                    title="Sync locally cached offline scans to database"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncingOffline ? 'animate-spin' : ''}`} />
+                    <span>Sync Offline ({offlineQueueCount})</span>
+                  </button>
+                )}
+
+                {/* Export to CSV Button */}
+                <button
+                  type="button"
+                  onClick={handleExportAttendanceCsv}
+                  disabled={filteredAttendance.length === 0}
+                  className="py-2 px-3.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95 disabled:opacity-40"
+                  title="Export current attendance records to CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-primary" />
+                  <span>Export CSV ({filteredAttendance.length})</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Attendance Records Table / Cards */}
+          <div className="bg-surface-container-lowest border border-surface-container rounded-3xl overflow-hidden shadow-xs">
+            {loadingAttendance ? (
+              <div className="p-12 text-center space-y-3">
+                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                <p className="text-xs text-secondary font-medium">Loading real-time attendance logs...</p>
+              </div>
+            ) : filteredAttendance.length === 0 ? (
+              <div className="p-12 text-center space-y-3 max-w-sm mx-auto">
+                <div className="w-12 h-12 rounded-2xl bg-surface-container text-secondary flex items-center justify-center mx-auto">
+                  <UserCheck className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-on-surface">
+                  {attendanceSearchQuery || selectedAttendanceActivity !== 'all'
+                    ? 'No Matching Attendees Found'
+                    : 'No Attendance Scans Yet'}
+                </h3>
+                <p className="text-xs text-secondary leading-relaxed">
+                  {attendanceSearchQuery || selectedAttendanceActivity !== 'all'
+                    ? 'Try adjusting your search criteria or switch back to "All Activities".'
+                    : 'As room coordinators scan student QR entry passes at room doors, verified attendee check-in records will appear here in real-time.'}
+                </p>
+                {(attendanceSearchQuery || selectedAttendanceActivity !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttendanceSearchQuery('');
+                      setSelectedAttendanceActivity('all');
+                    }}
+                    className="py-1.5 px-4 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-xs"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-surface-container">
+                {/* Desktop Table Header */}
+                <div className="hidden md:grid grid-cols-12 gap-3 px-6 py-3.5 bg-surface-container-low text-[11px] font-bold text-secondary uppercase tracking-wider">
+                  <div className="col-span-4">Participant &amp; USN</div>
+                  <div className="col-span-3">Activity &amp; Room</div>
+                  <div className="col-span-2">Check-In Time</div>
+                  <div className="col-span-2">Scanned By</div>
+                  <div className="col-span-1 text-right">Status</div>
+                </div>
+
+                {/* Records List */}
+                {filteredAttendance.map((rec, index) => {
+                  const act = getActivity(rec.activityId);
+                  const isDeleting = deletingAttendanceId === rec.id;
+                  const initial = (rec.participantName || 'P').charAt(0).toUpperCase();
+
+                  return (
+                    <div
+                      key={rec.id || index}
+                      className="p-4 sm:px-6 sm:py-3.5 hover:bg-surface-container-low/50 transition-colors flex flex-col md:grid md:grid-cols-12 gap-3 items-start md:items-center"
+                    >
+                      {/* Col 1: Participant */}
+                      <div className="col-span-4 flex items-center gap-3 w-full min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary border border-primary/20 font-black text-xs flex items-center justify-center shrink-0">
+                          {initial}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs sm:text-sm font-extrabold text-on-surface truncate">
+                            {rec.participantName || 'Participant'}
+                          </div>
+                          <div className="text-[11px] font-mono text-secondary truncate flex items-center gap-2">
+                            <span>{rec.participantUsn || 'No USN'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Col 2: Activity & Room */}
+                      <div className="col-span-3 min-w-0 w-full">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-on-surface truncate">
+                            {act?.name || rec.activityId}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-secondary mt-0.5">
+                          <MapPin className="w-3 h-3 text-primary shrink-0" />
+                          <span className="font-semibold text-on-surface">{act?.room || 'Room'}</span>
+                          <span>&bull;</span>
+                          <span className="text-primary font-medium">{act?.category}</span>
+                        </div>
+                      </div>
+
+                      {/* Col 3: Check-in Timestamp */}
+                      <div className="col-span-2 text-xs text-secondary min-w-0 w-full">
+                        <div className="font-semibold text-on-surface flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-secondary shrink-0" />
+                          <span>{formatAttendanceTime(rec.timestamp)}</span>
+                        </div>
+                        <div className="text-[10px] text-secondary/80 mt-0.5">
+                          {getRelativeTime(rec.timestamp)}
+                        </div>
+                      </div>
+
+                      {/* Col 4: Scanned By */}
+                      <div className="col-span-2 text-[11px] text-secondary min-w-0 w-full truncate">
+                        <span className="px-2 py-0.5 rounded-lg bg-surface-container border border-surface-container-high font-mono text-[10px] text-on-surface inline-block truncate max-w-full" title={rec.scannedBy || 'coordinator'}>
+                          {rec.scannedBy || 'coordinator'}
+                        </span>
+                      </div>
+
+                      {/* Col 5: Status Badge & Admin Action */}
+                      <div className="col-span-1 flex items-center justify-between md:justify-end gap-2 w-full">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Present</span>
+                        </span>
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAttendance(rec.id, rec.participantName, act?.name)}
+                            disabled={isDeleting}
+                            className="p-1.5 text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-colors ml-1"
+                            title="Remove attendance record (Admin only)"
+                          >
+                            {isDeleting ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SECTION C: PARTICIPANT VIEW (Pass Requests & Direct Access)               */}
+      {/* ========================================================================= */}
+      {!effectiveIsStaff && (
         <div className="space-y-5">
           {/* Participant Pass Summary Banner */}
           {user && (
@@ -723,10 +1344,10 @@ export default function RegistrationsHub({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredActivities.map(act => {
               const req = userRequests[act.id];
-              const isApproved = isStaff || req?.status === 'approved';
+              const isApproved = effectiveIsStaff || req?.status === 'approved';
               const isPending = req?.status === 'pending';
               const isRejected = req?.status === 'rejected';
-              const isUnrequested = !req && !isStaff;
+              const isUnrequested = !req && !effectiveIsStaff;
               const isSubmitting = requestingActivityId === act.id;
 
               return (
@@ -838,6 +1459,7 @@ export default function RegistrationsHub({
         </div>
       )}
     </div>
+    </>
   );
 }
 
