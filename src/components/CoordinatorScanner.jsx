@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ACTIVITIES, getActivityById } from '../data/activities';
-import { 
-  resolveParticipantByQr, 
-  markAttendance, 
-  getOfflineQueue, 
-  syncOfflineQueue, 
-  searchParticipantsForCoordinator 
+import {
+  resolveParticipantByQr,
+  markAttendance,
+  getOfflineQueue,
+  syncOfflineQueue,
+  searchParticipantsForCoordinator
 } from '../services/attendanceService';
-import { 
-  Camera, 
-  CameraOff, 
-  CheckCircle2, 
-  AlertTriangle, 
-  XCircle, 
+import {
+  Camera,
+  CameraOff,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
   MapPinOff,
-  Search, 
-  RefreshCw, 
+  Search,
+  RefreshCw,
   ChevronRight,
   SwitchCamera,
   MapPin,
@@ -24,11 +24,11 @@ import {
   Clock
 } from 'lucide-react';
 
-export default function CoordinatorScanner({ 
-  user, 
-  activities = ACTIVITIES, 
-  isAdmin = false, 
-  assignedActivityId = null 
+export default function CoordinatorScanner({
+  user,
+  activities = ACTIVITIES,
+  isAdmin = false,
+  assignedActivityId = null
 }) {
   const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
   const isLockedToAssigned = !isAdmin && Boolean(assignedActivityId);
@@ -123,7 +123,7 @@ export default function CoordinatorScanner({
           reason: 'Sync complete.',
         });
       }
-    } catch (e) {}
+    } catch (e) { }
     setSyncing(false);
   };
 
@@ -137,7 +137,7 @@ export default function CoordinatorScanner({
         try {
           await scannerRef.current.stop();
           scannerRef.current.clear();
-        } catch (e) {}
+        } catch (e) { }
         scannerRef.current = null;
       }
 
@@ -186,7 +186,7 @@ export default function CoordinatorScanner({
       // Tier 1: If specific camera ID chosen, try that
       if (chosenCamId) {
         try {
-          await html5QrCode.start(chosenCamId, config, onQrCodeSuccess, () => {});
+          await html5QrCode.start(chosenCamId, config, onQrCodeSuccess, () => { });
           started = true;
         } catch (camErr) {
           console.warn('Failed with chosen camera ID, attempting ideal environment constraint:', camErr);
@@ -196,7 +196,7 @@ export default function CoordinatorScanner({
       // Tier 2: Try ideal environment (back camera on mobile, doesn't throw OverconstrainedError on Mac)
       if (!started) {
         try {
-          await html5QrCode.start({ facingMode: { ideal: 'environment' } }, config, onQrCodeSuccess, () => {});
+          await html5QrCode.start({ facingMode: { ideal: 'environment' } }, config, onQrCodeSuccess, () => { });
           started = true;
         } catch (envErr) {
           console.warn('Ideal environment camera failed, attempting user camera fallback:', envErr);
@@ -206,7 +206,7 @@ export default function CoordinatorScanner({
       // Tier 3: Try front / user camera (macOS FaceTime HD / laptop webcams)
       if (!started) {
         try {
-          await html5QrCode.start({ facingMode: 'user' }, config, onQrCodeSuccess, () => {});
+          await html5QrCode.start({ facingMode: 'user' }, config, onQrCodeSuccess, () => { });
           started = true;
         } catch (userErr) {
           console.warn('User camera fallback failed, attempting basic stream:', userErr);
@@ -215,7 +215,7 @@ export default function CoordinatorScanner({
 
       // Tier 4: Fallback to exact environment as final try
       if (!started) {
-        await html5QrCode.start({ facingMode: 'environment' }, config, onQrCodeSuccess, () => {});
+        await html5QrCode.start({ facingMode: 'environment' }, config, onQrCodeSuccess, () => { });
       }
 
       // Ensure video element plays and has correct attributes
@@ -249,7 +249,7 @@ export default function CoordinatorScanner({
             ) {
               el.style.setProperty('display', 'none', 'important');
               el.style.setProperty('visibility', 'hidden', 'important');
-              try { el.remove(); } catch (_) {}
+              try { el.remove(); } catch (_) { }
             }
           }
         }
@@ -281,7 +281,7 @@ export default function CoordinatorScanner({
       try {
         await scannerRef.current.stop();
         scannerRef.current.clear();
-      } catch (e) {}
+      } catch (e) { }
       scannerRef.current = null;
     }
     setScanning(false);
@@ -342,7 +342,7 @@ export default function CoordinatorScanner({
 
       if (isDateExpired || isFlaggedExpired) {
         if (navigator.vibrate) {
-          try { navigator.vibrate([200]); } catch (_) {}
+          try { navigator.vibrate([200]); } catch (_) { }
         }
         recordScanResult({
           type: 'expired',
@@ -375,7 +375,7 @@ export default function CoordinatorScanner({
 
       if (res.status === 'already_marked') {
         if (navigator.vibrate) {
-          try { navigator.vibrate([80, 80, 80]); } catch (_) {}
+          try { navigator.vibrate([80, 80, 80]); } catch (_) { }
         }
         if (passMismatchedNotice) {
           recordScanResult({
@@ -398,7 +398,7 @@ export default function CoordinatorScanner({
         }
       } else if (passMismatchedNotice) {
         if (navigator.vibrate) {
-          try { navigator.vibrate([80, 80, 80]); } catch (_) {}
+          try { navigator.vibrate([80, 80, 80]); } catch (_) { }
         }
         recordScanResult({
           type: 'mismatch',
@@ -410,7 +410,7 @@ export default function CoordinatorScanner({
         });
       } else if (res.status === 'marked_present') {
         if (navigator.vibrate) {
-          try { navigator.vibrate(60); } catch (_) {}
+          try { navigator.vibrate(60); } catch (_) { }
         }
         recordScanResult({
           type: 'approved',
@@ -423,7 +423,7 @@ export default function CoordinatorScanner({
       } else if (res.status === 'queued_offline') {
         setOfflineCount(res.queueCount);
         if (navigator.vibrate) {
-          try { navigator.vibrate(60); } catch (_) {}
+          try { navigator.vibrate(60); } catch (_) { }
         }
         recordScanResult({
           type: 'approved',
@@ -436,7 +436,7 @@ export default function CoordinatorScanner({
       }
     } catch (err) {
       if (navigator.vibrate) {
-        try { navigator.vibrate([200]); } catch (_) {}
+        try { navigator.vibrate([200]); } catch (_) { }
       }
       recordScanResult({
         type: 'expired',
@@ -475,8 +475,8 @@ export default function CoordinatorScanner({
       }
       if (scannerRef.current) {
         try {
-          scannerRef.current.stop().catch(() => {});
-        } catch (e) {}
+          scannerRef.current.stop().catch(() => { });
+        } catch (e) { }
       }
     };
   }, []);
@@ -492,7 +492,7 @@ export default function CoordinatorScanner({
             </div>
             <div>
               <h2 className="text-sm font-bold text-on-surface tracking-tight">Attendance Scanner</h2>
-              <p className="text-[11px] text-secondary">Coordinator Check-in Desk</p>
+              <p className="text-[11px] text-secondary">Check-in Desk</p>
             </div>
           </div>
 
@@ -565,8 +565,8 @@ export default function CoordinatorScanner({
       <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-5 shadow-xs space-y-4 overflow-hidden relative">
         <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-surface-container-high flex flex-col items-center justify-center min-h-[300px]">
           {/* Always rendered in DOM with non-zero dimensions so Html5Qrcode calculates true width & height */}
-          <div 
-            id="qr-reader-container" 
+          <div
+            id="qr-reader-container"
             className="w-full min-h-[300px]"
           />
 
@@ -607,13 +607,13 @@ export default function CoordinatorScanner({
               <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center">
                 {/* Top-Left Rounded Corner */}
                 <div className="absolute top-0 left-0 w-10 h-10 border-t-[3.5px] border-l-[3.5px] border-white rounded-tl-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
-                
+
                 {/* Top-Right Rounded Corner */}
                 <div className="absolute top-0 right-0 w-10 h-10 border-t-[3.5px] border-r-[3.5px] border-white rounded-tr-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
-                
+
                 {/* Bottom-Left Rounded Corner */}
                 <div className="absolute bottom-0 left-0 w-10 h-10 border-b-[3.5px] border-l-[3.5px] border-white rounded-bl-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
-                
+
                 {/* Bottom-Right Rounded Corner */}
                 <div className="absolute bottom-0 right-0 w-10 h-10 border-b-[3.5px] border-r-[3.5px] border-white rounded-br-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
 
@@ -636,11 +636,10 @@ export default function CoordinatorScanner({
           <button
             onClick={scanning ? stopScanner : () => startScanner()}
             disabled={isStarting}
-            className={`flex-1 py-3.5 px-4 font-bold rounded-2xl transition-all shadow-xs flex items-center justify-center gap-2 text-xs active:scale-[0.99] ${
-              scanning
+            className={`flex-1 py-3.5 px-4 font-bold rounded-2xl transition-all shadow-xs flex items-center justify-center gap-2 text-xs active:scale-[0.99] ${scanning
                 ? 'bg-error-container hover:bg-error-container/80 text-on-error-container border border-error/30'
                 : 'bg-primary hover:bg-primary-container text-on-primary'
-            }`}
+              }`}
           >
             {scanning ? (
               <>
@@ -670,37 +669,35 @@ export default function CoordinatorScanner({
 
         {/* Last Scanned Information Right Below Scanner (Stays until next scan is registered) */}
         {lastScanned ? (
-          <div 
+          <div
             key={lastScanned.timestamp + (lastScanned.usn || '')}
-            className={`rounded-2xl p-4 sm:p-5 shadow-sm animate-pop-in space-y-3 transition-all ${
-              lastScanned.type === 'expired'
+            className={`rounded-2xl p-4 sm:p-5 shadow-sm animate-pop-in space-y-3 transition-all ${lastScanned.type === 'expired'
                 ? 'bg-rose-600 text-white'
                 : lastScanned.type === 'warning'
-                ? 'bg-amber-400 text-slate-950'
-                : lastScanned.type === 'mismatch'
-                ? 'bg-slate-700 text-white border-2 border-slate-500'
-                : 'bg-emerald-600 text-white'
-            }`}
+                  ? 'bg-amber-400 text-slate-950'
+                  : lastScanned.type === 'mismatch'
+                    ? 'bg-slate-700 text-white border-2 border-slate-500'
+                    : 'bg-emerald-600 text-white'
+              }`}
           >
             {/* Top Tag & Timestamp */}
             <div className="flex items-center justify-between text-[11px] font-black tracking-wider uppercase">
-              <span className={`px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
-                lastScanned.type === 'warning'
+              <span className={`px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${lastScanned.type === 'warning'
                   ? 'bg-black/15 text-slate-950 border border-black/20'
                   : 'bg-white/20 text-white border border-white/30'
-              }`}>
+                }`}>
                 {lastScanned.type === 'expired' && <XCircle className="w-3.5 h-3.5" />}
                 {lastScanned.type === 'warning' && <AlertTriangle className="w-3.5 h-3.5" />}
                 {lastScanned.type === 'mismatch' && <MapPinOff className="w-3.5 h-3.5" />}
                 {lastScanned.type === 'approved' && <CheckCircle2 className="w-3.5 h-3.5" />}
                 <span>
-                  {lastScanned.type === 'expired' 
-                    ? 'Expired' 
-                    : lastScanned.type === 'warning' 
-                    ? 'Warning' 
-                    : lastScanned.type === 'mismatch' 
-                    ? 'Room Mismatch' 
-                    : 'Approved'}
+                  {lastScanned.type === 'expired'
+                    ? 'Expired'
+                    : lastScanned.type === 'warning'
+                      ? 'Warning'
+                      : lastScanned.type === 'mismatch'
+                        ? 'Room Mismatch'
+                        : 'Approved'}
                 </span>
               </span>
               <span className="opacity-90 font-mono text-[10px]">
@@ -710,9 +707,8 @@ export default function CoordinatorScanner({
 
             {/* Participant Status & Identity */}
             <div className="flex items-start gap-3">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
-                lastScanned.type === 'warning' ? 'bg-black/10' : 'bg-white/20'
-              }`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${lastScanned.type === 'warning' ? 'bg-black/10' : 'bg-white/20'
+                }`}>
                 {lastScanned.type === 'expired' && <XCircle className="w-7 h-7 text-white" />}
                 {lastScanned.type === 'warning' && <AlertTriangle className="w-7 h-7 text-slate-950" />}
                 {lastScanned.type === 'mismatch' && <MapPinOff className="w-7 h-7 text-white" />}
@@ -727,9 +723,8 @@ export default function CoordinatorScanner({
                   {lastScanned.name}
                 </div>
                 {lastScanned.usn && lastScanned.usn !== 'N/A' && (
-                  <div className={`font-mono text-[11px] font-bold inline-block px-2 py-0.5 rounded-md mt-1 ${
-                    lastScanned.type === 'warning' ? 'bg-black/10 text-slate-950' : 'bg-white/20 text-white'
-                  }`}>
+                  <div className={`font-mono text-[11px] font-bold inline-block px-2 py-0.5 rounded-md mt-1 ${lastScanned.type === 'warning' ? 'bg-black/10 text-slate-950' : 'bg-white/20 text-white'
+                    }`}>
                     USN: {lastScanned.usn}
                   </div>
                 )}
@@ -738,9 +733,8 @@ export default function CoordinatorScanner({
 
             {/* Detail & Reason Pill */}
             {(lastScanned.detail || lastScanned.reason) && (
-              <div className={`p-2.5 rounded-xl text-xs space-y-0.5 text-left ${
-                lastScanned.type === 'warning' ? 'bg-black/10' : 'bg-white/15'
-              }`}>
+              <div className={`p-2.5 rounded-xl text-xs space-y-0.5 text-left ${lastScanned.type === 'warning' ? 'bg-black/10' : 'bg-white/15'
+                }`}>
                 {lastScanned.detail && (
                   <p className="font-bold opacity-95">{lastScanned.detail}</p>
                 )}
@@ -808,8 +802,8 @@ export default function CoordinatorScanner({
               <span className="text-primary font-bold">{currentActivity.room}</span>
             </div>
             {searchResults.map((p) => (
-              <div 
-                key={p.participantId} 
+              <div
+                key={p.participantId}
                 className="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-surface-container hover:bg-surface-container transition-colors"
               >
                 <div>

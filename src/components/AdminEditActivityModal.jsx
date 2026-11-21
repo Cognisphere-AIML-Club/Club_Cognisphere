@@ -4,26 +4,9 @@ import AdminTimePicker from './AdminTimePicker';
 import AdminDatePicker from './AdminDatePicker';
 
 const VENUE_ROOM_OPTIONS = [
-  'Room 101',
-  'Room 102',
-  'Room 103',
-  'Room 104',
-  'Room 105',
-  'Room 201',
-  'Room 202',
-  'Room 203',
-  'Room 204',
-  'Room 205',
-  'Room 301',
-  'Room 302',
-  'Lab 1',
-  'Lab 2',
-  'Lab 3',
-  'Lab 301',
-  'Seminar Hall 1',
-  'Seminar Hall 2',
-  'Main Auditorium',
-  'Amphitheatre'
+  'Room A107',
+  'Room A108',
+  'AIML Lab',
 ];
 
 function parseTimeRange(str) {

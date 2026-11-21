@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useSharedTimer } from '../hooks/useSharedTimer';
 import TimerDurationPicker from './TimerDurationPicker';
-import { 
-  Play, 
-  Pause, 
-  RotateCcw, 
-  Volume2, 
-  VolumeX, 
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Volume2,
+  VolumeX,
   Timer,
   Lock,
   CalendarDays,
   Tv
 } from 'lucide-react';
 
-export default function JudgeTimer({ 
-  activity, 
-  canControl = false, 
+export default function JudgeTimer({
+  activity,
+  canControl = false,
   userEmail = 'coordinator',
   onOpenBigScreen
 }) {
@@ -70,7 +70,7 @@ export default function JudgeTimer({
     setActivePresetId(null);
     const mins = Math.floor(newSeconds / 60);
     const secs = newSeconds % 60;
-    const label = mins > 0 
+    const label = mins > 0
       ? (secs > 0 ? `${mins}m ${secs}s Custom Round` : `${mins}m Custom Round`)
       : `${secs}s Custom Round`;
     resetTimer(newSeconds, userEmail, label);
@@ -80,33 +80,30 @@ export default function JudgeTimer({
     || activity?.name || 'Active Round';
 
   return (
-    <div className={`rounded-3xl border p-6 sm:p-8 transition-all shadow-xs relative overflow-hidden ${
-      isZero && status === 'finished'
+    <div className={`rounded-3xl border p-6 sm:p-8 transition-all shadow-xs relative overflow-hidden ${isZero && status === 'finished'
         ? 'bg-error-container/20 border-error'
         : isLast10Sec
-        ? 'bg-error-container/10 border-error/50'
-        : isRunning
-        ? 'bg-surface-container-lowest border-primary'
-        : 'bg-surface-container-lowest border-surface-container'
-    }`}>
+          ? 'bg-error-container/10 border-error/50'
+          : isRunning
+            ? 'bg-surface-container-lowest border-primary'
+            : 'bg-surface-container-lowest border-surface-container'
+      }`}>
       {/* Top Accent Line */}
-      <div className={`absolute top-0 inset-x-0 h-1.5 transition-colors ${
-        isZero ? 'bg-error' : isLast10Sec ? 'bg-error' : isRunning ? 'bg-primary' : 'bg-surface-container-high'
-      }`} />
+      <div className={`absolute top-0 inset-x-0 h-1.5 transition-colors ${isZero ? 'bg-error' : isLast10Sec ? 'bg-error' : isRunning ? 'bg-primary' : 'bg-surface-container-high'
+        }`} />
 
       {/* Timer Header */}
       <div className="flex items-center justify-between pb-4 border-b border-surface-container">
         <div className="flex items-center gap-2.5">
-          <div className={`w-9 h-9 rounded-2xl flex items-center justify-center border transition-colors ${
-            isRunning
+          <div className={`w-9 h-9 rounded-2xl flex items-center justify-center border transition-colors ${isRunning
               ? 'bg-surface-container border-primary/30 text-primary'
               : 'bg-surface-container-low border-surface-container text-secondary'
-          }`}>
+            }`}>
             <Timer className="w-5 h-5" />
           </div>
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-secondary block">
-              Coordinator Timer &bull; {activity?.room} {activity?.scheduledTime ? `• ${activity.scheduledTime}` : ''}
+              {activity?.room} {activity?.scheduledTime ? `• ${activity.scheduledTime}` : ''}
             </span>
             <h3 className="text-sm font-extrabold text-on-surface">
               {activity?.name}
@@ -130,26 +127,24 @@ export default function JudgeTimer({
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             title={soundEnabled ? 'Sound alerts enabled' : 'Sound alerts muted'}
-            className={`p-2 rounded-xl border transition-all ${
-              soundEnabled
+            className={`p-2 rounded-xl border transition-all ${soundEnabled
                 ? 'bg-surface-container border-surface-container-high text-primary'
                 : 'bg-surface-container-low border-surface-container text-secondary'
-            }`}
+              }`}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-            isZero
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${isZero
               ? 'bg-error-container border-error/30 text-on-error-container'
               : isLast10Sec
-              ? 'bg-error-container border-error/30 text-on-error-container'
-              : isRunning
-              ? 'bg-surface-container border-primary/30 text-primary'
-              : status === 'paused'
-              ? 'bg-secondary-container border-secondary/30 text-on-secondary-container'
-              : 'bg-surface-container-low border-surface-container text-secondary'
-          }`}>
+                ? 'bg-error-container border-error/30 text-on-error-container'
+                : isRunning
+                  ? 'bg-surface-container border-primary/30 text-primary'
+                  : status === 'paused'
+                    ? 'bg-secondary-container border-secondary/30 text-on-secondary-container'
+                    : 'bg-surface-container-low border-surface-container text-secondary'
+            }`}>
             {isRunning && (
               <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
             )}
@@ -160,15 +155,14 @@ export default function JudgeTimer({
 
       {/* Big High-Contrast Digital Display */}
       <div className="py-8 sm:py-12 text-center select-none space-y-2">
-        <div className={`font-mono text-6xl sm:text-8xl md:text-9xl font-black tracking-tight transition-colors ${
-          isZero
+        <div className={`font-mono text-6xl sm:text-8xl md:text-9xl font-black tracking-tight transition-colors ${isZero
             ? 'text-error'
             : isLast10Sec
-            ? 'text-error'
-            : isRunning
-            ? 'text-primary'
-            : 'text-on-surface'
-        }`}>
+              ? 'text-error'
+              : isRunning
+                ? 'text-primary'
+                : 'text-on-surface'
+          }`}>
           {formattedMinutes}:{formattedSeconds}
         </div>
 
@@ -250,18 +244,16 @@ export default function JudgeTimer({
                         resetTimer(p.seconds, userEmail, p.desc);
                       }}
                       title={p.desc}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-colors border flex items-center gap-1.5 ${
-                        isRunning
+                      className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-colors border flex items-center gap-1.5 ${isRunning
                           ? 'opacity-35 cursor-not-allowed bg-surface-container-low border-surface-container text-secondary'
                           : isSelected
-                          ? 'bg-primary text-on-primary border-primary shadow-xs'
-                          : 'bg-surface-container-low text-on-surface border-surface-container hover:bg-surface-container hover:border-surface-container-high'
-                      }`}
+                            ? 'bg-primary text-on-primary border-primary shadow-xs'
+                            : 'bg-surface-container-low text-on-surface border-surface-container hover:bg-surface-container hover:border-surface-container-high'
+                        }`}
                     >
                       <span className="font-extrabold">{p.label}</span>
-                      <span className={`text-[10px] truncate max-w-[90px] font-sans ${
-                        isSelected && !isRunning ? 'text-on-primary font-medium' : 'text-secondary'
-                      }`}>
+                      <span className={`text-[10px] truncate max-w-[90px] font-sans ${isSelected && !isRunning ? 'text-on-primary font-medium' : 'text-secondary'
+                        }`}>
                         {p.desc.split('–')[0]}
                       </span>
                     </button>

@@ -117,9 +117,9 @@ export default function ProfileEditPage({
   const [passConfig, setPassConfig] = useState(() => {
     try {
       const cached = localStorage.getItem('cognisphere_pass_config');
-      return cached ? JSON.parse(cached) : { hidePassAfterAttendance: true, enableThemeToggle: true };
+      return cached ? JSON.parse(cached) : { hidePassAfterAttendance: true, enableThemeToggle: false };
     } catch (e) {
-      return { hidePassAfterAttendance: true, enableThemeToggle: true };
+      return { hidePassAfterAttendance: true, enableThemeToggle: false };
     }
   });
 
@@ -139,7 +139,7 @@ export default function ProfileEditPage({
   const hidePassAfterAttendance = passConfig.hidePassAfterAttendance ?? true;
   const showLeaderboard = passConfig.showLeaderboard ?? true;
   const showVideoShowcase = passConfig.showVideoShowcase ?? false;
-  const enableThemeToggle = passConfig.enableThemeToggle ?? true;
+  const enableThemeToggle = passConfig.enableThemeToggle ?? false;
 
   const handleToggleHidePassAfterAttendance = async () => {
     const nextVal = !hidePassAfterAttendance;
@@ -195,6 +195,7 @@ export default function ProfileEditPage({
     hidePassAfterAttendance: true,
     showLeaderboard: true,
     showVideoShowcase: false,
+    enableThemeToggle: false,
     hiddenActivityIds: [],
     panelDismissedActivityIds: []
   };
@@ -377,16 +378,16 @@ export default function ProfileEditPage({
       const coordState = r.coordinatorState;
 
       // Identify whether this role document is a coordinator
-      const isCoord = 
-        rawRole === 'coordinator' || 
-        baseRole === 'coordinator' || 
+      const isCoord =
+        rawRole === 'coordinator' ||
+        baseRole === 'coordinator' ||
         coordState !== undefined ||
         r.isCoordinator === true;
 
       if (!isCoord) return;
 
       // Dynamically resolve Name & USN from database participants collection (keyed by UID, Email, USN)
-      const p = 
+      const p =
         (docUid && participantsMap[docUid]) ||
         (docUid && participantsMap[docUid.toLowerCase()]) ||
         (docEmail && participantsMap[docEmail]) ||
@@ -394,16 +395,16 @@ export default function ProfileEditPage({
         (r.id && participantsMap[r.id]) ||
         {};
 
-      const resolvedName = 
-        p.name || 
-        r.name || 
+      const resolvedName =
+        p.name ||
+        r.name ||
         (docEmail ? docEmail.split('@')[0] : '') ||
         docUid ||
         'Coordinator';
 
-      const resolvedUsn = 
-        p.usn || 
-        docUsn || 
+      const resolvedUsn =
+        p.usn ||
+        docUsn ||
         '';
 
       const resolvedEmail = docEmail || p.email || r.email || '';
@@ -411,8 +412,8 @@ export default function ProfileEditPage({
       // Resolve room and activity safely
       const matchAct = activities.find(
         a => (r.activityId && a.id === r.activityId) ||
-             (r.assignedEvent && (a.id === r.assignedEvent || (a.name && typeof a.name === 'string' && a.name.toLowerCase() === String(r.assignedEvent).toLowerCase()))) ||
-             (r.assignedRoom && (a.room && typeof a.room === 'string' && a.room.toLowerCase() === String(r.assignedRoom).toLowerCase()))
+          (r.assignedEvent && (a.id === r.assignedEvent || (a.name && typeof a.name === 'string' && a.name.toLowerCase() === String(r.assignedEvent).toLowerCase()))) ||
+          (r.assignedRoom && (a.room && typeof a.room === 'string' && a.room.toLowerCase() === String(r.assignedRoom).toLowerCase()))
       );
 
       const resolvedActivityId = r.activityId || matchAct?.id || '';
@@ -583,9 +584,9 @@ export default function ProfileEditPage({
   const filteredCoordinators = useMemo(() => {
     if (!coordinatorSearchQuery.trim()) return allCoordinators;
     const q = coordinatorSearchQuery.toLowerCase().trim();
-    return allCoordinators.filter(c => 
-      (c.name || '').toLowerCase().includes(q) || 
-      (c.usn || '').toLowerCase().includes(q) || 
+    return allCoordinators.filter(c =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.usn || '').toLowerCase().includes(q) ||
       (c.email || '').toLowerCase().includes(q) ||
       (c.assignedEvent || '').toLowerCase().includes(q)
     );
@@ -1095,11 +1096,10 @@ export default function ProfileEditPage({
                   onBlur={() => setTouched(prev => ({ ...prev, firstName: true }))}
                   onChange={handleFirstNameChange}
                   className={`w-full bg-surface-container-low rounded-xl py-2.5 px-3.5 text-sm text-on-surface placeholder-secondary focus:outline-none transition-all border ${showFirstNameError
-                      ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
-                      : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
+                    ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
+                    : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
                     }`}
                 />
-                <p className="text-[11px] text-secondary mt-1">Ex: Sachin</p>
                 {showFirstNameError && (
                   <p className="text-[11px] text-error mt-1 flex items-center gap-1 font-medium">
                     <AlertCircle className="w-3 h-3 flex-shrink-0" />
@@ -1119,7 +1119,6 @@ export default function ProfileEditPage({
                   onChange={handleLastNameChange}
                   className="w-full bg-surface-container-low border border-surface-container focus:border-primary rounded-xl py-2.5 px-3.5 text-sm text-on-surface placeholder-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
-                <p className="text-[11px] text-secondary mt-1">Ex: Tendulkar</p>
               </div>
             </div>
 
@@ -1136,13 +1135,10 @@ export default function ProfileEditPage({
                 onBlur={() => setTouched(prev => ({ ...prev, certificateName: true }))}
                 onChange={handleCertificateNameChange}
                 className={`w-full bg-surface-container-low rounded-xl py-2.5 px-3.5 text-sm font-semibold text-on-surface placeholder-secondary focus:outline-none transition-all border ${showCertNameError
-                    ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
-                    : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
+                  ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
+                  : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
                   }`}
               />
-              <p className="text-[11px] text-secondary mt-1">
-                How would you like your name to appear on certificates?
-              </p>
               {showCertNameError && (
                 <p className="text-[11px] text-error mt-1 flex items-center gap-1 font-medium">
                   <AlertCircle className="w-3 h-3 flex-shrink-0" />
@@ -1177,7 +1173,7 @@ export default function ProfileEditPage({
                 <div className="relative flex-1 flex items-center">
                   <span className={`absolute left-3 text-xs font-medium border-r pr-2.5 transition-colors ${showMobileError ? 'text-error border-error/50' : 'text-secondary border-surface-container'
                     }`}>
-                    IN &bull; +91
+                    IN +91
                   </span>
                   <input
                     type="tel"
@@ -1188,8 +1184,8 @@ export default function ProfileEditPage({
                     onChange={handleMobileChange}
                     maxLength={10}
                     className={`w-full bg-surface-container-low rounded-xl py-2.5 pl-20 pr-3.5 text-sm font-mono text-on-surface placeholder-secondary focus:outline-none transition-all border ${showMobileError
-                        ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
-                        : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
+                      ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
+                      : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
                       }`}
                   />
                 </div>
@@ -1226,26 +1222,16 @@ export default function ProfileEditPage({
             <div className="pt-2 border-t border-surface-container/60 space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-semibold text-on-surface flex items-center gap-1.5">
-                  <span>College USN / Roll Number</span>
+                  <span>USN / Roll Number</span>
                   <span className="text-error">*</span>
                 </label>
-                {isUsnLocked ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20 shadow-xs">
-                    <Lock className="w-2.5 h-2.5" />
-                    <span>Locked</span>
-                  </span>
-                ) : (
-                  <span className={`text-[10px] font-mono ${showUsnError ? 'text-error font-bold' : 'text-secondary'}`}>
-                    {usn.length}/10
-                  </span>
-                )}
               </div>
 
               <div className="relative">
                 <input
                   type="text"
                   required
-                  placeholder="1ST24AI045"
+                  placeholder="1ST24AI000"
                   value={usn}
                   readOnly={isUsnLocked}
                   disabled={isUsnLocked}
@@ -1253,10 +1239,10 @@ export default function ProfileEditPage({
                   onChange={handleUsnChange}
                   maxLength={10}
                   className={`w-full rounded-xl py-2.5 px-3.5 text-sm font-mono tracking-wider uppercase transition-all border ${isUsnLocked
-                      ? 'bg-surface-container/70 border-surface-container text-on-surface/75 cursor-not-allowed select-none pr-9 font-semibold'
-                      : showUsnError
-                        ? 'bg-surface-container-low border-error text-error focus:border-error focus:ring-2 focus:ring-error/20'
-                        : 'bg-surface-container-low border-surface-container text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20'
+                    ? 'bg-surface-container/70 border-surface-container text-on-surface/75 cursor-not-allowed select-none pr-9 font-semibold'
+                    : showUsnError
+                      ? 'bg-surface-container-low border-error text-error focus:border-error focus:ring-2 focus:ring-error/20'
+                      : 'bg-surface-container-low border-surface-container text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20'
                     }`}
                 />
                 {isUsnLocked && (
@@ -1270,7 +1256,7 @@ export default function ProfileEditPage({
                 <div className="p-2.5 rounded-xl bg-surface-container/60 border border-surface-container flex items-start gap-2 text-[11px] text-secondary">
                   <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <div className="leading-snug">
-                    <span className="font-semibold text-on-surface">USN Permanently Locked:</span> Linked to <span className="font-mono text-on-surface font-semibold">{user?.email || 'this account'}</span>. Once an email is linked with a USN, it cannot be changed.
+                    <span className="font-semibold text-on-surface">USN</span> Linked to <span className="font-mono text-on-surface font-semibold">{user?.email || 'this account'}</span>. Once an email is linked with a USN, it cannot be changed.
                   </div>
                 </div>
               ) : showUsnError ? (
@@ -1284,26 +1270,6 @@ export default function ProfileEditPage({
                 </p>
               )}
             </div>
-
-            {/* Academic Information Preview from USN */}
-            {/* {usnMetadata && (
-              <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <Building className="w-4 h-4 text-primary shrink-0" />
-                  <div>
-                    <span className="text-[10px] text-secondary uppercase font-bold block">Department</span>
-                    <span className="font-semibold text-on-surface">{usnMetadata.branch}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <GraduationCap className="w-4 h-4 text-primary shrink-0" />
-                  <div>
-                    <span className="text-[10px] text-secondary uppercase font-bold block">Academic Cohort</span>
-                    <span className="font-semibold text-on-surface">{usnMetadata.batch}</span>
-                  </div>
-                </div>
-              </div>
-            )} */}
           </div>
         </div>
 
@@ -1322,7 +1288,7 @@ export default function ProfileEditPage({
                   Event Operations &amp; Interface Controls
                 </h2>
                 <p className="text-xs text-secondary">
-                  Configure real-time pass redemption behavior and toggle application appearance.
+                  Configure real-time application appearance.
                 </p>
               </div>
             </div>
@@ -1338,12 +1304,9 @@ export default function ProfileEditPage({
                     </span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${hidePassAfterAttendance ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
                       }`}>
-                      {hidePassAfterAttendance ? 'Active (Auto-Hide)' : 'Disabled (Testing Mode)'}
+                      {hidePassAfterAttendance ? 'Active' : 'Disabled'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-secondary leading-relaxed">
-                    When enabled, once attendance is scanned and recorded at the door, the active QR pass is hidden and marked as checked-in on &quot;My Pass&quot; to avoid confusion or duplicate scans. Toggle off to test mismatches and re-scan scenarios.
-                  </p>
                 </div>
 
                 <button
@@ -1367,16 +1330,13 @@ export default function ProfileEditPage({
                   <div className="flex items-center gap-2">
                     <Sun className="w-4 h-4 text-primary" />
                     <span className="text-xs font-bold text-on-surface">
-                      Navigation Theme Switcher
+                      Theme Switcher
                     </span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${enableThemeToggle ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
                       }`}>
-                      {enableThemeToggle ? 'Active (Sidebar & Mobile)' : 'Disabled (Hidden)'}
+                      {enableThemeToggle ? 'Enabled' : 'Disabled'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-secondary leading-relaxed">
-                    Enable or disable the theme switch button in the desktop navigation sidebar and next to the mobile menu button.
-                  </p>
                 </div>
 
                 <button
@@ -1400,16 +1360,13 @@ export default function ProfileEditPage({
                   <div className="flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-primary" />
                     <span className="text-xs font-bold text-on-surface">
-                      Competition Leaderboard Visibility
+                      Leaderboard Visibility
                     </span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${showLeaderboard ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
                       }`}>
                       {showLeaderboard ? 'Active (Visible)' : 'Hidden (App & Big Screen)'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-secondary leading-relaxed">
-                    Controls whether the live competition leaderboard is visible across the app and on the Big Screen carousel. When disabled, the leaderboard is completely hidden from both the participant navigation and the projector carousel.
-                  </p>
                 </div>
 
                 <button
@@ -1440,9 +1397,6 @@ export default function ProfileEditPage({
                       {showVideoShowcase ? 'Active (Visible)' : 'Hidden (In Development)'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-secondary leading-relaxed">
-                    Controls whether the video aftermovie player and social reels/shorts section are displayed on the home page. Keep hidden while under development.
-                  </p>
                 </div>
 
                 <button
@@ -1466,17 +1420,17 @@ export default function ProfileEditPage({
                   <div className="flex items-center gap-2">
                     <SlidersHorizontal className="w-4 h-4 text-primary" />
                     <span className="text-xs font-bold text-on-surface">
-                      Pass Page Customization &amp; Layout Controls
+                      Pass Page Customization
                     </span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isSystemActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600'
                       }`}>
-                      {isSystemActive ? 'System Active' : 'Passes Disabled'}
+                      {isSystemActive ? 'Passes Enabled' : 'Passes Disabled'}
                     </span>
                   </div>
                   <p className="text-[11px] text-secondary leading-relaxed">
                     {!isSystemActive
-                      ? 'Status: Passes DISABLED for participants. Participants see "No events taking place currently" with a redirect to Events Hub.'
-                      : `Status: Active. ${visibleActivities.length} of ${allActivities.length} activities enabled for passes. Configure visibility, download button, and activity filters.`}
+                      ? 'Status: Passes DISABLED for participants.'
+                      : `Status: Active. ${visibleActivities.length} of ${allActivities.length} activities enabled for passes.`}
                   </p>
                 </div>
 
@@ -1501,15 +1455,12 @@ export default function ProfileEditPage({
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-primary" />
                     <span className="text-xs font-bold text-on-surface">
-                      Coordinator Permissions &amp; Feature Access Controls
+                      Coordinator Permissions
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                       {activeCoordinatorsCount} / {allCoordinators.length} Active
                     </span>
                   </div>
-                  <p className="text-[11px] text-secondary leading-relaxed">
-                    Grant or restrict coordinator controls for the Room Scanner, Timers Hub, Projector Big Screen, Registrations Desk, and Leaderboard. Toggle individual student states between Coordinator (staff controls) and Participant mode (can play in other events).
-                  </p>
                 </div>
 
                 <button
@@ -1834,8 +1785,8 @@ export default function ProfileEditPage({
                         <div
                           key={act.id}
                           className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${isVisible
-                              ? 'bg-surface-container-low border-surface-container'
-                              : 'bg-surface-container-lowest/60 border-dashed border-surface-container opacity-60'
+                            ? 'bg-surface-container-low border-surface-container'
+                            : 'bg-surface-container-lowest/60 border-dashed border-surface-container opacity-60'
                             }`}
                         >
                           <div className="min-w-0">
@@ -2150,7 +2101,7 @@ export default function ProfileEditPage({
 
                         const resolvedRoom = coord.assignedRoom || (activities.find(
                           a => (coord.activityId && a.id === coord.activityId) ||
-                               (coord.assignedEvent && (a.id === coord.assignedEvent || (a.name && typeof a.name === 'string' && a.name.toLowerCase() === String(coord.assignedEvent).toLowerCase())))
+                            (coord.assignedEvent && (a.id === coord.assignedEvent || (a.name && typeof a.name === 'string' && a.name.toLowerCase() === String(coord.assignedEvent).toLowerCase())))
                         )?.room) || '';
 
                         const resolvedEvent = coord.assignedEvent || (activities.find(

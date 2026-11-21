@@ -76,7 +76,8 @@ export default function MobileDrawerNav({
 
   const passBadge = useMemo(() => {
     if (!user || !profile?.qrId) return null;
-    if (isStaff) return 'Ready';
+    // Real status for participants and coordinators; only explicit Admin Mode previews 'Ready'
+    if (isAdmin && !isCoordinator) return 'Ready';
 
     const requestedList = Object.values(userRequests);
     const requestedCount = requestedList.length;
@@ -85,7 +86,7 @@ export default function MobileDrawerNav({
     if (approvedCount === 0) return null;
     if (approvedCount === requestedCount && requestedCount > 0) return 'Ready';
     return `${approvedCount}/${requestedCount}`;
-  }, [user, profile?.qrId, isStaff, userRequests]);
+  }, [user, profile?.qrId, isAdmin, isCoordinator, userRequests]);
 
   const navItems = [
     {
@@ -107,14 +108,14 @@ export default function MobileDrawerNav({
       label: 'Leaderboard',
       icon: Trophy,
       show: Boolean(showLeaderboard),
-      badge: 'Live'
+      badge: null
     },
     {
       id: 'registrations',
       label: (isAdmin || (isCoordinator && canDesk)) ? 'Registrations & Approvals' : 'Event Registrations',
       icon: ClipboardCheck,
       show: true,
-      badge: (isAdmin || (isCoordinator && canDesk)) ? 'Desk' : null
+      badge: null
     },
     {
       id: 'pass',
@@ -142,7 +143,7 @@ export default function MobileDrawerNav({
       label: 'Room Scanner',
       icon: ScanLine,
       show: isAdmin || (isCoordinator ? canScan : false),
-      badge: 'Staff'
+      badge: null
     },
   ];
 
@@ -152,18 +153,16 @@ export default function MobileDrawerNav({
     <div className={`fixed inset-0 z-50 md:hidden transition-all duration-300 ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ${
-          isOpen ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'
+          }`}
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Drawer Panel */}
       <div
-        className={`fixed inset-y-0 right-0 w-1/2 max-w-xs bg-surface-container-lowest border-l border-surface-container text-on-surface shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed inset-y-0 right-0 w-1/2 max-w-xs bg-surface-container-lowest border-l border-surface-container text-on-surface shadow-2xl flex flex-col transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         {/* 1. Header with App Info & Close Button */}
         <div className="h-14 px-3 border-b border-surface-container flex items-center justify-between bg-surface-container-low shrink-0">
@@ -224,13 +223,12 @@ export default function MobileDrawerNav({
 
                 {(isAdmin || isCoordinator || isJudge) && (
                   <span
-                    className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7.5px] font-black uppercase shadow-xs border border-surface-container-lowest ${
-                      isAdmin
+                    className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7.5px] font-black uppercase shadow-xs border border-surface-container-lowest ${isAdmin
                         ? 'bg-amber-600 text-white'
                         : isCoordinator
-                        ? 'bg-primary text-on-primary'
-                        : 'bg-purple-600 text-white'
-                    }`}
+                          ? 'bg-primary text-on-primary'
+                          : 'bg-purple-600 text-white'
+                      }`}
                   >
                     {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
                   </span>
@@ -246,15 +244,14 @@ export default function MobileDrawerNav({
                   {profile?.usn || user.email}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
-                  <span className={`px-1 py-0.2 rounded text-[8px] font-bold uppercase tracking-wider truncate ${
-                    isAdmin
+                  <span className={`px-1 py-0.2 rounded text-[8px] font-bold uppercase tracking-wider truncate ${isAdmin
                       ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                       : isCoordinator
-                      ? 'bg-primary/20 text-primary border border-primary/30'
-                      : isJudge
-                      ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30'
-                      : 'bg-surface-container-high text-secondary border border-surface-container'
-                  }`}>
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : isJudge
+                          ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30'
+                          : 'bg-surface-container-high text-secondary border border-surface-container'
+                    }`}>
                     {roleLabel}
                   </span>
                 </div>
@@ -295,11 +292,10 @@ export default function MobileDrawerNav({
                     onClose();
                     onSelectTab(item.id);
                   }}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                    isActive
+                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all ${isActive
                       ? 'bg-surface-container text-primary font-bold border-l-2 border-primary shadow-xs'
                       : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low active:bg-surface-container'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-secondary'}`} />
@@ -307,15 +303,14 @@ export default function MobileDrawerNav({
                   </div>
 
                   {item.badge && (
-                    <span className={`px-1.5 py-0.2 rounded text-[8.5px] font-bold tracking-wider shrink-0 ml-1 ${
-                      isActive
+                    <span className={`px-1.5 py-0.2 rounded text-[8.5px] font-bold tracking-wider shrink-0 ml-1 ${isActive
                         ? 'bg-primary-container text-on-primary'
                         : item.badge === 'Ready'
-                        ? 'bg-tertiary-container text-on-tertiary-container'
-                        : item.badge === 'Waiting'
-                        ? 'bg-surface-container text-secondary'
-                        : 'bg-secondary-container text-on-secondary-container font-mono'
-                    }`}>
+                          ? 'bg-tertiary-container text-on-tertiary-container'
+                          : item.badge === 'Waiting'
+                            ? 'bg-surface-container text-secondary'
+                            : 'bg-secondary-container text-on-secondary-container font-mono'
+                      }`}>
                       {item.badge}
                     </span>
                   )}
