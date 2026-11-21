@@ -849,7 +849,7 @@ export default function App() {
         onToggleAdminTheme={toggleTheme}
         onToggleTheme={toggleTheme}
         showLeaderboard={showLeaderboard}
-        enableThemeToggle={enableThemeToggle}
+        enableThemeToggle={enableThemeToggle && !isCoordinatorUser}
         canScan={effectiveIsAdmin || canCoordinatorScan}
         canTimers={effectiveIsAdmin || canCoordinatorTimers || effectiveIsJudge}
         canDesk={effectiveIsAdmin || canCoordinatorDesk}
@@ -905,8 +905,8 @@ export default function App() {
                 </button>
               )}
 
-              {/* Theme Switch Button (placed to the left of menu button, controlled by enableThemeToggle) */}
-              {enableThemeToggle && (
+              {/* Theme Switch Button (placed to the left of menu button, hidden for coordinators) */}
+              {enableThemeToggle && !isCoordinatorUser && (
                 <ThemeToggleButton
                   isDark={theme === 'dark'}
                   onToggle={toggleTheme}
