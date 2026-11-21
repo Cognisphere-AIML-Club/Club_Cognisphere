@@ -65,6 +65,25 @@ export function useParticipantProfile(user) {
             setNeedsProfileCompletion(false);
           }
         } else {
+          // Document does not exist in 'participants', check fallback 'participents'
+          getDoc(doc(db, 'participents', user.uid)).then((altSnap) => {
+            if (altSnap.exists()) {
+              const altData = altSnap.data();
+              const altQrId = altData.qrId || localStorage.getItem(`club_games_qr_id_${user.uid}`) || `qr_${user.uid.slice(0, 10)}`;
+              const altProfile = {
+                uid: user.uid,
+                qrId: altQrId,
+                ...altData,
+              };
+              setProfile(altProfile);
+              const hasName = Boolean(altData.firstName && altData.firstName.trim().length > 0);
+              const hasUsn = Boolean(altData.usn && validateUSN(altData.usn).valid);
+              const hasMobile = Boolean(altData.mobile && altData.mobile.trim().length === 10);
+              setNeedsProfileCompletion(!hasName || !hasUsn || !hasMobile);
+              setLoading(false);
+            }
+          }).catch(() => {});
+
           // Document does not exist yet
           let existingQrId = null;
           try {

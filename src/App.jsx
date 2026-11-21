@@ -807,7 +807,7 @@ export default function App() {
 
   // If Big Screen / Projector mode is active, render only for staff (Coordinators and Admins)
   // Always renders in crisp, high-contrast projector Light Mode
-  if (showBigScreen && isStaff) {
+  if (showBigScreen && effectiveIsStaff) {
     return (
       <BigScreenView
         activities={activities}

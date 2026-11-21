@@ -49,6 +49,8 @@ import {
   DEFAULT_COORDINATOR_CONFIG,
   subscribeToRolesCollection,
   subscribeToParticipantsCollection,
+  getParticipantDetails,
+  syncCoordinatorDetailsInDatabase,
   setCoordinatorRoleInDatabase,
   addCoordinatorToDatabase,
   removeCoordinatorFromDatabase
@@ -362,12 +364,14 @@ export default function ProfileEditPage({
   }, [effectiveIsAdmin]);
 
   // Pull all coordinators 100% dynamically from the Firestore 'roles' collection.
-  // Name and USN are automatically pulled from the database 'participants' collection.
+  // Name and USN are automatically pulled from the database 'participants' / 'participents' collections.
   const allCoordinators = useMemo(() => {
     const list = [];
 
     rolesFromDb.forEach((r) => {
-      const docEmail = (r.email || r.id || '').trim().toLowerCase();
+      const docEmail = (r.email || (r.id && r.id.includes('@') ? r.id : '')).trim().toLowerCase();
+      const docUid = r.uid || (!r.id?.includes('@') ? r.id : '');
+      const docUsn = (r.usn || '').trim().toUpperCase();
       const rawRole = (r.role || '').toLowerCase();
       const baseRole = (r.baseRole || '').toLowerCase();
       const coordState = r.coordinatorState;
@@ -381,16 +385,34 @@ export default function ProfileEditPage({
 
       if (!isCoord) return;
 
-      // Dynamically resolve Name & USN from database participants collection
-      const p = participantsMap[docEmail] || {};
-      const resolvedName = p.name || r.name || docEmail.split('@')[0];
-      const resolvedUsn = p.usn || (r.usn || '').trim().toUpperCase();
+      // Dynamically resolve Name & USN from database participants collection (keyed by UID, Email, USN)
+      const p = 
+        (docUid && participantsMap[docUid]) ||
+        (docUid && participantsMap[docUid.toLowerCase()]) ||
+        (docEmail && participantsMap[docEmail]) ||
+        (docUsn && participantsMap[docUsn]) ||
+        (r.id && participantsMap[r.id]) ||
+        {};
 
-      // Resolve room and activity
+      const resolvedName = 
+        p.name || 
+        r.name || 
+        (docEmail ? docEmail.split('@')[0] : '') ||
+        docUid ||
+        'Coordinator';
+
+      const resolvedUsn = 
+        p.usn || 
+        docUsn || 
+        '';
+
+      const resolvedEmail = docEmail || p.email || r.email || '';
+
+      // Resolve room and activity safely
       const matchAct = activities.find(
         a => (r.activityId && a.id === r.activityId) ||
-             (r.assignedEvent && (a.id === r.assignedEvent || a.name.toLowerCase() === r.assignedEvent.toLowerCase())) ||
-             (r.assignedRoom && a.room.toLowerCase() === r.assignedRoom.toLowerCase())
+             (r.assignedEvent && (a.id === r.assignedEvent || (a.name && typeof a.name === 'string' && a.name.toLowerCase() === String(r.assignedEvent).toLowerCase()))) ||
+             (r.assignedRoom && (a.room && typeof a.room === 'string' && a.room.toLowerCase() === String(r.assignedRoom).toLowerCase()))
       );
 
       const resolvedActivityId = r.activityId || matchAct?.id || '';
@@ -398,8 +420,9 @@ export default function ProfileEditPage({
       const resolvedRoom = r.assignedRoom || matchAct?.room || '';
 
       list.push({
-        id: r.id || `role_${docEmail}`,
-        email: docEmail,
+        id: r.id || (docEmail ? `role_${docEmail}` : `role_${docUid}`),
+        email: resolvedEmail,
+        uid: docUid,
         name: resolvedName,
         usn: resolvedUsn,
         activityId: resolvedActivityId,
@@ -413,6 +436,31 @@ export default function ProfileEditPage({
 
     return list;
   }, [rolesFromDb, participantsMap, activities]);
+
+  // Auto-sync coordinator Name and USN directly from database if missing or not yet cached
+  useEffect(() => {
+    if (!effectiveIsAdmin || allCoordinators.length === 0) return;
+
+    allCoordinators.forEach(async (coord) => {
+      // If already has both real name and USN, no need to query
+      const isGenericName = !coord.name || coord.name === coord.email?.split('@')[0] || coord.name === coord.uid || coord.name === 'Coordinator';
+      if (!isGenericName && coord.usn) return;
+
+      try {
+        const details = await syncCoordinatorDetailsInDatabase(coord);
+        if (details && (details.name || details.usn)) {
+          setParticipantsMap(prev => ({
+            ...prev,
+            ...(details.uid ? { [details.uid]: details, [details.uid.toLowerCase()]: details } : {}),
+            ...(details.email ? { [details.email]: details } : {}),
+            ...(details.usn ? { [details.usn]: details } : {})
+          }));
+        }
+      } catch (e) {
+        console.warn('Coordinator details sync notice:', e);
+      }
+    });
+  }, [allCoordinators, effectiveIsAdmin]);
 
   // Helper to determine the active state of a coordinator ('coordinator' vs 'participant')
   const getCoordinatorState = (coord, targetConfig = coordinatorConfig) => {
@@ -2100,14 +2148,14 @@ export default function ProfileEditPage({
                       filteredCoordinators.map((coord) => {
                         const isCoordinatorActive = getCoordinatorState(coord, coordinatorModalConfig) === 'coordinator';
 
-                        const resolvedRoom = coord.assignedRoom || activities.find(
+                        const resolvedRoom = coord.assignedRoom || (activities.find(
                           a => (coord.activityId && a.id === coord.activityId) ||
-                               (coord.assignedEvent && (a.id === coord.assignedEvent || a.name.toLowerCase() === coord.assignedEvent.toLowerCase()))
-                        )?.room;
+                               (coord.assignedEvent && (a.id === coord.assignedEvent || (a.name && typeof a.name === 'string' && a.name.toLowerCase() === String(coord.assignedEvent).toLowerCase())))
+                        )?.room) || '';
 
-                        const resolvedEvent = coord.assignedEvent || activities.find(
+                        const resolvedEvent = coord.assignedEvent || (activities.find(
                           a => coord.activityId && a.id === coord.activityId
-                        )?.name;
+                        )?.name) || '';
 
                         return (
                           <div

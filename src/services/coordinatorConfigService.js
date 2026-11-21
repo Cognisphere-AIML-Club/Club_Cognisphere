@@ -1,5 +1,6 @@
 import { 
   doc, 
+  getDoc,
   onSnapshot, 
   setDoc, 
   serverTimestamp, 
@@ -90,10 +91,13 @@ export function subscribeToRolesCollection(callback) {
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
           const docId = docSnap.id;
-          const email = (data.email || docId || '').trim().toLowerCase();
+          const isEmailId = docId.includes('@');
+          const email = (data.email || (isEmailId ? docId : '')).trim().toLowerCase();
+          const uid = data.uid || (!isEmailId ? docId : '');
           roles.push({
             id: docId,
             email,
+            uid,
             ...data
           });
         });
@@ -112,88 +116,281 @@ export function subscribeToRolesCollection(callback) {
 }
 
 /**
- * Real-time listener for the Firestore 'participants' collection.
- * Pulls participant profiles mapped by lowercase email so Name and USN are always fresh from the database.
+ * Real-time listener for Firestore participants collections.
+ * Pulls participant profiles mapped by UID (document ID), lowercase email, and USN
+ * so Name and USN are always fresh and fully resolved from the database.
+ * Supports both 'participants' and 'participents' collections, as well as 'registeredUsns' and 'qrPasses'.
  */
 export function subscribeToParticipantsCollection(callback) {
+  const map = {};
+
+  const processParticipantDoc = (d) => {
+    const data = d.data();
+    const uid = d.id; // The document ID in participants is the user's Auth UID
+    const resolvedName = 
+      data.name || 
+      `${data.firstName || ''} ${data.lastName || ''}`.trim() || 
+      data.displayName || 
+      data.certificateName || 
+      '';
+    const resolvedUsn = (data.usn || '').trim().toUpperCase();
+    const em = (data.email || data.userEmail || '').trim().toLowerCase();
+
+    const item = {
+      uid,
+      name: resolvedName,
+      usn: resolvedUsn,
+      email: em,
+      mobile: data.mobile || '',
+      qrId: data.qrId || ''
+    };
+
+    // Index by UID (both exact case and lower)
+    if (uid) {
+      map[uid] = item;
+      map[uid.toLowerCase()] = item;
+    }
+    // Index by email
+    if (em) {
+      map[em] = item;
+    }
+    // Index by USN
+    if (resolvedUsn) {
+      map[resolvedUsn] = item;
+    }
+  };
+
+  const handleSnapshot = (snapshot) => {
+    snapshot.forEach(processParticipantDoc);
+    callback({ ...map });
+  };
+
+  const unsubs = [];
+
+  // 1. Listen to 'participants' collection
   try {
-    const col = collection(db, 'participants');
-    return onSnapshot(
-      col,
+    const unsubPart = onSnapshot(
+      collection(db, 'participants'),
+      handleSnapshot,
+      (err) => console.warn('participants collection notice:', err?.message)
+    );
+    unsubs.push(unsubPart);
+  } catch (e) {}
+
+  // 2. Listen to 'participents' collection (user's Firestore collection spelling)
+  try {
+    const unsubParticipents = onSnapshot(
+      collection(db, 'participents'),
+      handleSnapshot,
+      (err) => console.warn('participents collection notice:', err?.message)
+    );
+    unsubs.push(unsubParticipents);
+  } catch (e) {}
+
+  // 3. Listen to 'registeredUsns' (links email <-> USN <-> UID)
+  try {
+    const unsubReg = onSnapshot(
+      collection(db, 'registeredUsns'),
       (snapshot) => {
-        const mapByEmail = {};
         snapshot.forEach((d) => {
           const data = d.data();
+          const usn = (data.usn || d.id || '').trim().toUpperCase();
           const em = (data.email || '').trim().toLowerCase();
-          if (em) {
-            const resolvedName = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName || '';
-            const resolvedUsn = (data.usn || '').trim().toUpperCase();
-            mapByEmail[em] = {
-              name: resolvedName,
-              usn: resolvedUsn,
-              mobile: data.mobile || '',
-              uid: d.id
+          const uid = data.uid || '';
+
+          if (uid || em || usn) {
+            const existing = map[uid] || map[em] || map[usn] || {};
+            const merged = {
+              uid: uid || existing.uid || '',
+              name: existing.name || (em ? em.split('@')[0] : ''),
+              usn: usn || existing.usn || '',
+              email: em || existing.email || ''
             };
+            if (uid) map[uid] = { ...(map[uid] || {}), ...merged };
+            if (em) map[em] = { ...(map[em] || {}), ...merged };
+            if (usn) map[usn] = { ...(map[usn] || {}), ...merged };
           }
         });
-        callback(mapByEmail);
+        callback({ ...map });
       },
-      (err) => {
-        console.warn('Participants collection listener notice:', err?.message);
-        callback({});
-      }
+      (err) => console.warn('registeredUsns listener notice:', err?.message)
     );
-  } catch (err) {
-    console.warn('Failed to listen to participants collection:', err);
-    callback({});
-    return () => {};
-  }
+    unsubs.push(unsubReg);
+  } catch (e) {}
+
+  // 4. Listen to 'qrPasses' (links participantId <-> real Name <-> USN)
+  try {
+    const unsubQr = onSnapshot(
+      collection(db, 'qrPasses'),
+      (snapshot) => {
+        snapshot.forEach((d) => {
+          const data = d.data();
+          const uid = data.participantId || '';
+          const name = data.name || '';
+          const usn = (data.usn || '').trim().toUpperCase();
+
+          if (uid && (name || usn)) {
+            const existing = map[uid] || {};
+            const updated = {
+              ...existing,
+              uid,
+              name: name || existing.name || '',
+              usn: usn || existing.usn || ''
+            };
+            map[uid] = updated;
+            if (updated.email) map[updated.email] = updated;
+            if (usn) map[usn] = updated;
+          }
+        });
+        callback({ ...map });
+      },
+      (err) => console.warn('qrPasses listener notice:', err?.message)
+    );
+    unsubs.push(unsubQr);
+  } catch (e) {}
+
+  return () => {
+    unsubs.forEach((u) => {
+      try {
+        if (typeof u === 'function') u();
+      } catch (e) {}
+    });
+  };
 }
 
 /**
- * Look up participant name and USN from the database by email
+ * Look up participant name, USN, and UID from the database.
+ * Supports direct document lookup by UID (document ID in participants / participents)
+ * as well as by Email or USN across collections.
  */
-export async function getParticipantDetailsByEmail(email) {
-  if (!email) return null;
-  const cleanEmail = email.trim().toLowerCase();
+export async function getParticipantDetails({ email, uid, usn } = {}) {
+  const cleanEmail = email ? email.trim().toLowerCase() : '';
+  const cleanUid = uid ? uid.trim() : '';
+  const cleanUsn = usn ? usn.trim().toUpperCase() : '';
 
-  try {
-    // 1. Check participants collection
-    const qPart = query(
-      collection(db, 'participants'),
-      where('email', '==', cleanEmail)
-    );
-    const snapPart = await getDocs(qPart);
-    if (!snapPart.empty) {
-      const data = snapPart.docs[0].data();
-      const resolvedName = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || '';
-      return {
-        name: resolvedName,
-        usn: (data.usn || '').trim().toUpperCase(),
-        mobile: data.mobile || '',
-        uid: snapPart.docs[0].id
-      };
+  // 1. Direct fetch by UID (the document ID in participants / participents)
+  if (cleanUid) {
+    for (const colName of ['participents', 'participants']) {
+      try {
+        const docSnap = await getDoc(doc(db, colName, cleanUid));
+        if (docSnap.exists()) {
+          const d = docSnap.data();
+          const resolvedName = 
+            d.name || 
+            `${d.firstName || ''} ${d.lastName || ''}`.trim() || 
+            d.displayName || 
+            d.certificateName || 
+            '';
+          return {
+            uid: cleanUid,
+            name: resolvedName,
+            usn: (d.usn || '').trim().toUpperCase(),
+            email: (d.email || d.userEmail || cleanEmail).trim().toLowerCase(),
+            mobile: d.mobile || ''
+          };
+        }
+      } catch (e) {}
     }
+  }
 
-    // 2. Fallback check in registeredUsns
-    const qUsn = query(
-      collection(db, 'registeredUsns'),
-      where('email', '==', cleanEmail)
-    );
-    const snapUsn = await getDocs(qUsn);
-    if (!snapUsn.empty) {
-      const data = snapUsn.docs[0].data();
-      return {
-        name: cleanEmail.split('@')[0],
-        usn: (data.usn || '').trim().toUpperCase(),
-        uid: data.uid || ''
-      };
+  // 2. Query registeredUsns (links email to UID & USN)
+  if (cleanEmail) {
+    try {
+      const q = query(collection(db, 'registeredUsns'), where('email', '==', cleanEmail));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const d = snap.docs[0].data();
+        const foundUid = d.uid;
+        const foundUsn = (d.usn || snap.docs[0].id || '').trim().toUpperCase();
+
+        if (foundUid) {
+          // Fetch the full participant profile by the discovered UID
+          const detailed = await getParticipantDetails({ uid: foundUid, email: cleanEmail, usn: foundUsn });
+          if (detailed && detailed.name) return detailed;
+        }
+
+        return {
+          uid: foundUid || '',
+          name: cleanEmail.split('@')[0],
+          usn: foundUsn,
+          email: cleanEmail
+        };
+      }
+    } catch (e) {}
+  }
+
+  // 3. Query participants and participents by email
+  if (cleanEmail) {
+    for (const colName of ['participents', 'participants']) {
+      try {
+        const q = query(collection(db, colName), where('email', '==', cleanEmail));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const docSnap = snap.docs[0];
+          const d = docSnap.data();
+          const resolvedName = 
+            d.name || 
+            `${d.firstName || ''} ${d.lastName || ''}`.trim() || 
+            d.displayName || 
+            '';
+          return {
+            uid: docSnap.id,
+            name: resolvedName,
+            usn: (d.usn || '').trim().toUpperCase(),
+            email: cleanEmail,
+            mobile: d.mobile || ''
+          };
+        }
+      } catch (e) {}
     }
-  } catch (err) {
-    console.warn('Error querying participant by email:', err?.message);
+  }
+
+  // 4. Query qrPasses by participantId (UID)
+  if (cleanUid) {
+    try {
+      const q = query(collection(db, 'qrPasses'), where('participantId', '==', cleanUid));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const d = snap.docs[0].data();
+        return {
+          uid: cleanUid,
+          name: d.name || '',
+          usn: (d.usn || '').trim().toUpperCase(),
+          email: cleanEmail
+        };
+      }
+    } catch (e) {}
+  }
+
+  // 5. In-memory case-insensitive scan of participants and participents collections
+  for (const colName of ['participents', 'participants']) {
+    try {
+      const allSnap = await getDocs(collection(db, colName));
+      for (const d of allSnap.docs) {
+        const data = d.data();
+        const em = (data.email || data.userEmail || '').trim().toLowerCase();
+        const docUsn = (data.usn || '').trim().toUpperCase();
+        if ((cleanEmail && em === cleanEmail) || (cleanUsn && docUsn === cleanUsn)) {
+          return {
+            uid: d.id,
+            name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName || '',
+            usn: docUsn,
+            email: em || cleanEmail,
+            mobile: data.mobile || ''
+          };
+        }
+      }
+    } catch (e) {}
   }
 
   return null;
+}
+
+/**
+ * Backwards compatibility helper
+ */
+export async function getParticipantDetailsByEmail(email) {
+  return getParticipantDetails({ email });
 }
 
 /**
@@ -275,7 +472,7 @@ export async function setCoordinatorRoleInDatabase({ email, usn, id, name, nextS
 
 /**
  * Add a new coordinator directly by Email and store it in Firestore 'roles/{email}'.
- * Automatically pulls their Name and USN from the participants collection in the database.
+ * Automatically pulls their Name, USN, and UID from the participants / participents collection in the database.
  */
 export async function addCoordinatorToDatabase({ email, activityId, assignedEvent, assignedRoom, addedBy }) {
   if (!email || !email.trim()) {
@@ -284,10 +481,11 @@ export async function addCoordinatorToDatabase({ email, activityId, assignedEven
 
   const cleanEmail = email.trim().toLowerCase();
 
-  // Pull name and USN from the database (participants or registeredUsns)
-  const participant = await getParticipantDetailsByEmail(cleanEmail);
+  // Pull name, USN, and UID from the database (participants / participents or registeredUsns)
+  const participant = await getParticipantDetails({ email: cleanEmail });
   const resolvedName = participant?.name || cleanEmail.split('@')[0];
   const resolvedUsn = participant?.usn || '';
+  const resolvedUid = participant?.uid || '';
   const cleanActivityId = activityId && activityId.trim() ? activityId.trim() : '';
   const cleanEvent = assignedEvent && assignedEvent.trim() ? assignedEvent.trim() : '';
   const cleanRoom = assignedRoom && assignedRoom.trim() ? assignedRoom.trim() : '';
@@ -303,6 +501,7 @@ export async function addCoordinatorToDatabase({ email, activityId, assignedEven
       email: cleanEmail,
       name: resolvedName,
       usn: resolvedUsn,
+      ...(resolvedUid ? { uid: resolvedUid } : {}),
       ...(cleanActivityId ? { activityId: cleanActivityId } : {}),
       ...(cleanEvent ? { assignedEvent: cleanEvent } : {}),
       ...(cleanRoom ? { assignedRoom: cleanRoom } : {}),
@@ -318,6 +517,7 @@ export async function addCoordinatorToDatabase({ email, activityId, assignedEven
     [cleanEmail]: 'coordinator'
   };
   if (resolvedUsn) activeUpdates[resolvedUsn] = 'coordinator';
+  if (resolvedUid) activeUpdates[resolvedUid] = 'coordinator';
 
   const cached = getCachedCoordinatorConfig();
   const newActiveStates = { ...(cached.activeStates || {}), ...activeUpdates };
@@ -338,12 +538,38 @@ export async function addCoordinatorToDatabase({ email, activityId, assignedEven
 
   return { 
     email: cleanEmail, 
+    uid: resolvedUid,
     name: resolvedName, 
     usn: resolvedUsn, 
     activityId: cleanActivityId, 
     assignedEvent: cleanEvent, 
     assignedRoom: cleanRoom 
   };
+}
+
+/**
+ * Automatically syncs resolved participant name, USN, and UID to roles in Firestore
+ */
+export async function syncCoordinatorDetailsInDatabase(coord) {
+  const email = (coord.email || (coord.id && coord.id.includes('@') ? coord.id : '')).trim().toLowerCase();
+  const uid = coord.uid || (!coord.id?.includes('@') ? coord.id : '');
+  const docKey = email || uid;
+  if (!docKey) return null;
+
+  const details = await getParticipantDetails({ email, uid, usn: coord.usn });
+  if (details && (details.name || details.usn)) {
+    try {
+      const roleRef = doc(db, 'roles', docKey);
+      await setDoc(roleRef, {
+        ...(details.name ? { name: details.name } : {}),
+        ...(details.usn ? { usn: details.usn } : {}),
+        ...(details.uid ? { uid: details.uid } : {}),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (e) {}
+    return details;
+  }
+  return null;
 }
 
 /**
