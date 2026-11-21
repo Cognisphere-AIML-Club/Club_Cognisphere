@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
+import {
+  ChevronLeft,
+  ChevronRight,
   Home,
-  CalendarDays, 
-  QrCode, 
-  Timer, 
-  ScanLine, 
-  Award, 
-  Tv, 
-  LogOut, 
+  CalendarDays,
+  QrCode,
+  Timer,
+  ScanLine,
+  Award,
+  Tv,
+  LogOut,
   LogIn,
   Sparkles,
   ShieldCheck,
@@ -44,7 +44,7 @@ export const SidebarNav = ({
   onToggleAdminTheme,
   onToggleTheme = onToggleAdminTheme,
   showLeaderboard = true,
-  enableThemeToggle = true,
+  enableThemeToggle = false,
   canScan = true,
   canTimers = true,
   canDesk = true,
@@ -67,7 +67,7 @@ export const SidebarNav = ({
       const next = !prev;
       try {
         localStorage.setItem('club_games_sidebar_collapsed', String(next));
-      } catch (e) {}
+      } catch (e) { }
       return next;
     });
   };
@@ -89,7 +89,8 @@ export const SidebarNav = ({
   // Compute dynamic pass badge: 'Ready', count like '1/3', or null if no QR
   const passBadge = useMemo(() => {
     if (!user || !profile?.qrId) return null;
-    if (isStaff) return 'Ready';
+    // Real status for participants and coordinators; only explicit Admin Mode previews 'Ready'
+    if (isAdmin && !isCoordinator) return 'Ready';
 
     const requestedList = Object.values(userRequests);
     const requestedCount = requestedList.length;
@@ -107,7 +108,7 @@ export const SidebarNav = ({
 
     // Otherwise show ratio e.g. 1/3, 2/3
     return `${approvedCount}/${requestedCount}`;
-  }, [user, profile?.qrId, isStaff, userRequests]);
+  }, [user, profile?.qrId, isAdmin, isCoordinator, userRequests]);
 
   const navItems = [
     {
@@ -129,14 +130,14 @@ export const SidebarNav = ({
       label: 'Leaderboard',
       icon: Trophy,
       show: Boolean(showLeaderboard),
-      badge: 'Live'
+      badge: null
     },
     {
       id: 'registrations',
       label: (isAdmin || (isCoordinator && canDesk)) ? 'Registrations & Approvals' : 'Event Registrations',
       icon: ClipboardCheck,
       show: true,
-      badge: (isAdmin || (isCoordinator && canDesk)) ? 'Desk' : null
+      badge: null
     },
     {
       id: 'pass',
@@ -157,14 +158,14 @@ export const SidebarNav = ({
       label: 'Timers Hub',
       icon: Timer,
       show: isAdmin || (isCoordinator ? canTimers : false) || isJudge,
-      badge: 'Live'
+      badge: null
     },
     {
       id: 'scan',
       label: 'Room Scanner',
       icon: ScanLine,
       show: isAdmin || (isCoordinator ? canScan : false),
-      badge: 'Staff'
+      badge: null
     },
   ];
 
@@ -172,24 +173,22 @@ export const SidebarNav = ({
 
   return (
     <aside
-      className={`hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-300 z-30 select-none border-r ${
-        isCollapsed ? 'w-20' : 'w-64'
-      } bg-surface-container-lowest border-surface-container text-on-surface shadow-xs`}
+      className={`hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-300 z-30 select-none border-r ${isCollapsed ? 'w-20' : 'w-64'
+        } bg-surface-container-lowest border-surface-container text-on-surface shadow-xs`}
     >
       {/* 1. Header with Logo & Brand */}
-      <div className={`h-16 flex items-center border-b border-surface-container px-3.5 transition-all ${
-        isCollapsed ? 'justify-center' : 'justify-between'
-      }`}>
-        <div 
+      <div className={`h-16 flex items-center border-b border-surface-container px-3.5 transition-all ${isCollapsed ? 'justify-center' : 'justify-between'
+        }`}>
+        <div
           onClick={() => onSelectTab('home')}
           className="flex items-center gap-3 cursor-pointer overflow-hidden group"
           title="Cognisphere - AI & Machine Learning Club"
         >
           {/* Logo Squircle Badge */}
           <div className="w-10 h-10 rounded-xl overflow-hidden border border-surface-container-high shadow-xs shrink-0 group-hover:scale-105 transition-transform bg-white/5 flex items-center justify-center p-0.5">
-            <img 
-              src="/cognisphere-emblem.png" 
-              alt="Cognisphere Logo" 
+            <img
+              src="/cognisphere-emblem.png"
+              alt="Cognisphere Logo"
               className="w-full h-full object-contain"
             />
           </div>
@@ -248,13 +247,11 @@ export const SidebarNav = ({
                 onClick={() => onSelectTab(item.id)}
                 title={isCollapsed ? item.label : undefined}
                 aria-label={item.label}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                  isCollapsed ? 'justify-center' : 'justify-between'
-                } ${
-                  isActive
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${isCollapsed ? 'justify-center' : 'justify-between'
+                  } ${isActive
                     ? 'bg-surface-container text-primary border-l-4 border-primary shadow-xs font-bold'
                     : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary' : 'text-secondary'}`} />
@@ -262,15 +259,14 @@ export const SidebarNav = ({
                 </div>
 
                 {!isCollapsed && item.badge && (
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${
-                    isActive 
-                      ? 'bg-primary-container text-on-primary' 
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${isActive
+                      ? 'bg-primary-container text-on-primary'
                       : item.badge === 'Ready'
-                      ? 'bg-tertiary-container text-on-tertiary-container'
-                      : item.badge === 'Waiting'
-                      ? 'bg-surface-container text-secondary'
-                      : 'bg-secondary-container text-on-secondary-container font-mono'
-                  }`}>
+                        ? 'bg-tertiary-container text-on-tertiary-container'
+                        : item.badge === 'Waiting'
+                          ? 'bg-surface-container text-secondary'
+                          : 'bg-secondary-container text-on-secondary-container font-mono'
+                    }`}>
                     {item.badge}
                   </span>
                 )}
@@ -285,9 +281,8 @@ export const SidebarNav = ({
               onClick={() => onLaunchBigScreen('hall')}
               title={isCollapsed ? "Projector Big Screen" : undefined}
               aria-label="Launch Projector Big Screen"
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                isCollapsed ? 'justify-center' : 'justify-start'
-              } bg-primary text-on-primary hover:bg-primary-container border-primary shadow-xs`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${isCollapsed ? 'justify-center' : 'justify-start'
+                } bg-primary text-on-primary hover:bg-primary-container border-primary shadow-xs`}
             >
               <Tv className="w-4 h-4 text-on-primary shrink-0" />
               {!isCollapsed && <span>Projector Screen</span>}
@@ -303,7 +298,7 @@ export const SidebarNav = ({
             {/* Admin Mode Toggle (Only visible for Admins) */}
             {isAdminUser && onToggleAdminMode && (
               !isCollapsed ? (
-                <div 
+                <div
                   onClick={onToggleAdminMode}
                   className="mb-2 p-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-high flex items-center justify-between cursor-pointer transition-all select-none group"
                   title={`Admin Mode: ${adminMode ? 'ON (Administrative Controls Active)' : 'OFF (Participant View)'}`}
@@ -321,9 +316,8 @@ export const SidebarNav = ({
                     <span>Admin Mode</span>
                   </div>
                   <div
-                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
-                      adminMode ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
-                    }`}
+                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${adminMode ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
+                      }`}
                   >
                     <span className="w-4 h-4 rounded-full bg-white shadow-xs block" />
                   </div>
@@ -333,11 +327,10 @@ export const SidebarNav = ({
                   <button
                     type="button"
                     onClick={onToggleAdminMode}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shadow-xs border ${
-                      adminMode 
-                        ? 'bg-primary text-on-primary border-primary' 
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shadow-xs border ${adminMode
+                        ? 'bg-primary text-on-primary border-primary'
                         : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-surface-container-high'
-                    }`}
+                      }`}
                     title={`Admin Mode: ${adminMode ? 'ON' : 'OFF'}`}
                     aria-label="Admin Mode"
                   >
@@ -350,7 +343,7 @@ export const SidebarNav = ({
             {/* Theme Toggle Switch (Controlled by admin enableThemeToggle setting) */}
             {enableThemeToggle && handleToggleTheme && (
               !isCollapsed ? (
-                <div 
+                <div
                   onClick={handleToggleTheme}
                   className="mb-2.5 p-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-high flex items-center justify-between cursor-pointer transition-all select-none group"
                   title={`Switch to ${currentTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
@@ -373,9 +366,8 @@ export const SidebarNav = ({
                     <span>{currentTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
                   </div>
                   <div
-                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
-                      currentTheme === 'dark' ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
-                    }`}
+                    className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${currentTheme === 'dark' ? 'bg-primary justify-end' : 'bg-surface-container-high border border-outline-variant justify-start'
+                      }`}
                   >
                     <span className="w-4 h-4 rounded-full bg-white shadow-xs block" />
                   </div>
@@ -397,11 +389,10 @@ export const SidebarNav = ({
             {/* User Profile Overview */}
             {isCollapsed ? (
               <div className="flex flex-col items-center justify-center w-full">
-                <div 
+                <div
                   onClick={onOpenEditProfile}
-                  className={`cursor-pointer group flex items-center justify-center p-1 rounded-2xl transition-all ${
-                    activeTab === 'profile' ? 'ring-2 ring-primary bg-surface-container' : ''
-                  }`}
+                  className={`cursor-pointer group flex items-center justify-center p-1 rounded-2xl transition-all ${activeTab === 'profile' ? 'ring-2 ring-primary bg-surface-container' : ''
+                    }`}
                   title={`${profile?.name || user.displayName || 'Participant'}${isAdmin || isCoordinator || isJudge ? ` (${roleLabel})` : ''}`}
                 >
                   {/* Avatar with Role Bubble */}
@@ -421,14 +412,13 @@ export const SidebarNav = ({
 
                     {/* Role bubble */}
                     {(isAdmin || isCoordinator || isJudge) && (
-                      <span 
-                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${
-                          isAdmin 
-                            ? 'bg-amber-600 text-white' 
-                            : isCoordinator 
-                            ? 'bg-primary text-on-primary' 
-                            : 'bg-purple-600 text-white'
-                        }`}
+                      <span
+                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${isAdmin
+                            ? 'bg-amber-600 text-white'
+                            : isCoordinator
+                              ? 'bg-primary text-on-primary'
+                              : 'bg-purple-600 text-white'
+                          }`}
                         title={roleLabel}
                       >
                         {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}
@@ -452,11 +442,10 @@ export const SidebarNav = ({
               </div>
             ) : (
               <div className="flex items-center justify-between gap-2.5">
-                <div 
+                <div
                   onClick={onOpenEditProfile}
-                  className={`flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1 p-1.5 rounded-2xl transition-all ${
-                    activeTab === 'profile' ? 'bg-surface-container ring-1 ring-primary/40' : 'hover:bg-surface-container/60'
-                  }`}
+                  className={`flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1 p-1.5 rounded-2xl transition-all ${activeTab === 'profile' ? 'bg-surface-container ring-1 ring-primary/40' : 'hover:bg-surface-container/60'
+                    }`}
                   title="Profile Settings"
                 >
                   {/* Avatar with Role Bubble */}
@@ -476,14 +465,13 @@ export const SidebarNav = ({
 
                     {/* Role bubble */}
                     {(isAdmin || isCoordinator || isJudge) && (
-                      <span 
-                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${
-                          isAdmin 
-                            ? 'bg-amber-600 text-white' 
-                            : isCoordinator 
-                            ? 'bg-primary text-on-primary' 
-                            : 'bg-purple-600 text-white'
-                        }`}
+                      <span
+                        className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black uppercase shadow-xs border-2 border-surface-container-lowest ${isAdmin
+                            ? 'bg-amber-600 text-white'
+                            : isCoordinator
+                              ? 'bg-primary text-on-primary'
+                              : 'bg-purple-600 text-white'
+                          }`}
                         title={roleLabel}
                       >
                         {isAdmin ? 'A' : isCoordinator ? 'C' : 'J'}

@@ -804,7 +804,7 @@ export default function EventLandingPage({
         <div ref={competitionsHeadingRef} className="flex items-center justify-between scroll-mt-24">
           <div>
             <h2 className="text-lg font-bold text-on-surface tracking-tight">Events &amp; Competitions Schedule</h2>
-            <p className="text-xs text-secondary">Browse upcoming club events. The latest event is expanded by default.</p>
+            <p className="text-xs text-secondary">Browse upcoming club events.</p>
           </div>
 
           {isAdmin && (
@@ -832,7 +832,7 @@ export default function EventLandingPage({
 
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-primary font-mono border border-surface-container-high">
                   <Calendar className="w-3.5 h-3.5 text-primary" />
-                  <span>Nov 24 – 26, 2026 (3 Days)</span>
+                  <span>Nov 24 – 26, 2026</span>
                 </span>
 
                 <span className="text-xs text-secondary font-semibold">

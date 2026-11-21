@@ -287,6 +287,7 @@ export default function GameDetailPage({
   activity,
   isAdmin,
   isStaff,
+  isCoordinator = false,
   role,
   roleData,
   user,
@@ -318,7 +319,8 @@ export default function GameDetailPage({
   const guide = activity.guide || GAME_GUIDES[activity.id] || null;
 
   const request = userRequests[activity.id];
-  const isApproved = isStaff || request?.status === 'approved';
+  // Coordinators have NO testing bypass modes: only genuinely approved passes are approved
+  const isApproved = Boolean(request?.status === 'approved' || (isAdmin && !isCoordinator));
   const isPending = request?.status === 'pending';
   const isRejected = request?.status === 'rejected';
 

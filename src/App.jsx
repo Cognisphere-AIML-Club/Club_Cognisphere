@@ -369,13 +369,13 @@ export default function App() {
     }
   });
 
-  // Navigation Theme Switcher Visibility State (Admin controlled via passConfig)
+  // Navigation Theme Switcher Visibility State (Admin controlled via passConfig, default FALSE to hide)
   const [enableThemeToggle, setEnableThemeToggle] = useState(() => {
     try {
       const cached = localStorage.getItem('cognisphere_pass_config');
-      return cached ? JSON.parse(cached).enableThemeToggle ?? true : true;
+      return cached ? Boolean(JSON.parse(cached).enableThemeToggle === true) : false;
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -389,6 +389,8 @@ export default function App() {
       }
       if (cfg && typeof cfg.enableThemeToggle === 'boolean') {
         setEnableThemeToggle(cfg.enableThemeToggle);
+      } else {
+        setEnableThemeToggle(false);
       }
     });
     return () => unsub();
@@ -1007,6 +1009,7 @@ export default function App() {
                     activity={activities.find(a => a.id === selectedGame.id) || selectedGame}
                     isAdmin={effectiveIsAdmin}
                     isStaff={effectiveIsStaff}
+                    isCoordinator={effectiveIsCoordinator}
                     role={effectiveRole}
                     roleData={roleData}
                     user={user}
@@ -1074,8 +1077,9 @@ export default function App() {
                   <ParticipantPass
                     profile={profile}
                     user={user}
-                    isStaff={effectiveIsStaff}
+                    isCoordinator={effectiveIsCoordinator}
                     isAdmin={effectiveIsAdmin}
+                    isStaff={false}
                     activities={activities}
                     initialActivityId={selectedPassGameId}
                     onEditProfile={() => navigateToTab('profile')}

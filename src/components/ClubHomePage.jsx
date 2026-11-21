@@ -336,8 +336,8 @@ export default function ClubHomePage({
                 const shortHref = short.platform === 'instagram'
                   ? (deviceLinks.isMobile ? getInstagramLinkHref(short.link) : short.link)
                   : (deviceLinks.isMobile && isAndroid()
-                      ? `intent://www.youtube.com#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(short.link)};end`
-                      : short.link);
+                    ? `intent://www.youtube.com#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(short.link)};end`
+                    : short.link);
                 return (
                   <a
                     key={idx}
@@ -346,46 +346,46 @@ export default function ClubHomePage({
                     rel={deviceLinks.isMobile ? undefined : 'noopener noreferrer'}
                     className="group relative rounded-2xl overflow-hidden border border-surface-container bg-surface-container-lowest hover:border-primary/50 transition-all duration-300 shadow-xs flex flex-col aspect-[9/14] cursor-pointer"
                   >
-                  {/* Visual Poster / Thumbnail */}
-                  <div className="relative flex-1 bg-gradient-to-b from-slate-800 to-slate-950 overflow-hidden flex items-center justify-center p-4">
-                    <div className={`absolute inset-0 bg-gradient-to-br ${short.gradient} transition-transform duration-500 group-hover:scale-105`} />
+                    {/* Visual Poster / Thumbnail */}
+                    <div className="relative flex-1 bg-gradient-to-b from-slate-800 to-slate-950 overflow-hidden flex items-center justify-center p-4">
+                      <div className={`absolute inset-0 bg-gradient-to-br ${short.gradient} transition-transform duration-500 group-hover:scale-105`} />
 
-                    {/* Subtle decorative badge */}
-                    <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/50 backdrop-blur-md border border-white/10 text-[10px] font-medium text-white/80">
-                      {short.tag}
+                      {/* Subtle decorative badge */}
+                      <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/50 backdrop-blur-md border border-white/10 text-[10px] font-medium text-white/80">
+                        {short.tag}
+                      </div>
+
+                      {/* Center Play Icon Badge */}
+                      <div className="relative z-10 w-11 h-11 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-transform duration-300 group-hover:scale-110 shadow-lg">
+                        <Play className="w-4 h-4 ml-0.5 fill-current text-white" />
+                      </div>
+
+                      {/* Gradient Scrim */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                     </div>
 
-                    {/* Center Play Icon Badge */}
-                    <div className="relative z-10 w-11 h-11 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-transform duration-300 group-hover:scale-110 shadow-lg">
-                      <Play className="w-4 h-4 ml-0.5 fill-current text-white" />
+                    {/* Card Info at Bottom */}
+                    <div className="p-3 bg-surface-container-lowest border-t border-surface-container flex flex-col justify-between">
+                      <h4 className="text-xs sm:text-sm font-bold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
+                        {short.title}
+                      </h4>
+                      <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-secondary">
+                        {short.platform === 'youtube' ? (
+                          <>
+                            <Youtube className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            <span className="truncate">Short · Opens on YouTube ↗</span>
+                          </>
+                        ) : (
+                          <>
+                            <Instagram className="w-3.5 h-3.5 text-pink-500 shrink-0" />
+                            <span className="truncate">{short.type} · Opens on Instagram ↗</span>
+                          </>
+                        )}
+                      </div>
                     </div>
-
-                    {/* Gradient Scrim */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                  </div>
-
-                  {/* Card Info at Bottom */}
-                  <div className="p-3 bg-surface-container-lowest border-t border-surface-container flex flex-col justify-between">
-                    <h4 className="text-xs sm:text-sm font-bold text-on-surface line-clamp-1 group-hover:text-primary transition-colors">
-                      {short.title}
-                    </h4>
-                    <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-secondary">
-                      {short.platform === 'youtube' ? (
-                        <>
-                          <Youtube className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                          <span className="truncate">Short · Opens on YouTube ↗</span>
-                        </>
-                      ) : (
-                        <>
-                          <Instagram className="w-3.5 h-3.5 text-pink-500 shrink-0" />
-                          <span className="truncate">{short.type} · Opens on Instagram ↗</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
+                  </a>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -488,7 +488,7 @@ export default function ClubHomePage({
               </div>
               <div>
                 <span className="text-[11px] font-bold text-secondary uppercase tracking-wider block">Phone Contact</span>
-                <span className="text-xs font-bold text-on-surface">Direct Coordinator Line</span>
+                <span className="text-xs font-bold text-on-surface">Technical Head</span>
               </div>
             </div>
             <div className="pt-2 border-t border-surface-container/60 flex items-center justify-between flex-wrap gap-2">

@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { ACTIVITIES } from '../data/activities';
 import JudgeTimer from './JudgeTimer';
 
-export default function TimersHub({ 
-  activities = ACTIVITIES, 
-  role, 
-  roleData, 
-  user, 
+export default function TimersHub({
+  activities = ACTIVITIES,
+  role,
+  roleData,
+  user,
   isAdmin = false,
   assignedActivityId = null,
-  onOpenBigScreen 
+  onOpenBigScreen
 }) {
   const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
   const isCoordinator = role === 'coordinator';
@@ -29,11 +29,11 @@ export default function TimersHub({
   }, [isLockedToAssigned, assignedActivityId]);
 
   const selectedActivity = allActivities.find(a => a.id === selectedActivityId) || allActivities[0];
-  
+
   // Can control ONLY if admin OR if coordinator assigned to this activity
   const canControl = isAdmin || (isCoordinator && (!assignedActivityId || selectedActivityId === assignedActivityId));
 
-  const visibleActivities = isLockedToAssigned 
+  const visibleActivities = isLockedToAssigned
     ? allActivities.filter(a => a.id === assignedActivityId)
     : allActivities;
 
@@ -49,11 +49,10 @@ export default function TimersHub({
             <button
               key={act.id}
               onClick={() => setSelectedActivityId(act.id)}
-              className={`p-3 rounded-2xl text-left transition-all border flex flex-col justify-between ${
-                isSelected
-                  ? 'bg-primary text-on-primary font-bold border-primary shadow-xs'
-                  : 'bg-surface-container-lowest hover:bg-surface-container-low border-surface-container text-on-surface'
-              }`}
+              className={`p-3 rounded-2xl text-left transition-all border flex flex-col justify-between ${isSelected
+                ? 'bg-primary text-on-primary font-bold border-primary shadow-xs'
+                : 'bg-surface-container-lowest hover:bg-surface-container-low border-surface-container text-on-surface'
+                }`}
             >
               <div className="text-xs truncate font-bold">{act.name}</div>
               <div className={`text-[10px] truncate font-medium mt-0.5 ${isSelected ? 'text-on-primary/80' : 'text-secondary'}`}>
@@ -63,13 +62,7 @@ export default function TimersHub({
                 <span className={`font-mono truncate ${isSelected ? 'text-on-primary font-bold' : 'text-secondary'}`}>
                   {act.room}
                 </span>
-                {userCanControlThis && (
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-bold ${
-                    isSelected ? 'bg-surface-container-lowest/20 text-on-primary' : 'bg-surface-container text-primary'
-                  }`}>
-                    {isLockedToAssigned ? 'Assigned' : 'Coord'}
-                  </span>
-                )}
+                {userCanControlThis}
               </div>
             </button>
           );

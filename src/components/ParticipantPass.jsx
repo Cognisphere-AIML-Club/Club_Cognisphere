@@ -36,11 +36,16 @@ export default function ParticipantPass({
   onGoToEvents,
   initialActivityId = null, 
   user = null, 
-  isStaff = false,
+  isCoordinator = false,
   isAdmin = false,
+  isStaff = false,
   activities = ACTIVITIES
 }) {
   const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
+
+  // Strict rule: Testing bypass is only available to Admin in explicit Admin Mode.
+  // Coordinators are participants and MUST NEVER have testing bypass modes.
+  const hasAdminBypass = Boolean(isAdmin && !isCoordinator);
 
   const [userRequests, setUserRequests] = useState({});
   const [userAttendance, setUserAttendance] = useState({});
@@ -74,11 +79,11 @@ export default function ParticipantPass({
   const dismissedIds = Array.isArray(passConfig.panelDismissedActivityIds) ? passConfig.panelDismissedActivityIds : [];
   const visibleActivities = allActivities.filter(a => !hiddenIds.includes(a.id) && !dismissedIds.includes(a.id));
 
-  // Selection dropdown displays all activities where participant has an approved pass (ALWAYS accessible!),
-  // plus requested pending passes that are visible.
-  // Staff/Admins can preview all enabled activities for testing.
+  // Selection dropdown displays ONLY activities where participant has registered
+  // (approved passes are ALWAYS accessible, pending passes are displayed while awaiting approval).
+  // Coordinators have NO testing bypass modes and see strictly their registered events.
   const displayActivities = allActivities.filter(act => {
-    if (isStaff) return !hiddenIds.includes(act.id) && !dismissedIds.includes(act.id);
+    if (hasAdminBypass) return !hiddenIds.includes(act.id) && !dismissedIds.includes(act.id);
     const req = userRequests[act.id];
     // APPROVED passes are ALWAYS displayed for the attendee
     if (req?.status === 'approved') return true;
@@ -165,12 +170,12 @@ export default function ParticipantPass({
 
   const displayName = profile?.name || `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || user?.displayName || 'Participant';
 
-  // Request status for this game
+  // Request status for this game (Coordinators must be genuinely approved, no bypass)
   const request = currentActivity?.id ? userRequests[currentActivity.id] : null;
-  const isApproved = Boolean(isStaff || request?.status === 'approved');
-  const isPending = Boolean(!isStaff && request?.status === 'pending');
-  const isRejected = Boolean(!isStaff && request?.status === 'rejected');
-  const isUnrequested = Boolean(!request && !isStaff);
+  const isApproved = Boolean(request?.status === 'approved' || (hasAdminBypass && !request));
+  const isPending = Boolean(!hasAdminBypass && request?.status === 'pending');
+  const isRejected = Boolean(!hasAdminBypass && request?.status === 'rejected');
+  const isUnrequested = Boolean(!request && !hasAdminBypass);
 
   // Attendance status for this game
   const attendanceRecord = currentActivity?.id ? userAttendance[currentActivity.id] : null;
@@ -615,7 +620,7 @@ export default function ParticipantPass({
                   >
                     {displayActivities.map((act) => {
                       const actReq = userRequests[act.id];
-                      const actApproved = isStaff || actReq?.status === 'approved';
+                      const actApproved = actReq?.status === 'approved' || (hasAdminBypass && !actReq);
                       const actPending = actReq?.status === 'pending';
                       const actDate = act.eventDate || '2026-11-24';
                       const statusLabel = actApproved ? '✓ Approved' : actPending ? '⏳ Pending' : 'Locked';
@@ -796,10 +801,10 @@ export default function ParticipantPass({
                     {currentActivity?.name}
                   </h4>
                   <p className="text-xs text-on-surface-variant leading-relaxed">
-                    {isStaff ? 'Staff Preview: Pass is unrequested.' : 'You have not registered for this event yet. Visit the Events Hub to request participation.'}
+                    {hasAdminBypass ? 'Admin Preview: Pass is unrequested.' : 'You have not registered for this event yet. Visit the Events Hub to request participation.'}
                   </p>
                 </div>
-                {onGoToEvents && !isStaff && (
+                {onGoToEvents && !hasAdminBypass && (
                   <button
                     onClick={onGoToEvents}
                     className="py-2.5 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs inline-flex items-center gap-2 shadow-xs transition"
@@ -849,10 +854,10 @@ export default function ParticipantPass({
             </button>
           </div>
 
-              {/* Staff Preview Banner */}
-              {isStaff && (
+              {/* Admin Preview Banner — ONLY shown when Admin is in preview testing, NEVER for coordinators */}
+              {hasAdminBypass && (
                 <div className="p-3 rounded-2xl bg-surface-container border border-surface-container-high text-center text-xs text-primary font-bold">
-                  Coordinator / Admin View: You have full preview access for verification testing.
+                  Admin Preview Mode: Active for layout verification testing.
                 </div>
               )}
             </>
