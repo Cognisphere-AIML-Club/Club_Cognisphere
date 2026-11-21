@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  User, 
-  ArrowLeft, 
-  CheckCircle2, 
-  AlertCircle, 
-  Lock, 
-  Loader2, 
-  Save, 
-  Mail, 
-  Phone, 
-  Shield, 
+import {
+  User,
+  ArrowLeft,
+  CheckCircle2,
+  AlertCircle,
+  Lock,
+  Loader2,
+  Save,
+  Mail,
+  Phone,
+  Shield,
   Award,
   Calendar,
   Building,
@@ -29,12 +29,30 @@ import {
   Eye,
   EyeOff,
   Plus,
-  Video
+  Video,
+  Sun,
+  Moon,
+  Users,
+  ScanLine,
+  Timer,
+  Tv,
+  ClipboardCheck,
+  UserPlus
 } from 'lucide-react';
 import { validateUSN } from '../hooks/useParticipantProfile';
 import { subscribeToPassConfig, updatePassConfig } from '../services/passApprovalService';
-import { ThemeToggleButton } from './ThemeToggleButton';
 import { ACTIVITIES } from '../data/activities';
+import {
+  subscribeToCoordinatorConfig,
+  updateCoordinatorConfig,
+  getCachedCoordinatorConfig,
+  DEFAULT_COORDINATOR_CONFIG,
+  subscribeToRolesCollection,
+  subscribeToParticipantsCollection,
+  setCoordinatorRoleInDatabase,
+  addCoordinatorToDatabase,
+  removeCoordinatorFromDatabase
+} from '../services/coordinatorConfigService';
 
 // Helper to decode branch and batch year from VTU/college USN (e.g. 1ST24AI045)
 function parseUsnMetadata(rawUsn) {
@@ -67,17 +85,19 @@ function parseUsnMetadata(rawUsn) {
   };
 }
 
-export default function ProfileEditPage({ 
-  user, 
-  profile, 
-  onSave, 
-  onBack, 
+export default function ProfileEditPage({
+  user,
+  profile,
+  onSave,
+  onBack,
   onNavigate,
   onDirtyChange,
   pendingExitTab,
   onCancelExit,
   role = 'participant',
   isAdmin = false,
+  adminMode = false,
+  onToggleAdminMode,
   activities = ACTIVITIES,
   theme = 'light',
   onToggleTheme
@@ -95,9 +115,9 @@ export default function ProfileEditPage({
   const [passConfig, setPassConfig] = useState(() => {
     try {
       const cached = localStorage.getItem('cognisphere_pass_config');
-      return cached ? JSON.parse(cached) : { hidePassAfterAttendance: true };
+      return cached ? JSON.parse(cached) : { hidePassAfterAttendance: true, enableThemeToggle: true };
     } catch (e) {
-      return { hidePassAfterAttendance: true };
+      return { hidePassAfterAttendance: true, enableThemeToggle: true };
     }
   });
 
@@ -108,7 +128,7 @@ export default function ProfileEditPage({
         setPassConfig(cfg);
         try {
           localStorage.setItem('cognisphere_pass_config', JSON.stringify(cfg));
-        } catch (e) {}
+        } catch (e) { }
       }
     });
     return () => unsub();
@@ -117,10 +137,23 @@ export default function ProfileEditPage({
   const hidePassAfterAttendance = passConfig.hidePassAfterAttendance ?? true;
   const showLeaderboard = passConfig.showLeaderboard ?? true;
   const showVideoShowcase = passConfig.showVideoShowcase ?? false;
+  const enableThemeToggle = passConfig.enableThemeToggle ?? true;
 
   const handleToggleHidePassAfterAttendance = async () => {
     const nextVal = !hidePassAfterAttendance;
     const updated = { ...passConfig, hidePassAfterAttendance: nextVal };
+    setPassConfig(updated);
+    try {
+      localStorage.setItem('cognisphere_pass_config', JSON.stringify(updated));
+      await updatePassConfig(updated, user?.email || 'admin');
+    } catch (err) {
+      console.warn('Failed to update passConfig:', err);
+    }
+  };
+
+  const handleToggleEnableThemeToggle = async () => {
+    const nextVal = !enableThemeToggle;
+    const updated = { ...passConfig, enableThemeToggle: nextVal };
     setPassConfig(updated);
     try {
       localStorage.setItem('cognisphere_pass_config', JSON.stringify(updated));
@@ -253,7 +286,7 @@ export default function ProfileEditPage({
       setPassConfig(modalConfig);
       try {
         localStorage.setItem('cognisphere_pass_config', JSON.stringify(modalConfig));
-      } catch (err) {}
+      } catch (err) { }
       setShowConfigModal(false);
     } catch (err) {
       alert(err.message || 'Failed to save pass layout settings');
@@ -273,12 +306,270 @@ export default function ProfileEditPage({
       setShowSearchDropdown(false);
       try {
         localStorage.setItem('cognisphere_pass_config', JSON.stringify(DEFAULT_PASS_CONFIG));
-      } catch (err) {}
+      } catch (err) { }
       setShowConfigModal(false);
     } catch (err) {
       alert(err.message || 'Failed to reset settings');
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  // Coordinator Permissions & Access Controls Modal State (for Admin)
+  const [coordinatorConfig, setCoordinatorConfig] = useState(getCachedCoordinatorConfig);
+  const [showCoordinatorModal, setShowCoordinatorModal] = useState(false);
+  const [coordinatorModalConfig, setCoordinatorModalConfig] = useState(coordinatorConfig);
+  const [coordinatorSearchQuery, setCoordinatorSearchQuery] = useState('');
+  const [savingCoordinatorConfig, setSavingCoordinatorConfig] = useState(false);
+  const [rolesFromDb, setRolesFromDb] = useState([]);
+  const [participantsMap, setParticipantsMap] = useState({});
+
+  // Add Coordinator form inputs (Email only, Name and USN pulled automatically from DB)
+  const [showAddCoordinatorForm, setShowAddCoordinatorForm] = useState(false);
+  const [newCoordEmail, setNewCoordEmail] = useState('');
+  const [newCoordEvent, setNewCoordEvent] = useState('');
+  const [isAddingCoordinator, setIsAddingCoordinator] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeToCoordinatorConfig((cfg) => {
+      if (cfg) {
+        setCoordinatorConfig(cfg);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Real-time listener for Firestore roles collection (Admin exclusive)
+  useEffect(() => {
+    if (effectiveIsAdmin) {
+      const unsub = subscribeToRolesCollection((roles) => {
+        if (roles && Array.isArray(roles)) {
+          setRolesFromDb(roles);
+        }
+      });
+      return () => unsub && unsub();
+    }
+  }, [effectiveIsAdmin]);
+
+  // Real-time listener for Firestore participants collection to resolve Name & USN directly from DB
+  useEffect(() => {
+    if (effectiveIsAdmin) {
+      const unsub = subscribeToParticipantsCollection((map) => {
+        if (map) setParticipantsMap(map);
+      });
+      return () => unsub && unsub();
+    }
+  }, [effectiveIsAdmin]);
+
+  // Pull all coordinators 100% dynamically from the Firestore 'roles' collection.
+  // Name and USN are automatically pulled from the database 'participants' collection.
+  const allCoordinators = useMemo(() => {
+    const list = [];
+
+    rolesFromDb.forEach((r) => {
+      const docEmail = (r.email || r.id || '').trim().toLowerCase();
+      const rawRole = (r.role || '').toLowerCase();
+      const baseRole = (r.baseRole || '').toLowerCase();
+      const coordState = r.coordinatorState;
+
+      // Identify whether this role document is a coordinator
+      const isCoord = 
+        rawRole === 'coordinator' || 
+        baseRole === 'coordinator' || 
+        coordState !== undefined ||
+        r.isCoordinator === true;
+
+      if (!isCoord) return;
+
+      // Dynamically resolve Name & USN from database participants collection
+      const p = participantsMap[docEmail] || {};
+      const resolvedName = p.name || r.name || docEmail.split('@')[0];
+      const resolvedUsn = p.usn || (r.usn || '').trim().toUpperCase();
+
+      // Resolve room and activity
+      const matchAct = activities.find(
+        a => (r.activityId && a.id === r.activityId) ||
+             (r.assignedEvent && (a.id === r.assignedEvent || a.name.toLowerCase() === r.assignedEvent.toLowerCase())) ||
+             (r.assignedRoom && a.room.toLowerCase() === r.assignedRoom.toLowerCase())
+      );
+
+      const resolvedActivityId = r.activityId || matchAct?.id || '';
+      const resolvedEvent = r.assignedEvent || matchAct?.name || '';
+      const resolvedRoom = r.assignedRoom || matchAct?.room || '';
+
+      list.push({
+        id: r.id || `role_${docEmail}`,
+        email: docEmail,
+        name: resolvedName,
+        usn: resolvedUsn,
+        activityId: resolvedActivityId,
+        assignedEvent: resolvedEvent,
+        assignedRoom: resolvedRoom,
+        firestoreRole: rawRole,
+        coordinatorState: coordState || rawRole,
+        fromDb: true
+      });
+    });
+
+    return list;
+  }, [rolesFromDb, participantsMap, activities]);
+
+  // Helper to determine the active state of a coordinator ('coordinator' vs 'participant')
+  const getCoordinatorState = (coord, targetConfig = coordinatorConfig) => {
+    const states = targetConfig?.activeStates || {};
+    const normEmail = coord.email ? coord.email.trim().toLowerCase() : '';
+    const normUsn = coord.usn ? coord.usn.trim().toUpperCase() : '';
+    const coordId = coord.id;
+
+    if (normEmail && states[normEmail] !== undefined) return states[normEmail];
+    if (normUsn && states[normUsn] !== undefined) return states[normUsn];
+    if (coordId && states[coordId] !== undefined) return states[coordId];
+
+    if (coord.coordinatorState) return coord.coordinatorState;
+    if (coord.firestoreRole) return coord.firestoreRole;
+
+    return 'coordinator';
+  };
+
+  const handleToggleCoordinatorPermission = (permKey) => {
+    setCoordinatorModalConfig(prev => ({
+      ...prev,
+      permissions: {
+        ...(prev.permissions || {}),
+        [permKey]: !(prev.permissions?.[permKey] ?? true)
+      }
+    }));
+  };
+
+  // Immediate toggle of coordinator state in both UI and Firestore DB
+  const handleToggleCoordinatorState = async (coord) => {
+    const currentState = getCoordinatorState(coord, coordinatorModalConfig);
+    const nextState = currentState === 'coordinator' ? 'participant' : 'coordinator';
+
+    // 1. Optimistic update
+    const normEmail = coord.email ? coord.email.trim().toLowerCase() : '';
+    const normUsn = coord.usn ? coord.usn.trim().toUpperCase() : '';
+    const coordId = coord.id;
+
+    const newActiveStates = { ...(coordinatorModalConfig.activeStates || {}) };
+    if (normEmail) newActiveStates[normEmail] = nextState;
+    if (normUsn) newActiveStates[normUsn] = nextState;
+    if (coordId) newActiveStates[coordId] = nextState;
+
+    setCoordinatorModalConfig(prev => ({
+      ...prev,
+      activeStates: newActiveStates
+    }));
+    setCoordinatorConfig(prev => ({
+      ...prev,
+      activeStates: newActiveStates
+    }));
+
+    // 2. Immediate persist to Firestore roles and settings
+    try {
+      await setCoordinatorRoleInDatabase({
+        email: normEmail,
+        usn: normUsn,
+        id: coordId,
+        name: coord.name,
+        nextState,
+        updatedBy: user?.email || 'admin'
+      });
+
+      const label = coord.name || normEmail || 'Coordinator';
+      setSuccessToast(`${label} is now in ${nextState === 'coordinator' ? 'Coordinator Mode' : 'Participant Mode'}`);
+      setTimeout(() => setSuccessToast(''), 3500);
+    } catch (err) {
+      console.error('Failed to toggle coordinator state:', err);
+      alert('Could not update coordinator state in database: ' + err.message);
+    }
+  };
+
+  const handleCreateCoordinator = async (e) => {
+    if (e) e.preventDefault();
+    if (!newCoordEmail.trim()) {
+      alert('Please enter a valid email address for the coordinator.');
+      return;
+    }
+    const selectedAct = activities.find(a => a.id === newCoordEvent);
+    try {
+      setIsAddingCoordinator(true);
+      const res = await addCoordinatorToDatabase({
+        email: newCoordEmail,
+        activityId: selectedAct?.id || '',
+        assignedEvent: selectedAct?.name || '',
+        assignedRoom: selectedAct?.room || '',
+        addedBy: user?.email || 'admin'
+      });
+
+      const nameInfo = res.name ? ` (${res.name})` : '';
+      const roomInfo = selectedAct ? ` for ${selectedAct.room} • ${selectedAct.name}` : '';
+      setSuccessToast(`Coordinator ${newCoordEmail}${nameInfo} registered${roomInfo}!`);
+      setTimeout(() => setSuccessToast(''), 4000);
+      setNewCoordEmail('');
+      setNewCoordEvent('');
+      setShowAddCoordinatorForm(false);
+    } catch (err) {
+      console.error('Failed to add coordinator:', err);
+      alert('Error adding coordinator: ' + err.message);
+    } finally {
+      setIsAddingCoordinator(false);
+    }
+  };
+
+  const handleDeleteCoordinator = async (coord) => {
+    if (!coord?.email) return;
+    if (!window.confirm(`Are you sure you want to remove coordinator access for ${coord.name || coord.email}?`)) {
+      return;
+    }
+    try {
+      await removeCoordinatorFromDatabase(coord.email, user?.email || 'admin');
+      setSuccessToast(`${coord.name || coord.email} removed from coordinators.`);
+      setTimeout(() => setSuccessToast(''), 3500);
+    } catch (err) {
+      console.error('Failed to remove coordinator:', err);
+      alert('Could not remove coordinator: ' + err.message);
+    }
+  };
+
+  const filteredCoordinators = useMemo(() => {
+    if (!coordinatorSearchQuery.trim()) return allCoordinators;
+    const q = coordinatorSearchQuery.toLowerCase().trim();
+    return allCoordinators.filter(c => 
+      (c.name || '').toLowerCase().includes(q) || 
+      (c.usn || '').toLowerCase().includes(q) || 
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.assignedEvent || '').toLowerCase().includes(q)
+    );
+  }, [allCoordinators, coordinatorSearchQuery]);
+
+  const activeCoordinatorsCount = useMemo(() => {
+    return allCoordinators.filter(c => {
+      const state = getCoordinatorState(c, coordinatorConfig);
+      return state === 'coordinator';
+    }).length;
+  }, [allCoordinators, coordinatorConfig]);
+
+  const handleSaveCoordinatorConfig = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      setSavingCoordinatorConfig(true);
+      await updateCoordinatorConfig(coordinatorModalConfig, user?.email || 'admin');
+      setCoordinatorConfig(coordinatorModalConfig);
+      setShowCoordinatorModal(false);
+      setSuccessToast('Coordinator permissions saved successfully!');
+      setTimeout(() => setSuccessToast(''), 4000);
+    } catch (err) {
+      console.error('Failed to update coordinator config:', err);
+      alert(err.message || 'Failed to update coordinator settings');
+    } finally {
+      setSavingCoordinatorConfig(false);
+    }
+  };
+
+  const handleResetCoordinatorConfig = () => {
+    if (window.confirm('Reset all coordinator permissions and active states to default?')) {
+      setCoordinatorModalConfig(DEFAULT_COORDINATOR_CONFIG);
     }
   };
 
@@ -321,7 +612,7 @@ export default function ProfileEditPage({
     if (profile) {
       if (profile.firstName) initialF = profile.firstName;
       if (profile.lastName) initialL = profile.lastName;
-      
+
       const certName = profile.certificateName || profile.name || '';
       if (certName) {
         initialCert = certName;
@@ -709,8 +1000,8 @@ export default function ProfileEditPage({
             <CheckCircle2 className="w-4 h-4 shrink-0 text-white" />
             <span>{successToast}</span>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setSuccessToast('')}
             className="text-white hover:opacity-80 px-2 py-0.5"
           >
@@ -755,11 +1046,10 @@ export default function ProfileEditPage({
                   value={firstName}
                   onBlur={() => setTouched(prev => ({ ...prev, firstName: true }))}
                   onChange={handleFirstNameChange}
-                  className={`w-full bg-surface-container-low rounded-xl py-2.5 px-3.5 text-sm text-on-surface placeholder-secondary focus:outline-none transition-all border ${
-                    showFirstNameError 
-                      ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20' 
+                  className={`w-full bg-surface-container-low rounded-xl py-2.5 px-3.5 text-sm text-on-surface placeholder-secondary focus:outline-none transition-all border ${showFirstNameError
+                      ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
                       : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
-                  }`}
+                    }`}
                 />
                 <p className="text-[11px] text-secondary mt-1">Ex: Sachin</p>
                 {showFirstNameError && (
@@ -797,11 +1087,10 @@ export default function ProfileEditPage({
                 value={certificateName}
                 onBlur={() => setTouched(prev => ({ ...prev, certificateName: true }))}
                 onChange={handleCertificateNameChange}
-                className={`w-full bg-surface-container-low rounded-xl py-2.5 px-3.5 text-sm font-semibold text-on-surface placeholder-secondary focus:outline-none transition-all border ${
-                  showCertNameError 
-                    ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20' 
+                className={`w-full bg-surface-container-low rounded-xl py-2.5 px-3.5 text-sm font-semibold text-on-surface placeholder-secondary focus:outline-none transition-all border ${showCertNameError
+                    ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
                     : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
-                }`}
+                  }`}
               />
               <p className="text-[11px] text-secondary mt-1">
                 How would you like your name to appear on certificates?
@@ -838,9 +1127,8 @@ export default function ProfileEditPage({
               </label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1 flex items-center">
-                  <span className={`absolute left-3 text-xs font-medium border-r pr-2.5 transition-colors ${
-                    showMobileError ? 'text-error border-error/50' : 'text-secondary border-surface-container'
-                  }`}>
+                  <span className={`absolute left-3 text-xs font-medium border-r pr-2.5 transition-colors ${showMobileError ? 'text-error border-error/50' : 'text-secondary border-surface-container'
+                    }`}>
                     IN &bull; +91
                   </span>
                   <input
@@ -851,11 +1139,10 @@ export default function ProfileEditPage({
                     onBlur={() => setTouched(prev => ({ ...prev, mobile: true }))}
                     onChange={handleMobileChange}
                     maxLength={10}
-                    className={`w-full bg-surface-container-low rounded-xl py-2.5 pl-20 pr-3.5 text-sm font-mono text-on-surface placeholder-secondary focus:outline-none transition-all border ${
-                      showMobileError 
-                        ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20' 
+                    className={`w-full bg-surface-container-low rounded-xl py-2.5 pl-20 pr-3.5 text-sm font-mono text-on-surface placeholder-secondary focus:outline-none transition-all border ${showMobileError
+                        ? 'border-error focus:border-error focus:ring-2 focus:ring-error/20'
                         : 'border-surface-container focus:border-primary focus:ring-2 focus:ring-primary/20'
-                    }`}
+                      }`}
                   />
                 </div>
               </div>
@@ -917,13 +1204,12 @@ export default function ProfileEditPage({
                   onBlur={() => !isUsnLocked && setTouched(prev => ({ ...prev, usn: true }))}
                   onChange={handleUsnChange}
                   maxLength={10}
-                  className={`w-full rounded-xl py-2.5 px-3.5 text-sm font-mono tracking-wider uppercase transition-all border ${
-                    isUsnLocked
+                  className={`w-full rounded-xl py-2.5 px-3.5 text-sm font-mono tracking-wider uppercase transition-all border ${isUsnLocked
                       ? 'bg-surface-container/70 border-surface-container text-on-surface/75 cursor-not-allowed select-none pr-9 font-semibold'
-                      : showUsnError 
-                        ? 'bg-surface-container-low border-error text-error focus:border-error focus:ring-2 focus:ring-error/20' 
+                      : showUsnError
+                        ? 'bg-surface-container-low border-error text-error focus:border-error focus:ring-2 focus:ring-error/20'
                         : 'bg-surface-container-low border-surface-container text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20'
-                  }`}
+                    }`}
                 />
                 {isUsnLocked && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 pointer-events-none" title="USN is permanently locked">
@@ -952,7 +1238,7 @@ export default function ProfileEditPage({
             </div>
 
             {/* Academic Information Preview from USN */}
-            {usnMetadata && (
+            {/* {usnMetadata && (
               <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="flex items-center gap-2">
                   <Building className="w-4 h-4 text-primary shrink-0" />
@@ -969,7 +1255,7 @@ export default function ProfileEditPage({
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         </div>
 
@@ -1002,9 +1288,8 @@ export default function ProfileEditPage({
                     <span className="text-xs font-bold text-on-surface">
                       Hide QR Pass Once Scanned &amp; Marked
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      hidePassAfterAttendance ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${hidePassAfterAttendance ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
+                      }`}>
                       {hidePassAfterAttendance ? 'Active (Auto-Hide)' : 'Disabled (Testing Mode)'}
                     </span>
                   </div>
@@ -1016,52 +1301,50 @@ export default function ProfileEditPage({
                 <button
                   type="button"
                   onClick={handleToggleHidePassAfterAttendance}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    hidePassAfterAttendance ? 'bg-primary' : 'bg-surface-container-high'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${hidePassAfterAttendance ? 'bg-primary' : 'bg-surface-container-high'
+                    }`}
                   role="switch"
                   aria-checked={hidePassAfterAttendance}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                      hidePassAfterAttendance ? 'translate-x-5' : 'translate-x-0'
-                    }`}
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${hidePassAfterAttendance ? 'translate-x-5' : 'translate-x-0'
+                      }`}
                   />
                 </button>
               </div>
 
-              {/* Control 2: Theme Toggle (Admin Exclusive, directly accessible) */}
-              {onToggleTheme && (
-                <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1 max-w-lg">
-                    <div className="flex items-center gap-2">
-                      {/* Skiper4: animated sun/moon icon */}
-                      <ThemeToggleButton
-                        isDark={theme === 'dark'}
-                        size={16}
-                        className="text-on-surface pointer-events-none"
-                      />
-                      <span className="text-xs font-bold text-on-surface">
-                        System Theme Mode
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-surface-container text-primary uppercase tracking-wider">
-                        {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-secondary leading-relaxed">
-                      Toggle system appearance between Light and Dark mode. Available exclusively for administrators.
-                    </p>
+              {/* Control 2: Navigation Theme Switcher Feature Toggle */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-lg">
+                  <div className="flex items-center gap-2">
+                    <Sun className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-on-surface">
+                      Navigation Theme Switcher
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${enableThemeToggle ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
+                      }`}>
+                      {enableThemeToggle ? 'Active (Sidebar & Mobile)' : 'Disabled (Hidden)'}
+                    </span>
                   </div>
-
-                  {/* Skiper4: animated toggle button */}
-                  <ThemeToggleButton
-                    isDark={theme === 'dark'}
-                    onToggle={onToggleTheme}
-                    size={20}
-                    className="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface rounded-xl transition active:scale-95 shadow-xs"
-                  />
+                  <p className="text-[11px] text-secondary leading-relaxed">
+                    Enable or disable the theme switch button in the desktop navigation sidebar and next to the mobile menu button.
+                  </p>
                 </div>
-              )}
+
+                <button
+                  type="button"
+                  onClick={handleToggleEnableThemeToggle}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${enableThemeToggle ? 'bg-primary' : 'bg-surface-container-high'
+                    }`}
+                  role="switch"
+                  aria-checked={enableThemeToggle}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${enableThemeToggle ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                  />
+                </button>
+              </div>
 
               {/* Control 3: Competition Leaderboard Visibility Toggle (Admin Exclusive) */}
               <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1071,9 +1354,8 @@ export default function ProfileEditPage({
                     <span className="text-xs font-bold text-on-surface">
                       Competition Leaderboard Visibility
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      showLeaderboard ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${showLeaderboard ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
+                      }`}>
                       {showLeaderboard ? 'Active (Visible)' : 'Hidden (App & Big Screen)'}
                     </span>
                   </div>
@@ -1085,16 +1367,14 @@ export default function ProfileEditPage({
                 <button
                   type="button"
                   onClick={handleToggleShowLeaderboard}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    showLeaderboard ? 'bg-primary' : 'bg-surface-container-high'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${showLeaderboard ? 'bg-primary' : 'bg-surface-container-high'
+                    }`}
                   role="switch"
                   aria-checked={showLeaderboard}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                      showLeaderboard ? 'translate-x-5' : 'translate-x-0'
-                    }`}
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${showLeaderboard ? 'translate-x-5' : 'translate-x-0'
+                      }`}
                   />
                 </button>
               </div>
@@ -1107,9 +1387,8 @@ export default function ProfileEditPage({
                     <span className="text-xs font-bold text-on-surface">
                       Home Page Video Showcase &amp; Reels
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      showVideoShowcase ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${showVideoShowcase ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
+                      }`}>
                       {showVideoShowcase ? 'Active (Visible)' : 'Hidden (In Development)'}
                     </span>
                   </div>
@@ -1121,16 +1400,14 @@ export default function ProfileEditPage({
                 <button
                   type="button"
                   onClick={handleToggleShowVideoShowcase}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    showVideoShowcase ? 'bg-primary' : 'bg-surface-container-high'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${showVideoShowcase ? 'bg-primary' : 'bg-surface-container-high'
+                    }`}
                   role="switch"
                   aria-checked={showVideoShowcase}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                      showVideoShowcase ? 'translate-x-5' : 'translate-x-0'
-                    }`}
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${showVideoShowcase ? 'translate-x-5' : 'translate-x-0'
+                      }`}
                   />
                 </button>
               </div>
@@ -1143,15 +1420,14 @@ export default function ProfileEditPage({
                     <span className="text-xs font-bold text-on-surface">
                       Pass Page Customization &amp; Layout Controls
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      isSystemActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isSystemActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600'
+                      }`}>
                       {isSystemActive ? 'System Active' : 'Passes Disabled'}
                     </span>
                   </div>
                   <p className="text-[11px] text-secondary leading-relaxed">
-                    {!isSystemActive 
-                      ? 'Status: Passes DISABLED for participants. Participants see "No events taking place currently" with a redirect to Events Hub.' 
+                    {!isSystemActive
+                      ? 'Status: Passes DISABLED for participants. Participants see "No events taking place currently" with a redirect to Events Hub.'
                       : `Status: Active. ${visibleActivities.length} of ${allActivities.length} activities enabled for passes. Configure visibility, download button, and activity filters.`}
                   </p>
                 </div>
@@ -1168,6 +1444,37 @@ export default function ProfileEditPage({
                 >
                   <Settings2 className="w-4 h-4" />
                   <span>Edit Layout</span>
+                </button>
+              </div>
+
+              {/* Control 5: Coordinator Feature Access & Role State Controls */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-lg">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-on-surface">
+                      Coordinator Permissions &amp; Feature Access Controls
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      {activeCoordinatorsCount} / {allCoordinators.length} Active
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-secondary leading-relaxed">
+                    Grant or restrict coordinator controls for the Room Scanner, Timers Hub, Projector Big Screen, Registrations Desk, and Leaderboard. Toggle individual student states between Coordinator (staff controls) and Participant mode (can play in other events).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCoordinatorModalConfig(coordinatorConfig);
+                    setCoordinatorSearchQuery('');
+                    setShowCoordinatorModal(true);
+                  }}
+                  className="py-2 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0 self-start sm:self-auto"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span>Configure Coordinators</span>
                 </button>
               </div>
             </div>
@@ -1206,12 +1513,12 @@ export default function ProfileEditPage({
 
       {/* Save Changes Before Exiting Pop-up Modal (Portaled to document.body for true Screen Center) */}
       {showUnsavedModal && typeof document !== 'undefined' && createPortal(
-        <div 
+        <div
           className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
           onClick={handleModalCancel}
         >
-          <div 
+          <div
             className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl relative text-on-surface m-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1323,63 +1630,49 @@ export default function ProfileEditPage({
             {/* Form */}
             <form onSubmit={handleSaveConfig} className="space-y-4">
               {/* Full Disable / Master Switch on Top */}
-              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-black text-on-surface uppercase tracking-wide">
-                      Pass System Active (Master Switch)
-                    </span>
-                    <p className="text-[11px] text-secondary">
-                      When turned OFF, passes are hidden and participants see &ldquo;No events taking place currently&rdquo; with a button to Events &amp; Hub.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalConfig.passSystemEnabled ?? true}
-                    onChange={(e) => setModalConfig({ ...modalConfig, passSystemEnabled: e.target.checked })}
-                    className="w-5 h-5 rounded text-primary focus:ring-primary"
+              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container flex items-center justify-between gap-4">
+                <div className="space-y-0.5 max-w-sm">
+                  <span className="text-xs font-black text-on-surface uppercase tracking-wide">
+                    Pass System Active (Master Switch)
+                  </span>
+                  <p className="text-[11px] text-secondary">
+                    When turned OFF, passes are hidden and participants see &ldquo;No events taking place currently&rdquo; with a button to Events &amp; Hub.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModalConfig({ ...modalConfig, passSystemEnabled: !(modalConfig.passSystemEnabled ?? true) })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${(modalConfig.passSystemEnabled ?? true) ? 'bg-primary' : 'bg-surface-container-high'}`}
+                  role="switch"
+                  aria-checked={modalConfig.passSystemEnabled ?? true}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${(modalConfig.passSystemEnabled ?? true) ? 'translate-x-5' : 'translate-x-0'}`}
                   />
-                </label>
+                </button>
               </div>
 
               {/* Download Pass Button Toggle */}
-              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-black text-on-surface uppercase tracking-wide">
-                      Download Pass Button
-                    </span>
-                    <p className="text-[11px] text-secondary">
-                      Allow participants to download their high-resolution pass with venue details and QR code.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalConfig.showDownloadButton ?? true}
-                    onChange={(e) => setModalConfig({ ...modalConfig, showDownloadButton: e.target.checked })}
-                    className="w-5 h-5 rounded text-primary focus:ring-primary"
+              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container flex items-center justify-between gap-4">
+                <div className="space-y-0.5 max-w-sm">
+                  <span className="text-xs font-black text-on-surface uppercase tracking-wide">
+                    Download Pass Button
+                  </span>
+                  <p className="text-[11px] text-secondary">
+                    Allow participants to download their high-resolution pass with venue details and QR code.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModalConfig({ ...modalConfig, showDownloadButton: !(modalConfig.showDownloadButton ?? true) })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${(modalConfig.showDownloadButton ?? true) ? 'bg-primary' : 'bg-surface-container-high'}`}
+                  role="switch"
+                  aria-checked={modalConfig.showDownloadButton ?? true}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${(modalConfig.showDownloadButton ?? true) ? 'translate-x-5' : 'translate-x-0'}`}
                   />
-                </label>
-              </div>
-
-              {/* Hide Pass After Attendance Scanned Toggle */}
-              <div className="space-y-2 bg-surface-container-low p-4 rounded-2xl border border-surface-container">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-black text-on-surface uppercase tracking-wide">
-                      Hide Pass Once Attendance Marked
-                    </span>
-                    <p className="text-[11px] text-secondary">
-                      After a coordinator scans the pass, replace the active QR code with a &ldquo;Redeemed / Checked-In&rdquo; status card.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalConfig.hidePassAfterAttendance ?? true}
-                    onChange={(e) => setModalConfig({ ...modalConfig, hidePassAfterAttendance: e.target.checked })}
-                    className="w-5 h-5 rounded text-primary focus:ring-primary"
-                  />
-                </label>
+                </button>
               </div>
 
               {/* Per-Activity Visibility Controls with Search & Dismiss */}
@@ -1429,7 +1722,7 @@ export default function ProfileEditPage({
                           const isHidden = modalHiddenIds.includes(act.id);
 
                           return (
-                            <div 
+                            <div
                               key={act.id}
                               className="p-2 flex items-center justify-between hover:bg-surface-container-low rounded-xl transition-colors text-xs"
                             >
@@ -1452,14 +1745,14 @@ export default function ProfileEditPage({
                                   <button
                                     type="button"
                                     onClick={() => handleToggleActivityVisibility(act.id)}
-                                    className={`py-1 px-2.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors ${
-                                      isHidden 
-                                        ? 'bg-surface-container text-secondary' 
-                                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                    }`}
+                                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${!isHidden ? 'bg-primary' : 'bg-surface-container-high'}`}
+                                    role="switch"
+                                    aria-checked={!isHidden}
+                                    title={!isHidden ? 'Visible' : 'Hidden'}
                                   >
-                                    {isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                                    <span>{isHidden ? 'Hidden' : 'Visible'}</span>
+                                    <span
+                                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${!isHidden ? 'translate-x-4' : 'translate-x-0'}`}
+                                    />
                                   </button>
                                 )}
                               </div>
@@ -1492,11 +1785,10 @@ export default function ProfileEditPage({
                       return (
                         <div
                           key={act.id}
-                          className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                            isVisible 
-                              ? 'bg-surface-container-low border-surface-container' 
+                          className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${isVisible
+                              ? 'bg-surface-container-low border-surface-container'
                               : 'bg-surface-container-lowest/60 border-dashed border-surface-container opacity-60'
-                          }`}
+                            }`}
                         >
                           <div className="min-w-0">
                             <div className="text-xs font-bold text-on-surface truncate flex items-center gap-1.5">
@@ -1514,14 +1806,14 @@ export default function ProfileEditPage({
                             <button
                               type="button"
                               onClick={() => handleToggleActivityVisibility(act.id)}
-                              className={`py-1 px-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
-                                isVisible 
-                                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' 
-                                  : 'bg-surface-container text-secondary border border-surface-container'
-                              }`}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isVisible ? 'bg-primary' : 'bg-surface-container-high'}`}
+                              role="switch"
+                              aria-checked={isVisible}
+                              title={isVisible ? 'Visible in pass selector' : 'Hidden from pass selector'}
                             >
-                              {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                              <span>{isVisible ? 'Visible' : 'Hidden'}</span>
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${isVisible ? 'translate-x-5' : 'translate-x-0'}`}
+                              />
                             </button>
 
                             <button
@@ -1575,6 +1867,353 @@ export default function ProfileEditPage({
                       <>
                         <Check className="w-3.5 h-3.5" />
                         <span>Save Layout</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================================= */}
+      {/* ADMIN COORDINATOR PERMISSIONS & ACCESS CONTROLS MODAL                     */}
+      {/* ========================================================================= */}
+      {effectiveIsAdmin && showCoordinatorModal && createPortal(
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 sm:pt-14 bg-black/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-surface-container-lowest border border-surface-container rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 h-auto max-h-fit mb-10">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-surface-container pb-4">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <Users className="w-4 h-4" />
+                  <span>Coordinator Permissions &amp; Feature Access</span>
+                </div>
+                <p className="text-xs text-secondary">
+                  Configure tool access permissions and toggle individual student coordinator vs participant states.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCoordinatorModal(false)}
+                className="text-secondary hover:text-on-surface p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveCoordinatorConfig} className="space-y-5">
+              {/* SECTION 1: Tool & Feature Permissions for Coordinators */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-secondary">
+                    Feature Controls for Coordinators
+                  </span>
+                  <span className="text-[10px] text-primary font-semibold">
+                    Global Permissions
+                  </span>
+                </div>
+
+                <div className="space-y-3 bg-surface-container-low p-3.5 rounded-2xl border border-surface-container">
+                  {/* Default operations notice */}
+                  <div className="p-2.5 bg-surface-container rounded-xl border border-primary/20 flex items-start gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-secondary leading-relaxed">
+                      <strong className="text-on-surface font-bold">Default Coordinator Tools:</strong> Room Attendance QR Scanner, Timers Hub, and Projector Big Screen are automatically enabled for coordinators, strictly scoped to their assigned room.
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-surface-container/60">
+                    {/* Feature 1: Registration & Approvals Desk */}
+                    <div className="pt-2 first:pt-0 pb-2 flex items-center justify-between gap-4">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-on-surface">
+                          <ClipboardCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span>Registration &amp; Approvals Desk</span>
+                        </div>
+                        <p className="text-[11px] text-secondary">
+                          Allow coordinators to review, approve/decline participant pass requests and view door attendance lists.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCoordinatorPermission('registrationDesk')}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${(coordinatorModalConfig.permissions?.registrationDesk ?? true) ? 'bg-primary' : 'bg-surface-container-high'}`}
+                        role="switch"
+                        aria-checked={coordinatorModalConfig.permissions?.registrationDesk ?? true}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${(coordinatorModalConfig.permissions?.registrationDesk ?? true) ? 'translate-x-5' : 'translate-x-0'}`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Feature 2: Leaderboard Entries */}
+                    <div className="pt-2 pb-1 flex items-center justify-between gap-4">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-on-surface">
+                          <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span>Leaderboard Score Entries &amp; Sync</span>
+                        </div>
+                        <p className="text-[11px] text-secondary">
+                          Allow coordinators to input participant scores, sync Google Sheet evaluation tabs, and update winners.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCoordinatorPermission('leaderboardEntries')}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${(coordinatorModalConfig.permissions?.leaderboardEntries ?? true) ? 'bg-primary' : 'bg-surface-container-high'}`}
+                        role="switch"
+                        aria-checked={coordinatorModalConfig.permissions?.leaderboardEntries ?? true}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${(coordinatorModalConfig.permissions?.leaderboardEntries ?? true) ? 'translate-x-5' : 'translate-x-0'}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 2: Searchable Coordinator List & Role State */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-secondary">
+                    Database Coordinators ({filteredCoordinators.length} in database)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCoordinatorForm(prev => !prev)}
+                    className="text-xs text-primary hover:text-primary-container font-bold flex items-center gap-1 transition-colors"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>{showAddCoordinatorForm ? 'Close Add Form' : 'Add Coordinator'}</span>
+                  </button>
+                </div>
+
+                <div className="p-3 bg-surface-container-low rounded-2xl border border-surface-container space-y-3">
+                  <p className="text-[11px] text-secondary leading-relaxed">
+                    Toggle individual students between <strong>Coordinator</strong> (active staff privileges) and <strong>Participant</strong> mode (can register and compete in other events without staff interference). Switches sync to Firestore in real-time.
+                  </p>
+
+                  {/* Add Coordinator Inline Form (Email & Event Dropdown) */}
+                  {showAddCoordinatorForm && (
+                    <div className="p-3 bg-surface-container rounded-xl border border-primary/20 space-y-2.5 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+                          <UserPlus className="w-4 h-4 text-primary" />
+                          <span>Add Coordinator by Email</span>
+                        </div>
+                        <span className="text-[10px] text-secondary hidden sm:inline">
+                          Name &amp; USN will be pulled automatically from database
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <input
+                          type="email"
+                          required
+                          placeholder="Google Email (e.g. coordinator@gmail.com) *"
+                          value={newCoordEmail}
+                          onChange={(e) => setNewCoordEmail(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-surface-container-lowest border border-surface-container-high rounded-lg text-xs text-on-surface placeholder:text-secondary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <select
+                          required
+                          value={newCoordEvent}
+                          onChange={(e) => setNewCoordEvent(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-surface-container-lowest border border-surface-container-high rounded-lg text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                        >
+                          <option value="">Select Assigned Event &amp; Room *</option>
+                          {activities.map((act) => (
+                            <option key={act.id} value={act.id}>
+                              {act.room} &bull; {act.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <p className="text-[10px] text-secondary">
+                          Stored directly into Firestore <code className="font-mono text-primary">roles</code> collection
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddCoordinatorForm(false)}
+                            className="px-3 py-1 bg-surface-container-high hover:bg-surface-container-highest text-secondary text-xs rounded-lg font-medium"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isAddingCoordinator || !newCoordEmail.trim()}
+                            onClick={handleCreateCoordinator}
+                            className="px-3 py-1 bg-primary hover:bg-primary-container text-on-primary text-xs font-bold rounded-lg shadow-xs flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {isAddingCoordinator ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>Adding...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="w-3 h-3" />
+                                <span>Add to Database</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Search Bar for Name, USN, or Email */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-secondary absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Search coordinator by name, email, or USN (e.g. 1ST24...)"
+                      value={coordinatorSearchQuery}
+                      onChange={(e) => setCoordinatorSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-surface-container border border-surface-container-high rounded-xl text-xs text-on-surface placeholder:text-secondary focus:outline-none focus:ring-2 focus:ring-primary shadow-xs"
+                    />
+                    {coordinatorSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setCoordinatorSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-secondary hover:text-on-surface"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Coordinators List (100% Pulled from Database) */}
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1 divide-y divide-surface-container/50">
+                    {filteredCoordinators.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-secondary">
+                        No coordinators found in database. Click &ldquo;Add Coordinator&rdquo; above to register one.
+                      </div>
+                    ) : (
+                      filteredCoordinators.map((coord) => {
+                        const isCoordinatorActive = getCoordinatorState(coord, coordinatorModalConfig) === 'coordinator';
+
+                        const resolvedRoom = coord.assignedRoom || activities.find(
+                          a => (coord.activityId && a.id === coord.activityId) ||
+                               (coord.assignedEvent && (a.id === coord.assignedEvent || a.name.toLowerCase() === coord.assignedEvent.toLowerCase()))
+                        )?.room;
+
+                        const resolvedEvent = coord.assignedEvent || activities.find(
+                          a => coord.activityId && a.id === coord.activityId
+                        )?.name;
+
+                        return (
+                          <div
+                            key={coord.id}
+                            className="pt-2.5 first:pt-0 pb-1.5 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-on-surface">{coord.name}</span>
+                                {coord.usn && (
+                                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-surface-container text-primary border border-surface-container-high">
+                                    {coord.usn}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-secondary mt-0.5 flex-wrap">
+                                {resolvedRoom ? (
+                                  <span className="font-bold text-primary px-1.5 py-0.2 rounded bg-primary/10 border border-primary/20">
+                                    {resolvedRoom}
+                                  </span>
+                                ) : (
+                                  <span className="text-secondary italic">Room not assigned</span>
+                                )}
+                                {resolvedEvent && (
+                                  <>
+                                    <span>&bull;</span>
+                                    <span className="font-semibold text-on-surface">{resolvedEvent}</span>
+                                  </>
+                                )}
+                                {coord.email && (
+                                  <>
+                                    <span>&bull;</span>
+                                    <span className="font-mono truncate max-w-[140px] sm:max-w-xs">{coord.email}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {/* Toggle switch with NO text */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCoordinatorState(coord)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isCoordinatorActive ? 'bg-primary' : 'bg-surface-container-high'}`}
+                                role="switch"
+                                aria-checked={isCoordinatorActive}
+                                title={isCoordinatorActive ? 'Switch to Participant Mode' : 'Switch to Coordinator Mode'}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${isCoordinatorActive ? 'translate-x-5' : 'translate-x-0'}`}
+                                />
+                              </button>
+
+                              {/* Delete coordinator button */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCoordinator(coord)}
+                                className="p-1.5 text-secondary hover:text-error hover:bg-surface-container rounded-lg transition-colors"
+                                title={`Remove ${coord.name || coord.email} from coordinators`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-surface-container gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetCoordinatorConfig}
+                  disabled={savingCoordinatorConfig}
+                  className="py-2 px-3 text-secondary hover:text-error text-xs font-semibold flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Defaults</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCoordinatorModal(false)}
+                    className="py-2 px-4 bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-bold rounded-xl"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={savingCoordinatorConfig}
+                    className="py-2 px-4 bg-primary hover:bg-primary-container text-on-primary text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {savingCoordinatorConfig ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Save Permissions</span>
                       </>
                     )}
                   </button>

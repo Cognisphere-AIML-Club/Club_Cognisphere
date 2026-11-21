@@ -24,13 +24,27 @@ import {
   Clock
 } from 'lucide-react';
 
-export default function CoordinatorScanner({ user, activities = ACTIVITIES }) {
+export default function CoordinatorScanner({ 
+  user, 
+  activities = ACTIVITIES, 
+  isAdmin = false, 
+  assignedActivityId = null 
+}) {
   const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
+  const isLockedToAssigned = !isAdmin && Boolean(assignedActivityId);
+
   const getActivity = (id) => allActivities.find(a => a.id === id) || allActivities[0];
 
   const [selectedActivityId, setSelectedActivityId] = useState(() => {
+    if (isLockedToAssigned && assignedActivityId) return assignedActivityId;
     return localStorage.getItem('club_games_selected_activity') || allActivities[0].id;
   });
+
+  useEffect(() => {
+    if (isLockedToAssigned && assignedActivityId) {
+      setSelectedActivityId(assignedActivityId);
+    }
+  }, [isLockedToAssigned, assignedActivityId]);
 
   const [scanning, setScanning] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -496,22 +510,36 @@ export default function CoordinatorScanner({ user, activities = ACTIVITIES }) {
           )}
         </div>
 
-        {/* Activity Selector */}
+        {/* Activity Selector (Locked for Room Coordinators, Switchable for Admins) */}
         <div>
           <label className="block text-[11px] font-bold text-secondary mb-1.5 uppercase tracking-wider">
             Active Room &amp; Activity
           </label>
-          <select
-            value={selectedActivityId}
-            onChange={handleActivityChange}
-            className="w-full bg-surface-container-low border border-surface-container text-on-surface font-semibold rounded-xl p-3 text-xs focus:outline-none focus:border-primary cursor-pointer"
-          >
-            {allActivities.map((act) => (
-              <option key={act.id} value={act.id}>
-                {act.name} — {act.room} • {act.scheduledTime || ''}
-              </option>
-            ))}
-          </select>
+          {isLockedToAssigned ? (
+            <div className="w-full bg-surface-container-low border border-primary/30 rounded-xl p-3 text-xs flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-on-surface">{currentActivity.name}</span>
+                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                  {currentActivity.room}
+                </span>
+              </div>
+              <span className="text-[10px] text-primary font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10">
+                Assigned Room
+              </span>
+            </div>
+          ) : (
+            <select
+              value={selectedActivityId}
+              onChange={handleActivityChange}
+              className="w-full bg-surface-container-low border border-surface-container text-on-surface font-semibold rounded-xl p-3 text-xs focus:outline-none focus:border-primary cursor-pointer"
+            >
+              {allActivities.map((act) => (
+                <option key={act.id} value={act.id}>
+                  {act.name} — {act.room} • {act.scheduledTime || ''}
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* Active Activity Details: Venue, Date, Time */}
           <div className="flex items-center gap-3 text-[11px] text-secondary mt-2 px-1 flex-wrap">

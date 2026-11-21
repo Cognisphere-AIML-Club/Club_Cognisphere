@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { useParticipantProfile } from './hooks/useParticipantProfile';
 import { useActivities } from './hooks/useActivities';
@@ -20,6 +20,7 @@ import { SidebarNav } from './components/SidebarNav';
 import MobileDrawerNav from './components/MobileDrawerNav';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { subscribeToPassConfig } from './services/passApprovalService';
+import { subscribeToCoordinatorConfig, getCachedCoordinatorConfig } from './services/coordinatorConfigService';
 import { MenuIcon } from './components/AnimatedIcons';
 import { ThemeToggleButton } from './components/ThemeToggleButton';
 import {
@@ -163,10 +164,46 @@ export default function App() {
   const [bigScreenMode, setBigScreenMode] = useState(initialMode);
   const [bigScreenActivityId, setBigScreenActivityId] = useState(urlActivity || null);
 
-  const isAdmin = role === 'admin';
-  const isCoordinator = role === 'coordinator';
+  // Coordinator Configuration & Permissions State (Admin controlled)
+  const [coordinatorConfig, setCoordinatorConfig] = useState(getCachedCoordinatorConfig);
+  useEffect(() => {
+    const unsub = subscribeToCoordinatorConfig((cfg) => {
+      if (cfg) setCoordinatorConfig(cfg);
+    });
+    return () => unsub();
+  }, []);
+
+  const isAdmin = role === 'admin' || roleData?.role === 'admin' || roleData?.isAdmin === true;
+
+  // Coordinator identification dynamically pulled from Firestore role document
+  const isCoordinatorUser = 
+    role === 'coordinator' || 
+    roleData?.role === 'coordinator' || 
+    roleData?.baseRole === 'coordinator' || 
+    roleData?.coordinatorState !== undefined;
+
+  // Admin controls coordinator state: 'coordinator' vs 'participant'
+  // When set to 'participant', coordinators can participate in other games without staff controls.
+  // We resolve the active state dynamically from config activeStates and Firestore roleData.
+  const coordinatorActiveState = useMemo(() => {
+    if (!isCoordinatorUser) return 'participant';
+
+    const states = coordinatorConfig?.activeStates || {};
+    const normEmail = user?.email ? user.email.trim().toLowerCase() : '';
+    const normUsn = profile?.usn ? profile.usn.trim().toUpperCase() : '';
+
+    if (normEmail && states[normEmail] !== undefined) return states[normEmail];
+    if (normUsn && states[normUsn] !== undefined) return states[normUsn];
+
+    if (roleData?.coordinatorState) return roleData.coordinatorState;
+    if (role === 'coordinator') return 'coordinator';
+
+    return 'coordinator';
+  }, [isCoordinatorUser, coordinatorConfig, user?.email, profile?.usn, roleData, role]);
+
+  const isCoordinatorActive = isCoordinatorUser && coordinatorActiveState === 'coordinator';
+
   const isJudge = role === 'judge';
-  const isStaff = isAdmin || isCoordinator;
 
   // Admin Mode: toggle between Admin Mode (ON) and default Participant view (OFF)
   const [adminMode, setAdminMode] = useState(() => {
@@ -177,28 +214,56 @@ export default function App() {
     }
   });
 
-  const toggleAdminMode = () => {
-    setAdminMode(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem('cognisphere_admin_mode', String(next));
-      } catch (e) {}
-      return next;
-    });
-  };
-
   // When adminMode is true and user is admin, admin controls are enabled.
   // When adminMode is false (the default), admin sees the participant view!
   const effectiveIsAdmin = isAdmin && adminMode;
-  const effectiveIsCoordinator = isCoordinator;
+  const effectiveIsCoordinator = !effectiveIsAdmin && isCoordinatorActive;
   const effectiveIsJudge = isJudge;
-  const effectiveIsStaff = (effectiveIsAdmin || isCoordinator);
-  const effectiveRole = isAdmin ? (adminMode ? 'admin' : 'participant') : role;
+  const effectiveIsStaff = effectiveIsAdmin || effectiveIsCoordinator;
+  const effectiveRole = isAdmin 
+    ? (adminMode ? 'admin' : 'participant') 
+    : (effectiveIsCoordinator ? 'coordinator' : 'participant');
 
-  // Theme preference (light by default for all users, toggleable anytime between Light and Dark)
+  // Default operations for coordinators: scanner, timerHub, and bigScreen are always available when active
+  const coordinatorPermissions = coordinatorConfig.permissions || {};
+  const canCoordinatorScan = effectiveIsCoordinator;
+  const canCoordinatorTimers = effectiveIsCoordinator;
+  const canCoordinatorBigScreen = effectiveIsCoordinator;
+  const canCoordinatorDesk = effectiveIsCoordinator && Boolean(coordinatorPermissions.registrationDesk ?? true);
+  const canCoordinatorLeaderboard = effectiveIsCoordinator && Boolean(coordinatorPermissions.leaderboardEntries ?? true);
+
+  // Resolve assigned activity ID for the logged-in coordinator from database roleData
+  const coordinatorAssignedActivityId = useMemo(() => {
+    if (!roleData) return null;
+    if (roleData.activityId) return roleData.activityId;
+    if (roleData.assignedEvent) {
+      const match = activities.find(
+        a => a.id === roleData.assignedEvent || 
+             a.name.toLowerCase() === roleData.assignedEvent.toLowerCase()
+      );
+      if (match) return match.id;
+    }
+    if (roleData.assignedRoom) {
+      const match = activities.find(
+        a => a.room.toLowerCase() === roleData.assignedRoom.toLowerCase()
+      );
+      if (match) return match.id;
+    }
+    return null;
+  }, [roleData, activities]);
+
+  // Theme preference:
+  // If in admin mode and was previously dark, start as dark; otherwise light by default
   const [theme, setTheme] = useState(() => {
     try {
-      return localStorage.getItem('cognisphere_theme') || localStorage.getItem('cognisphere_admin_theme') || 'light';
+      const savedAdminMode = localStorage.getItem('cognisphere_admin_mode') === 'true';
+      if (savedAdminMode) {
+        const wasDark = localStorage.getItem('cognisphere_admin_was_dark') === 'true' ||
+          localStorage.getItem('cognisphere_admin_theme') === 'dark' ||
+          localStorage.getItem('cognisphere_theme') === 'dark';
+        return wasDark ? 'dark' : 'light';
+      }
+      return localStorage.getItem('cognisphere_theme') || 'light';
     } catch (e) {
       return 'light';
     }
@@ -239,8 +304,49 @@ export default function App() {
     try {
       localStorage.setItem('cognisphere_theme', next);
       localStorage.setItem('cognisphere_admin_theme', next);
+      if (adminMode) {
+        localStorage.setItem('cognisphere_admin_was_dark', String(next === 'dark'));
+      }
     } catch (e) { }
     applyThemeToDOM(next);
+  };
+
+  const toggleAdminMode = () => {
+    setAdminMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('cognisphere_admin_mode', String(next));
+      } catch (e) { }
+
+      if (!next) {
+        // Switching to Participant mode:
+        // Remember if admin theme was dark, and switch to light mode
+        const wasDark = theme === 'dark';
+        try {
+          localStorage.setItem('cognisphere_admin_was_dark', String(wasDark));
+          localStorage.setItem('cognisphere_theme', 'light');
+        } catch (e) { }
+        setTheme('light');
+        applyThemeToDOM('light');
+      } else {
+        // Switching back to Admin mode:
+        // Check if theme was dark in admin mode, and restore if so
+        let wasDark = false;
+        try {
+          wasDark = localStorage.getItem('cognisphere_admin_was_dark') === 'true' ||
+            localStorage.getItem('cognisphere_admin_theme') === 'dark';
+        } catch (e) { }
+        if (wasDark) {
+          try {
+            localStorage.setItem('cognisphere_theme', 'dark');
+          } catch (e) { }
+          setTheme('dark');
+          applyThemeToDOM('dark');
+        }
+      }
+
+      return next;
+    });
   };
 
   // Competition Leaderboard Visibility State (Admin controlled via passConfig)
@@ -263,6 +369,16 @@ export default function App() {
     }
   });
 
+  // Navigation Theme Switcher Visibility State (Admin controlled via passConfig)
+  const [enableThemeToggle, setEnableThemeToggle] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cognisphere_pass_config');
+      return cached ? JSON.parse(cached).enableThemeToggle ?? true : true;
+    } catch {
+      return true;
+    }
+  });
+
   useEffect(() => {
     const unsub = subscribeToPassConfig((cfg) => {
       if (cfg && typeof cfg.showLeaderboard === 'boolean') {
@@ -271,13 +387,20 @@ export default function App() {
       if (cfg && typeof cfg.showVideoShowcase === 'boolean') {
         setShowVideoShowcase(cfg.showVideoShowcase);
       }
+      if (cfg && typeof cfg.enableThemeToggle === 'boolean') {
+        setEnableThemeToggle(cfg.enableThemeToggle);
+      }
     });
     return () => unsub();
   }, []);
 
   const handleOpenBigScreen = (mode = 'hall', activityId = null) => {
-    setBigScreenMode(mode);
-    setBigScreenActivityId(activityId);
+    const isRestrictedCoordinator = !effectiveIsAdmin && Boolean(coordinatorAssignedActivityId);
+    const targetMode = isRestrictedCoordinator ? 'room' : mode;
+    const targetActivityId = isRestrictedCoordinator ? coordinatorAssignedActivityId : activityId;
+
+    setBigScreenMode(targetMode);
+    setBigScreenActivityId(targetActivityId);
     setShowBigScreen(true);
     try {
       window.history.pushState({ cognisphere: true, bigScreen: true }, '', '/screen');
@@ -561,7 +684,7 @@ export default function App() {
             '',
             window.location.pathname + window.location.search
           );
-        } catch (err) {}
+        } catch (err) { }
         setPendingProfileExitTab('__back__');
         return;
       }
@@ -690,14 +813,17 @@ export default function App() {
         activities={activities}
         onExit={handleExitBigScreen}
         initialMode={bigScreenMode}
-        initialActivityId={bigScreenActivityId}
+        initialActivityId={effectiveIsAdmin ? bigScreenActivityId : (coordinatorAssignedActivityId || bigScreenActivityId)}
         showLeaderboard={showLeaderboard}
+        isAdmin={effectiveIsAdmin}
+        assignedActivityId={coordinatorAssignedActivityId}
       />
     );
   }
 
   return (
     <div className="min-h-screen bg-surface text-on-surface flex flex-col md:flex-row transition-colors duration-200">
+
       {/* 1. Desktop & Laptop Expandable / Contractable Sidebar with Profile at Bottom-Left */}
       <SidebarNav
         user={user}
@@ -721,6 +847,11 @@ export default function App() {
         onToggleAdminTheme={toggleTheme}
         onToggleTheme={toggleTheme}
         showLeaderboard={showLeaderboard}
+        enableThemeToggle={enableThemeToggle}
+        canScan={effectiveIsAdmin || canCoordinatorScan}
+        canTimers={effectiveIsAdmin || canCoordinatorTimers || effectiveIsJudge}
+        canDesk={effectiveIsAdmin || canCoordinatorDesk}
+        canBigScreen={effectiveIsAdmin || canCoordinatorBigScreen}
       />
 
       {/* 2. Main Content Area */}
@@ -761,11 +892,10 @@ export default function App() {
                 <button
                   onClick={toggleAdminMode}
                   title={`Admin Mode: ${adminMode ? 'ON (Active)' : 'OFF (Participant View)'}`}
-                  className={`px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-bold active:scale-95 ${
-                    adminMode 
-                      ? 'bg-primary text-on-primary border-primary shadow-xs' 
-                      : 'text-on-surface bg-surface-container border-surface-container-high hover:bg-surface-container-high'
-                  }`}
+                  className={`px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-bold active:scale-95 ${adminMode
+                    ? 'bg-primary text-on-primary border-primary shadow-xs'
+                    : 'text-on-surface bg-surface-container border-surface-container-high hover:bg-surface-container-high'
+                    }`}
                   aria-label="Admin Mode Toggle"
                 >
                   <ShieldCheck className={`w-3.5 h-3.5 ${adminMode ? 'text-on-primary' : 'text-primary'}`} />
@@ -773,14 +903,16 @@ export default function App() {
                 </button>
               )}
 
-              {/* Theme Switch Button (placed to the left of menu button) */}
-              <ThemeToggleButton
-                isDark={theme === 'dark'}
-                onToggle={toggleTheme}
-                size={18}
-                className="w-9 h-9 !rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container transition-all active:scale-95 shadow-xs"
-                title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-              />
+              {/* Theme Switch Button (placed to the left of menu button, controlled by enableThemeToggle) */}
+              {enableThemeToggle && (
+                <ThemeToggleButton
+                  isDark={theme === 'dark'}
+                  onToggle={toggleTheme}
+                  size={18}
+                  className="w-9 h-9 !rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container transition-all active:scale-95 shadow-xs"
+                  title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                />
+              )}
 
               {/* Hamburger Menu Button — Skiper99 animated MenuIcon */}
               <button
@@ -793,7 +925,7 @@ export default function App() {
                 <MenuIcon
                   size={20}
                   isOpen={mobileMenuOpen}
-                  onToggle={() => {}}
+                  onToggle={() => { }}
                   className="w-5 h-5"
                 />
               </button>
@@ -824,6 +956,10 @@ export default function App() {
           theme={theme}
           onToggleTheme={toggleTheme}
           showLeaderboard={showLeaderboard}
+          canScan={effectiveIsAdmin || canCoordinatorScan}
+          canTimers={effectiveIsAdmin || canCoordinatorTimers || effectiveIsJudge}
+          canDesk={effectiveIsAdmin || canCoordinatorDesk}
+          canBigScreen={effectiveIsAdmin || canCoordinatorBigScreen}
         />
 
         {/* Main Content Area */}
@@ -907,6 +1043,7 @@ export default function App() {
                     isAdmin={effectiveIsAdmin}
                     isCoordinator={effectiveIsCoordinator}
                     isStaff={effectiveIsStaff}
+                    canEditLeaderboard={effectiveIsAdmin || canCoordinatorLeaderboard}
                     onBack={triggerBackAction}
                     onNavigateToEvent={(actId) => {
                       const act = activities.find(a => a.id === actId);
@@ -924,6 +1061,7 @@ export default function App() {
                   isAdmin={effectiveIsAdmin}
                   isCoordinator={effectiveIsCoordinator}
                   isStaff={effectiveIsStaff}
+                  canManageDesk={effectiveIsAdmin || canCoordinatorDesk}
                   activities={activities}
                   onViewPass={handleOpenPassForGame}
                   onSignIn={signInWithGoogle}
@@ -947,21 +1085,25 @@ export default function App() {
               )}
 
               {/* Tab 3: Room Timers Hub (Only accessible to Coordinators, Judges & Admins) */}
-              {activeTab === 'timers' && (effectiveIsStaff || effectiveIsJudge) && (
+              {activeTab === 'timers' && (effectiveIsAdmin || canCoordinatorTimers || effectiveIsJudge) && (
                 <TimersHub
                   activities={activities}
                   role={effectiveRole}
                   roleData={roleData}
                   user={user}
+                  isAdmin={effectiveIsAdmin}
+                  assignedActivityId={coordinatorAssignedActivityId}
                   onOpenBigScreen={(actId) => handleOpenBigScreen('room', actId)}
                 />
               )}
 
               {/* Tab 4: Coordinator Scanner */}
-              {activeTab === 'scan' && user && effectiveIsStaff && (
-                <CoordinatorScanner 
-                  user={user} 
-                  activities={activities} 
+              {activeTab === 'scan' && user && (effectiveIsAdmin || canCoordinatorScan) && (
+                <CoordinatorScanner
+                  user={user}
+                  activities={activities}
+                  isAdmin={effectiveIsAdmin}
+                  assignedActivityId={coordinatorAssignedActivityId}
                 />
               )}
 
@@ -981,7 +1123,9 @@ export default function App() {
                   user={user}
                   profile={profile}
                   role={effectiveRole}
-                  isAdmin={effectiveIsAdmin}
+                  isAdmin={isAdmin}
+                  adminMode={adminMode}
+                  onToggleAdminMode={toggleAdminMode}
                   activities={activities}
                   theme={theme}
                   onToggleTheme={toggleTheme}

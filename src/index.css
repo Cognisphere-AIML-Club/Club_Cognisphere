@@ -14,7 +14,7 @@
 @font-face {
   font-family: 'Audex';
   src: url('/fonts/audex.regular.otf') format('opentype'),
-       url('/fonts/audex.regular.otf') format('truetype');
+    url('/fonts/audex.regular.otf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -152,6 +152,7 @@ body.dark,
   html {
     @apply bg-surface text-on-surface;
   }
+
   body {
     @apply bg-surface text-on-surface antialiased transition-colors duration-200;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -163,6 +164,7 @@ body.dark,
     opacity: 0;
     transform: scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -186,7 +188,7 @@ body.dark,
   overflow: hidden !important;
 }
 
-#qr-reader-container > div {
+#qr-reader-container>div {
   width: 100% !important;
   height: 100% !important;
   min-height: 300px !important;
@@ -216,15 +218,15 @@ body.dark,
   background: transparent !important;
 }
 
-#qr-reader-container #qr-shaded-region > div {
+#qr-reader-container #qr-shaded-region>div {
   display: none !important;
 }
 
 /* Suppress html5-qrcode "Scanner paused" overlay banner completely */
-#qr-reader-container > div[style*="rgba(9, 9, 9, 0.46)"],
-#qr-reader-container > div[style*="#FFECEC"],
-#qr-reader-container > div[style*="rgb(255, 236, 236)"],
-#qr-reader-container > div[style*="top: 0px"],
+#qr-reader-container>div[style*="rgba(9, 9, 9, 0.46)"],
+#qr-reader-container>div[style*="#FFECEC"],
+#qr-reader-container>div[style*="rgb(255, 236, 236)"],
+#qr-reader-container>div[style*="top: 0px"],
 #qr-reader-container #qr-reader__status_span,
 #qr-reader-container #qr-reader__header_message {
   display: none !important;
@@ -244,6 +246,7 @@ body.dark,
   from {
     width: 100%;
   }
+
   to {
     width: 0%;
   }
@@ -258,6 +261,7 @@ body.dark,
     transform: scale(0.85);
     opacity: 0;
   }
+
   100% {
     transform: scale(1);
     opacity: 1;
@@ -294,6 +298,7 @@ body.dark,
     inherits: false;
     initial-value: 0px;
   }
+
   @property --fb {
     syntax: "<length>";
     inherits: false;
@@ -303,37 +308,43 @@ body.dark,
   .scroll-fade-y {
     --ft: 0px;
     --fb: 40px;
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      transparent 0,
-      #000 var(--ft),
-      #000 calc(100% - var(--fb)),
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      to bottom,
-      transparent 0,
-      #000 var(--ft),
-      #000 calc(100% - var(--fb)),
-      transparent 100%
-    );
+    -webkit-mask-image: linear-gradient(to bottom,
+        transparent 0,
+        #000 var(--ft),
+        #000 calc(100% - var(--fb)),
+        transparent 100%);
+    mask-image: linear-gradient(to bottom,
+        transparent 0,
+        #000 var(--ft),
+        #000 calc(100% - var(--fb)),
+        transparent 100%);
     -webkit-mask-size: 100% 100%;
     mask-size: 100% 100%;
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     animation: skiper87-fadeTop 1 linear both,
-               skiper87-fadeBottom 1 linear both;
+      skiper87-fadeBottom 1 linear both;
     animation-timeline: scroll(self), scroll(self);
     animation-range: 0% 12%, 88% 100%;
   }
 
   @keyframes skiper87-fadeTop {
-    from { --ft: 0px; }
-    to   { --ft: 40px; }
+    from {
+      --ft: 0px;
+    }
+
+    to {
+      --ft: 40px;
+    }
   }
 
   @keyframes skiper87-fadeBottom {
-    from { --fb: 40px; }
-    to   { --fb: 0px; }
+    from {
+      --fb: 40px;
+    }
+
+    to {
+      --fb: 0px;
+    }
   }
 }

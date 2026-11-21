@@ -21,6 +21,7 @@ export default function LeaderboardPage({
   isAdmin = false,
   isCoordinator = false,
   isStaff = false,
+  canEditLeaderboard = false,
   onBack,
   onNavigateToEvent
 }) {
@@ -153,6 +154,7 @@ export default function LeaderboardPage({
         isAdmin={isAdmin}
         isCoordinator={isCoordinator}
         isStaff={isStaff}
+        canEditLeaderboard={canEditLeaderboard}
         onPublishScore={publishScore}
         onUnpublishScore={unpublishScore}
         adminEmail={user?.email}

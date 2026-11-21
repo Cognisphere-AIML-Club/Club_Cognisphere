@@ -506,8 +506,12 @@ export default function BigScreenView({
   onExit, 
   initialMode = 'hall', 
   initialActivityId = null,
-  showLeaderboard: propShowLeaderboard
+  showLeaderboard: propShowLeaderboard,
+  isAdmin = false,
+  assignedActivityId = null
 }) {
+  const isLockedToAssigned = !isAdmin && Boolean(assignedActivityId);
+
   const [remoteShowLeaderboard, setRemoteShowLeaderboard] = useState(() => {
     if (typeof propShowLeaderboard === 'boolean') return propShowLeaderboard;
     try {
@@ -528,10 +532,20 @@ export default function BigScreenView({
   }, []);
 
   const showLeaderboard = typeof propShowLeaderboard === 'boolean' ? propShowLeaderboard : remoteShowLeaderboard;
-  const [displayMode, setDisplayMode] = useState(initialMode); // 'room' | 'hall'
-  const [selectedActivityId, setSelectedActivityId] = useState(
-    initialActivityId || activities[0]?.id || 'reverse-prompt'
-  );
+  const [displayMode, setDisplayMode] = useState(() => {
+    if (isLockedToAssigned) return 'room';
+    return initialMode;
+  }); // 'room' | 'hall'
+  const [selectedActivityId, setSelectedActivityId] = useState(() => {
+    if (isLockedToAssigned && assignedActivityId) return assignedActivityId;
+    return initialActivityId || activities[0]?.id || 'reverse-prompt';
+  });
+
+  useEffect(() => {
+    if (isLockedToAssigned && assignedActivityId) {
+      setSelectedActivityId(assignedActivityId);
+    }
+  }, [isLockedToAssigned, assignedActivityId]);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [wakeLockActive, setWakeLockActive] = useState(false);
@@ -720,17 +734,25 @@ export default function BigScreenView({
           {/* Right Controls: Room Selector (if in Room Mode), Sound & Fullscreen */}
           <div className="flex items-center gap-2">
             {displayMode === 'room' && (
-              <select
-                value={selectedActivityId}
-                onChange={(e) => setSelectedActivityId(e.target.value)}
-                className="bg-slate-100 text-slate-900 border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:border-emerald-600 cursor-pointer shadow-xs"
-              >
-                {activities.map((act) => (
-                  <option key={act.id} value={act.id}>
-                    {act.room} &bull; {act.name}
-                  </option>
-                ))}
-              </select>
+              isLockedToAssigned ? (
+                <div className="bg-slate-100 text-slate-900 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold shadow-xs flex items-center gap-1.5">
+                  <span className="text-emerald-700 font-extrabold">{currentActivity.room}</span>
+                  <span>&bull;</span>
+                  <span className="truncate max-w-[140px]">{currentActivity.name}</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedActivityId}
+                  onChange={(e) => setSelectedActivityId(e.target.value)}
+                  className="bg-slate-100 text-slate-900 border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:border-emerald-600 cursor-pointer shadow-xs"
+                >
+                  {activities.map((act) => (
+                    <option key={act.id} value={act.id}>
+                      {act.room} &bull; {act.name}
+                    </option>
+                  ))}
+                </select>
+              )
             )}
 
             {/* Sound Toggle */}
@@ -790,7 +812,8 @@ export default function BigScreenView({
             activities={activities}
             showLeaderboard={showLeaderboard}
             onSelectRoom={(actId) => {
-              setSelectedActivityId(actId);
+              const target = isLockedToAssigned ? assignedActivityId : actId;
+              setSelectedActivityId(target);
               setDisplayMode('room');
             }}
           />

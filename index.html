@@ -1,51 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Cognisphere Club Games</title>
-    
-    <!-- PWA & Mobile Meta Tags -->
-    <meta name="description" content="Campus club games event dashboard, offline QR pass, live real-time timers & leaderboards" />
-    <meta name="theme-color" content="#f8f9ff" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Cognisphere" />
-    
-    <!-- Favicon & PWA Icons (Bust Chrome SQLite & ServiceWorker cache with explicit versions & discrete PNGs) -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20261115b" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20261115b" />
-    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png?v=20261115b" />
-    <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64x64.png?v=20261115b" />
-    <link rel="icon" type="image/png" href="/favicon.png?v=20261115b" />
-    <link rel="shortcut icon" href="/favicon.ico?v=20261115b" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=20261115b" />
 
-    <!-- Projector Display Fonts -->
-    <link rel="preload" href="/fonts/audex.regular.otf" as="font" type="font/otf" crossorigin />
-    <link rel="preload" href="/fonts/arkhip.regular.otf" as="font" type="font/otf" crossorigin />
-    <link rel="preload" href="/fonts/skate-blade.regular.otf" as="font" type="font/otf" crossorigin />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Cognisphere Club Games</title>
 
-    <!-- Pre-load Diagnostics Listener -->
-    <script>
-      window.addEventListener('error', function(e) {
-        var root = document.getElementById('root');
-        if (root && (!root.children.length || root.innerHTML.trim() === '')) {
-          root.innerHTML = '<div style="padding:24px;font-family:system-ui,sans-serif;background:#0f172a;color:#f87171;min-height:100vh;">' +
-            '<h2 style="font-weight:bold;margin-bottom:8px;">Startup Error</h2>' +
-            '<pre style="background:#1e293b;padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap;color:#fca5a5;">' + 
-            (e.error ? (e.error.stack || e.error.message) : e.message) + '</pre>' +
-            '<button onclick="location.reload()" style="margin-top:16px;padding:8px 16px;background:#ef4444;color:#fff;border:none;border-radius:6px;cursor:pointer;">Retry</button>' +
-            '</div>';
-        }
-      });
-      window.addEventListener('unhandledrejection', function(e) {
-        console.error('Unhandled Promise Rejection:', e.reason);
-      });
-    </script>
-  </head>
-  <body class="bg-surface text-on-surface min-h-screen antialiased selection:bg-primary-container selection:text-on-primary">
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+  <!-- PWA & Mobile Meta Tags -->
+  <meta name="description"
+    content="Campus club games event dashboard, offline QR pass, live real-time timers & leaderboards" />
+  <meta name="theme-color" content="#f8f9ff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Cognisphere" />
+
+  <!-- Favicon & PWA Icons (Bust Chrome SQLite & ServiceWorker cache with explicit versions & discrete PNGs) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20261115b" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20261115b" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png?v=20261115b" />
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64x64.png?v=20261115b" />
+  <link rel="icon" type="image/png" href="/favicon.png?v=20261115b" />
+  <link rel="shortcut icon" href="/favicon.ico?v=20261115b" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=20261115b" />
+
+  <!-- Projector Display Fonts -->
+  <link rel="preload" href="/fonts/audex.regular.otf" as="font" type="font/otf" crossorigin />
+  <link rel="preload" href="/fonts/arkhip.regular.otf" as="font" type="font/otf" crossorigin />
+  <link rel="preload" href="/fonts/skate-blade.regular.otf" as="font" type="font/otf" crossorigin />
+
+  <!-- Pre-load Diagnostics Listener -->
+  <script>
+    window.addEventListener('error', function (e) {
+      var root = document.getElementById('root');
+      if (root && (!root.children.length || root.innerHTML.trim() === '')) {
+        root.innerHTML = '<div style="padding:24px;font-family:system-ui,sans-serif;background:#0f172a;color:#f87171;min-height:100vh;">' +
+          '<h2 style="font-weight:bold;margin-bottom:8px;">Startup Error</h2>' +
+          '<pre style="background:#1e293b;padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap;color:#fca5a5;">' +
+          (e.error ? (e.error.stack || e.error.message) : e.message) + '</pre>' +
+          '<button onclick="location.reload()" style="margin-top:16px;padding:8px 16px;background:#ef4444;color:#fff;border:none;border-radius:6px;cursor:pointer;">Retry</button>' +
+          '</div>';
+      }
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      console.error('Unhandled Promise Rejection:', e.reason);
+    });
+  </script>
+</head>
+
+<body
+  class="bg-surface text-on-surface min-h-screen antialiased selection:bg-primary-container selection:text-on-primary">
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+  <!-- AIDesigner Effects Runtime for Pixel Grid Background -->
+  <script src="https://cdn.aidesigner.ai/effects/runtime/v1.js" async></script>
+</body>
+
 </html>

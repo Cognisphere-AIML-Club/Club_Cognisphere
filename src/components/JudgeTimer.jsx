@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useSharedTimer } from '../hooks/useSharedTimer';
+import TimerDurationPicker from './TimerDurationPicker';
 import { 
   Play, 
   Pause, 
   RotateCcw, 
   Volume2, 
   VolumeX, 
-  Timer, 
-  Plus, 
-  Minus,
+  Timer,
   Lock,
   CalendarDays,
   Tv
@@ -34,21 +33,12 @@ export default function JudgeTimer({
     pauseTimer,
     resumeTimer,
     resetTimer,
-    adjustTime,
   } = useSharedTimer(activity?.id, defaultSec);
 
   const formattedMinutes = String(minutes).padStart(2, '0');
   const formattedSeconds = String(seconds).padStart(2, '0');
 
   const isRunning = status === 'running';
-
-  const defaultPresets = [
-    { id: 'def-60', label: '1:00', seconds: 60 },
-    { id: 'def-120', label: '2:00', seconds: 120 },
-    { id: 'def-180', label: '3:00', seconds: 180 },
-    { id: 'def-300', label: '5:00', seconds: 300 },
-    { id: 'def-900', label: '15:00', seconds: 900 },
-  ];
 
   const timelinePresets = activity?.scheduleTimeline?.map((item, idx) => ({
     id: `stage-${idx}`,
@@ -57,29 +47,36 @@ export default function JudgeTimer({
     desc: item.stage
   })) || null;
 
-  // Single active preset button tracking (ensures only 1 button highlights even if multiple stages share the same duration)
+  // Single active preset button tracking for Round Stage Presets
   const [activePresetId, setActivePresetId] = useState(() => {
     if (timelinePresets && timelinePresets.length > 0) {
       const match = timelinePresets.find(p => p.seconds === defaultSec);
       return match ? match.id : timelinePresets[0].id;
     }
-    const defMatch = defaultPresets.find(p => p.seconds === defaultSec);
-    return defMatch ? defMatch.id : defaultPresets[0].id;
+    return null;
   });
 
-    // Keep single active preset in sync when switching activities
+  // Keep single active preset in sync when switching activities
   useEffect(() => {
     if (timelinePresets && timelinePresets.length > 0) {
       const match = timelinePresets.find(p => p.seconds === defaultSec);
-      setActivePresetId(match ? match.id : timelinePresets[0].id);
+      setActivePresetId(match ? match.id : (timelinePresets[0]?.id || null));
     } else {
-      const defMatch = defaultPresets.find(p => p.seconds === defaultSec);
-      setActivePresetId(defMatch ? defMatch.id : defaultPresets[0].id);
+      setActivePresetId(null);
     }
   }, [activity?.id, defaultSec]);
 
+  const handleCustomDurationChange = (newSeconds) => {
+    setActivePresetId(null);
+    const mins = Math.floor(newSeconds / 60);
+    const secs = newSeconds % 60;
+    const label = mins > 0 
+      ? (secs > 0 ? `${mins}m ${secs}s Custom Round` : `${mins}m Custom Round`)
+      : `${secs}s Custom Round`;
+    resetTimer(newSeconds, userEmail, label);
+  };
+
   const currentActiveStage = timelinePresets?.find(p => p.id === activePresetId)?.desc
-    || defaultPresets.find(p => p.id === activePresetId)?.label
     || activity?.name || 'Active Round';
 
   return (
@@ -181,7 +178,7 @@ export default function JudgeTimer({
           {isLast10Sec && '⚠️ Final 10 Seconds — Prepare to Wrap Up'}
           {isZero && '🚨 Round Finished — Coordinator Recording Attendance'}
           {status === 'paused' && 'Clock is paused'}
-          {status === 'idle' && `Ready (${Math.round(durationSeconds / 60)} min preset)`}
+          {status === 'idle' && `Ready (${durationSeconds >= 60 ? `${Math.round(durationSeconds / 60)} min` : `${durationSeconds}s`} duration)`}
         </p>
       </div>
 
@@ -274,69 +271,16 @@ export default function JudgeTimer({
             </div>
           )}
 
-          {/* Standard Presets & Quick +/- 30s Buttons: Disabled when running */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-surface-container">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold text-secondary mr-1">Presets:</span>
-              {defaultPresets.map((p) => {
-                const isSelected = activePresetId === p.id && durationSeconds === p.seconds;
-                return (
-                  <button
-                    key={p.id}
-                    disabled={isRunning}
-                    onClick={() => {
-                      setActivePresetId(p.id);
-                      resetTimer(p.seconds, userEmail, `${p.label} Round`);
-                    }}
-                    className={`px-3 py-1 rounded-xl text-xs font-mono font-bold transition-colors border ${
-                      isRunning
-                        ? 'opacity-35 cursor-not-allowed bg-surface-container-low border-surface-container text-secondary'
-                        : isSelected
-                        ? 'bg-primary text-on-primary border-primary shadow-xs'
-                        : 'bg-surface-container-low text-on-surface border-surface-container hover:bg-surface-container hover:border-surface-container-high'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Quick +/- 30s Buttons: Disabled when running */}
-            <div className="flex items-center gap-1">
-              <button
-                disabled={isRunning}
-                onClick={() => {
-                  setActivePresetId(null);
-                  adjustTime(-30, userEmail);
-                }}
-                className={`p-1.5 rounded-lg border text-xs flex items-center gap-0.5 transition-colors ${
-                  isRunning
-                    ? 'opacity-35 cursor-not-allowed bg-surface-container-low border-surface-container text-secondary'
-                    : 'bg-surface-container-low text-on-surface border-surface-container hover:bg-surface-container hover:border-surface-container-high'
-                }`}
-                title="Subtract 30 seconds"
-              >
-                <Minus className="w-3 h-3" />
-                <span className="text-[10px] font-mono">30s</span>
-              </button>
-              <button
-                disabled={isRunning}
-                onClick={() => {
-                  setActivePresetId(null);
-                  adjustTime(30, userEmail);
-                }}
-                className={`p-1.5 rounded-lg border text-xs flex items-center gap-0.5 transition-colors ${
-                  isRunning
-                    ? 'opacity-35 cursor-not-allowed bg-surface-container-low border-surface-container text-secondary'
-                    : 'bg-surface-container-low text-on-surface border-surface-container hover:bg-surface-container hover:border-surface-container-high'
-                }`}
-                title="Add 30 seconds"
-              >
-                <Plus className="w-3 h-3" />
-                <span className="text-[10px] font-mono">30s</span>
-              </button>
-            </div>
+          {/* Custom Time Selector (MUI TimePicker): Disabled when running */}
+          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-surface-container">
+            <span className="text-[11px] font-semibold text-secondary mr-0.5">
+              Time Selector:
+            </span>
+            <TimerDurationPicker
+              durationSeconds={durationSeconds}
+              onChangeDuration={handleCustomDurationChange}
+              disabled={isRunning}
+            />
           </div>
         </div>
       ) : (

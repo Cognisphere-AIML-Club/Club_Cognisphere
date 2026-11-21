@@ -42,7 +42,11 @@ export default function MobileDrawerNav({
   onLaunchBigScreen,
   theme = 'light',
   onToggleTheme,
-  showLeaderboard = true
+  showLeaderboard = true,
+  canScan = true,
+  canTimers = true,
+  canDesk = true,
+  canBigScreen = true
 }) {
   // Lock body scroll when mobile drawer is open
   useEffect(() => {
@@ -107,10 +111,10 @@ export default function MobileDrawerNav({
     },
     {
       id: 'registrations',
-      label: isStaff ? 'Registrations & Approvals' : 'Event Registrations',
+      label: (isAdmin || (isCoordinator && canDesk)) ? 'Registrations & Approvals' : 'Event Registrations',
       icon: ClipboardCheck,
       show: true,
-      badge: isStaff ? 'Desk' : null
+      badge: (isAdmin || (isCoordinator && canDesk)) ? 'Desk' : null
     },
     {
       id: 'pass',
@@ -130,14 +134,14 @@ export default function MobileDrawerNav({
       id: 'timers',
       label: 'Timers Hub',
       icon: Timer,
-      show: isStaff || isJudge,
+      show: isAdmin || (isCoordinator ? canTimers : false) || isJudge,
       badge: null
     },
     {
       id: 'scan',
       label: 'Room Scanner',
       icon: ScanLine,
-      show: isStaff,
+      show: isAdmin || (isCoordinator ? canScan : false),
       badge: 'Staff'
     },
   ];
