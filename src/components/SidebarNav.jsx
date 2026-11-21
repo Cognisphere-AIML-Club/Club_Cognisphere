@@ -340,8 +340,8 @@ export const SidebarNav = ({
               )
             )}
 
-            {/* Theme Toggle Switch (Controlled by admin enableThemeToggle setting) */}
-            {enableThemeToggle && handleToggleTheme && (
+            {/* Theme Toggle Switch (Controlled by admin enableThemeToggle setting, hidden for coordinators) */}
+            {enableThemeToggle && !isCoordinator && !profile?.isCoordinator && role !== 'coordinator' && handleToggleTheme && (
               !isCollapsed ? (
                 <div
                   onClick={handleToggleTheme}
