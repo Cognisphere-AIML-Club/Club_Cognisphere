@@ -36,7 +36,7 @@ service cloud.firestore {
     // === ROLES COLLECTION ===
     // Any authenticated user can read only their own role doc to resolve permissions; only admins can write roles.
     match /roles/{email} {
-      allow read: if isAuthenticated() && (request.auth.token.email.lower() == email.lower() || isAdmin());
+      allow read: if isAuthenticated() && (request.auth.token.email.lower() == email.lower() || request.auth.uid == email || isAdmin());
       allow write: if isAdmin();
     }
 
@@ -44,9 +44,22 @@ service cloud.firestore {
     // Sensitive data (email, mobile, uid).
     // Participant can read and write only their own profile doc.
     // USN IMMUTABILITY LOCK: Once 'usn' is registered, it can NEVER be altered to another USN.
-    // Only admins can query or read everyone's profile.
+    // Admins and coordinators can query or read profile to display rosters and attendance.
     match /participants/{userId} {
-      allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      allow read: if (isAuthenticated() && request.auth.uid == userId) || isCoordinator() || isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && request.auth.uid == userId && (
+        !('usn' in resource.data) || 
+        resource.data.usn == null || 
+        resource.data.usn == '' || 
+        request.resource.data.usn == resource.data.usn
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Support both 'participants' and 'participents' database collection spellings
+    match /participents/{userId} {
+      allow read: if (isAuthenticated() && request.auth.uid == userId) || isCoordinator() || isAdmin();
       allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isAuthenticated() && request.auth.uid == userId && (
         !('usn' in resource.data) || 
