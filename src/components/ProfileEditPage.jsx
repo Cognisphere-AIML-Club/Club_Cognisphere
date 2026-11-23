@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Lock,
+  Unlock,
   Loader2,
   Save,
   Mail,
@@ -41,6 +42,7 @@ import {
 } from 'lucide-react';
 import { validateUSN } from '../hooks/useParticipantProfile';
 import { subscribeToPassConfig, updatePassConfig } from '../services/passApprovalService';
+import { subscribeCertificateSettings, toggleCertificateRelease } from '../services/certificateService';
 import { ACTIVITIES } from '../data/activities';
 import {
   subscribeToCoordinatorConfig,
@@ -140,6 +142,33 @@ export default function ProfileEditPage({
   const showLeaderboard = passConfig.showLeaderboard ?? true;
   const showVideoShowcase = passConfig.showVideoShowcase ?? false;
   const enableThemeToggle = passConfig.enableThemeToggle ?? false;
+
+  // Real-time certificate release settings (Admin Master Switch)
+  const [certSettings, setCertSettings] = useState({ enabled: false });
+  const [togglingCert, setTogglingCert] = useState(false);
+
+  useEffect(() => {
+    if (!effectiveIsAdmin) return;
+    const unsub = subscribeCertificateSettings((data) => {
+      if (data) setCertSettings(data);
+    });
+    return () => unsub();
+  }, [effectiveIsAdmin]);
+
+  const isCertEnabled = Boolean(certSettings.enabled);
+
+  const handleToggleCertificates = async () => {
+    if (!effectiveIsAdmin) return;
+    try {
+      setTogglingCert(true);
+      const nextState = !certSettings.enabled;
+      await toggleCertificateRelease(nextState, user?.email || 'admin');
+    } catch (err) {
+      alert(err.message || 'Failed to update certificate release status');
+    } finally {
+      setTogglingCert(false);
+    }
+  };
 
   const handleToggleHidePassAfterAttendance = async () => {
     const nextVal = !hidePassAfterAttendance;
@@ -1294,6 +1323,36 @@ export default function ProfileEditPage({
             </div>
 
             <div className="space-y-4">
+              {/* Control 0: Certificates Release Master Switch */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-lg">
+                  <div className="flex items-center gap-2">
+                    <Award className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-on-surface">
+                      Certificates Release
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isCertEnabled ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
+                      }`}>
+                      {isCertEnabled ? 'Released' : 'Locked'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleToggleCertificates}
+                  disabled={togglingCert}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isCertEnabled ? 'bg-primary' : 'bg-surface-container-high'
+                    }`}
+                  role="switch"
+                  aria-checked={isCertEnabled}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${isCertEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                  />
+                </button>
+              </div>
               {/* Control 1: Hide QR Pass After Attendance Marked */}
               <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1 max-w-lg">

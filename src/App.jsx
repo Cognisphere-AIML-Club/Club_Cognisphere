@@ -10,6 +10,7 @@ import GameDetailPage from './components/GameDetailPage';
 import TimersHub from './components/TimersHub';
 import BigScreenView from './components/BigScreenView';
 import CertificatesView from './components/CertificatesView';
+import CertificateVerificationView from './components/CertificateVerificationView';
 import ClubHomePage from './components/ClubHomePage';
 import RegistrationsHub from './components/RegistrationsHub';
 import LogoutConfirmModal from './components/LogoutConfirmModal';
@@ -66,12 +67,12 @@ export default function App() {
     const hash = window.location.hash.replace(/^#\/?/, '');
     const search = new URLSearchParams(window.location.search);
 
-    // Exact path matches (e.g. /events, /leaderboard, /registrations, /pass)
+    // Exact path matches (e.g. /events, /leaderboard, /registrations, /pass, /verify)
     if (pathname === '/events' || hash === 'events') return 'events';
     if (pathname === '/leaderboard' || hash === 'leaderboard') return 'leaderboard';
     if (pathname === '/registrations' || hash === 'registrations') return 'registrations';
     if (pathname === '/pass' || hash === 'pass') return 'pass';
-    if (pathname === '/certificates' || hash === 'certificates') return 'certificates';
+    if (pathname === '/certificates' || hash === 'certificates' || pathname === '/verify' || pathname.startsWith('/verify/') || hash === 'verify') return 'certificates';
     if (pathname === '/timers' || hash === 'timers') return 'timers';
     if (pathname === '/scan' || hash === 'scan') return 'scan';
     if (pathname === '/profile' || hash === 'profile') return 'profile';
@@ -102,6 +103,18 @@ export default function App() {
   const [selectedGame, setSelectedGame] = useState(null); // active GameDetailPage
   const [selectedPassGameId, setSelectedPassGameId] = useState(null);
   const [selectedLeaderboardGameId, setSelectedLeaderboardGameId] = useState(() => searchParams.get('game') || null);
+
+  // Certificate Verification Deep-Link State (?id=... or /verify?id=... or /verify/...)
+  const [verifyCertId, setVerifyCertId] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const sp = new URLSearchParams(window.location.search);
+    const fromQuery = sp.get('id') || sp.get('verify') || sp.get('cert');
+    if (fromQuery) return fromQuery;
+    const pn = window.location.pathname.replace(/\/+$/, '');
+    if (pn.startsWith('/verify/')) return pn.split('/verify/')[1];
+    if (pn === '/verify' && sp.get('id')) return sp.get('id');
+    return null;
+  });
 
   // Helper to safely get window scroll position
   const getWindowScrollY = () => {
@@ -989,8 +1002,22 @@ export default function App() {
 
           {/* Hardware-Accelerated Navigation Stage & Page Layers (Safari Compositor Stack) */}
           <div className="nav-layer-stage">
-            <div className="nav-page-layer" key={`layer_${stackIndex}_${activeTab}_${selectedGame?.id || 'main'}`}>
-              {/* Tab 0: Club Home Page & History */}
+            <div className="nav-page-layer" key={verifyCertId ? `verify_${verifyCertId}` : `layer_${stackIndex}_${activeTab}_${selectedGame?.id || 'main'}`}>
+              {/* Public Certificate Verification View */}
+              {verifyCertId ? (
+                <CertificateVerificationView
+                  certId={verifyCertId}
+                  onBack={() => {
+                    setVerifyCertId(null);
+                    if (typeof window !== 'undefined') {
+                      window.history.pushState({}, '', '/');
+                    }
+                    setActiveTab('home');
+                  }}
+                />
+              ) : (
+                <>
+                  {/* Tab 0: Club Home Page & History */}
               {activeTab === 'home' && (
                 <ClubHomePage
                   user={user}
@@ -1116,7 +1143,8 @@ export default function App() {
                 <CertificatesView
                   user={user}
                   profile={profile}
-                  isAdmin={effectiveIsAdmin}
+                  isAdmin={isAdmin || effectiveIsAdmin}
+                  isStaff={effectiveIsStaff}
                   activities={activities}
                 />
               )}
@@ -1170,8 +1198,10 @@ export default function App() {
                   </button>
                 </div>
               )}
-            </div>
-          </div>
+            </>
+          )}
+        </div>
+      </div>
 
           {/* Registration Modal: collects Name, verified USN, and Mobile with red error focus & text */}
           {user && (

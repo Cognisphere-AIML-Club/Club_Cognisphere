@@ -164,6 +164,14 @@ service cloud.firestore {
       allow write: if isAdmin() || isCoordinator();
     }
 
+    // === CERTIFICATES (OFFICIAL VERIFICATION INDEX) ===
+    // Publicly readable so anyone can verify certificate authenticity via verification link.
+    // Issuable by the participant for their own record or by admins / coordinators.
+    match /certificates/{certId} {
+      allow read: if true;
+      allow write: if isAuthenticated() && (request.resource.data.participantId == request.auth.uid || isAdmin() || isCoordinator());
+    }
+
     // === DENY BY DEFAULT ===
     match /{document=**} {
       allow read, write: if false;

@@ -163,7 +163,7 @@ export async function markAttendance({ activityId, participantId, participantNam
   }
 
   try {
-    // Check if already marked present
+    // Check if already marked present by document ID
     const existingSnap = await getDoc(docRef);
     if (existingSnap.exists()) {
       const data = existingSnap.data();
@@ -174,6 +174,31 @@ export async function markAttendance({ activityId, participantId, participantNam
         participantName: data.participantName || participantName,
         participantUsn: data.participantUsn || participantUsn
       };
+    }
+
+    // Also check if already marked with participantUsn (prevents UID vs USN duplicate records)
+    if (participantUsn) {
+      try {
+        const qUsn = query(
+          collection(db, 'attendance'),
+          where('activityId', '==', activityId),
+          where('participantUsn', '==', participantUsn.trim().toUpperCase()),
+          limit(1)
+        );
+        const usnSnap = await getDocs(qUsn);
+        if (!usnSnap.empty) {
+          const data = usnSnap.docs[0].data();
+          return {
+            status: 'already_marked',
+            message: 'Already marked present for this activity.',
+            record: data,
+            participantName: data.participantName || participantName,
+            participantUsn: data.participantUsn || participantUsn
+          };
+        }
+      } catch (err) {
+        console.warn('USN attendance duplicate check notice:', err);
+      }
     }
 
     // Atomic insert

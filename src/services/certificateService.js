@@ -52,21 +52,194 @@ export async function toggleCertificateRelease(enabled, adminEmail = 'admin') {
 }
 
 /**
+ * Real-time subscription to attendance records for a participant
+ * Queries both by participantId (userId) and participantUsn (USN) to ensure 100% coverage
+ */
+export function subscribeUserAttendance(userId, userUsn, callback) {
+  if (!userId && !userUsn) {
+    callback([]);
+    return () => {};
+  }
+
+  const attendanceMap = new Map();
+
+  const updateCallback = () => {
+    // Deduplicate by activityId so each activity appears only once (prevents duplicate certificates)
+    const eventMap = new Map();
+    Array.from(attendanceMap.values()).forEach(record => {
+      const actKey = (record.activityId || record.passActivityId || record.id || '').trim().toLowerCase();
+      if (!eventMap.has(actKey)) {
+        eventMap.set(actKey, record);
+      } else {
+        const existing = eventMap.get(actKey);
+        const timeA = existing.timestamp?.getTime ? existing.timestamp.getTime() : 0;
+        const timeB = record.timestamp?.getTime ? record.timestamp.getTime() : 0;
+        if (timeB && (!timeA || timeB < timeA)) {
+          eventMap.set(actKey, record);
+        }
+      }
+    });
+
+    const list = Array.from(eventMap.values()).sort((a, b) => {
+      const timeA = a.timestamp?.getTime ? a.timestamp.getTime() : 0;
+      const timeB = b.timestamp?.getTime ? b.timestamp.getTime() : 0;
+      return timeB - timeA;
+    });
+    callback(list);
+  };
+
+  const unsubs = [];
+
+  // 1. Primary query by participantId (User UID)
+  if (userId) {
+    try {
+      const qUid = query(
+        collection(db, 'attendance'),
+        where('participantId', '==', userId)
+      );
+      const unsubUid = onSnapshot(qUid, (snap) => {
+        snap.docs.forEach(d => {
+          const data = d.data();
+          attendanceMap.set(d.id, {
+            id: d.id,
+            ...data,
+            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.scannedAt || Date.now())
+          });
+        });
+        updateCallback();
+      }, (err) => {
+        console.warn('Attendance subscription (UID) error:', err.message);
+      });
+      unsubs.push(unsubUid);
+    } catch (e) {
+      console.warn('Failed to listen to attendance by UID:', e);
+    }
+  }
+
+  // 2. Query by participantUsn (if available)
+  const cleanUsn = userUsn ? userUsn.trim().toUpperCase() : null;
+  if (cleanUsn) {
+    try {
+      const qUsn = query(
+        collection(db, 'attendance'),
+        where('participantUsn', '==', cleanUsn)
+      );
+      const unsubUsn = onSnapshot(qUsn, (snap) => {
+        snap.docs.forEach(d => {
+          const data = d.data();
+          attendanceMap.set(d.id, {
+            id: d.id,
+            ...data,
+            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.scannedAt || Date.now())
+          });
+        });
+        updateCallback();
+      }, (err) => {
+        console.warn('Attendance subscription (USN) error:', err.message);
+      });
+      unsubs.push(unsubUsn);
+    } catch (e) {
+      console.warn('Failed to listen to attendance by USN:', e);
+    }
+  }
+
+  return () => {
+    unsubs.forEach(u => {
+      try { u(); } catch (_) {}
+    });
+  };
+}
+
+/**
+ * Real-time subscription to scores/ranks won by a specific participant
+ */
+export function subscribeUserScores(userId, userUsn, callback) {
+  if (!userId && !userUsn) {
+    callback([]);
+    return () => {};
+  }
+
+  const scoresMap = new Map();
+  const updateCallback = () => {
+    callback(Array.from(scoresMap.values()));
+  };
+
+  const unsubs = [];
+
+  if (userId) {
+    try {
+      const qUid = query(collection(db, 'scores'), where('participantId', '==', userId));
+      const unsub = onSnapshot(qUid, (snap) => {
+        snap.docs.forEach(d => scoresMap.set(d.id, { id: d.id, ...d.data() }));
+        updateCallback();
+      }, (err) => console.warn('Scores subscription (UID) error:', err.message));
+      unsubs.push(unsub);
+    } catch (_) {}
+  }
+
+  const cleanUsn = userUsn ? userUsn.trim().toUpperCase() : null;
+  if (cleanUsn) {
+    try {
+      const qUsn = query(collection(db, 'scores'), where('participantUsn', '==', cleanUsn));
+      const unsub = onSnapshot(qUsn, (snap) => {
+        snap.docs.forEach(d => scoresMap.set(d.id, { id: d.id, ...d.data() }));
+        updateCallback();
+      }, (err) => console.warn('Scores subscription (USN) error:', err.message));
+      unsubs.push(unsub);
+    } catch (_) {}
+  }
+
+  return () => {
+    unsubs.forEach(u => {
+      try { u(); } catch (_) {}
+    });
+  };
+}
+
+/**
  * Fetch all attendance records for a specific participant
  */
-export async function fetchUserAttendance(userId) {
-  if (!userId) return [];
+export async function fetchUserAttendance(userId, userUsn = null) {
+  if (!userId && !userUsn) return [];
   try {
-    const q = query(
-      collection(db, 'attendance'),
-      where('participantId', '==', userId)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({
-      id: d.id,
-      ...d.data(),
-      timestamp: d.data().timestamp?.toDate ? d.data().timestamp.toDate() : new Date()
-    }));
+    const list = [];
+    const seen = new Set();
+
+    if (userId) {
+      const q1 = query(
+        collection(db, 'attendance'),
+        where('participantId', '==', userId)
+      );
+      const snap1 = await getDocs(q1);
+      snap1.docs.forEach(d => {
+        seen.add(d.id);
+        list.push({
+          id: d.id,
+          ...d.data(),
+          timestamp: d.data().timestamp?.toDate ? d.data().timestamp.toDate() : new Date(d.data().scannedAt || Date.now())
+        });
+      });
+    }
+
+    if (userUsn) {
+      const q2 = query(
+        collection(db, 'attendance'),
+        where('participantUsn', '==', userUsn.trim().toUpperCase())
+      );
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(d => {
+        if (!seen.has(d.id)) {
+          seen.add(d.id);
+          list.push({
+            id: d.id,
+            ...d.data(),
+            timestamp: d.data().timestamp?.toDate ? d.data().timestamp.toDate() : new Date(d.data().scannedAt || Date.now())
+          });
+        }
+      });
+    }
+
+    return list;
   } catch (err) {
     console.warn('Failed to fetch user attendance for certificates:', err.message);
     return [];
@@ -76,21 +249,104 @@ export async function fetchUserAttendance(userId) {
 /**
  * Fetch all scores/ranks won by a specific participant
  */
-export async function fetchUserScores(userId) {
-  if (!userId) return [];
+export async function fetchUserScores(userId, userUsn = null) {
+  if (!userId && !userUsn) return [];
   try {
-    const q = query(
-      collection(db, 'scores'),
-      where('participantId', '==', userId)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    }));
+    const list = [];
+    const seen = new Set();
+
+    if (userId) {
+      const q1 = query(
+        collection(db, 'scores'),
+        where('participantId', '==', userId)
+      );
+      const snap1 = await getDocs(q1);
+      snap1.docs.forEach(d => {
+        seen.add(d.id);
+        list.push({ id: d.id, ...d.data() });
+      });
+    }
+
+    if (userUsn) {
+      const q2 = query(
+        collection(db, 'scores'),
+        where('participantUsn', '==', userUsn.trim().toUpperCase())
+      );
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(d => {
+        if (!seen.has(d.id)) {
+          seen.add(d.id);
+          list.push({ id: d.id, ...d.data() });
+        }
+      });
+    }
+
+    return list;
   } catch (err) {
     console.warn('Failed to fetch user scores for certificates:', err.message);
     return [];
+  }
+}
+
+/**
+ * Record or verify an issued certificate in Firestore certificates collection
+ * Lightweight record containing short metadata for validation.
+ */
+export async function recordCertificateIssuance({
+  certId,
+  participantId,
+  participantName,
+  activityId,
+  activityName,
+  verifyUrl
+}) {
+  if (!certId || !participantId) return null;
+  try {
+    const certRef = doc(db, 'certificates', certId);
+    const dataToSave = {
+      certId,
+      participantId,
+      participantName: (participantName || 'Participant').trim(),
+      activityId: activityId || '',
+      activityName: activityName || '',
+      verifyUrl: verifyUrl || '',
+      event: 'IGNITE-2026',
+      issuer: 'Cognisphere - AI & ML Club, Sambhram Institute of Technology',
+      dates: '24 - 25 November, 2026',
+      status: 'verified',
+      issuedAt: serverTimestamp()
+    };
+    await setDoc(certRef, dataToSave, { merge: true });
+    return dataToSave;
+  } catch (err) {
+    console.warn('Certificate issuance tracking notice:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Verify a certificate by its unique Certificate ID (Public verification)
+ */
+export async function verifyCertificateById(certId) {
+  if (!certId) return { exists: false, error: 'No certificate ID provided' };
+  try {
+    const { getDoc } = await import('firebase/firestore');
+    const certRef = doc(db, 'certificates', certId.trim());
+    const snap = await getDoc(certRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      return {
+        exists: true,
+        data: {
+          ...data,
+          issuedAt: data.issuedAt?.toDate ? data.issuedAt.toDate() : new Date()
+        }
+      };
+    }
+    return { exists: false, error: 'Certificate not found in registry' };
+  } catch (err) {
+    console.warn('Certificate verification lookup failed:', err.message);
+    return { exists: false, error: err.message };
   }
 }
 
