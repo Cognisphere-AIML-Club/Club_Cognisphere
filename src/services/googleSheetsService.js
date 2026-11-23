@@ -1102,15 +1102,19 @@ export async function pushBulkParticipantsToGoogleSheet({
   webAppUrl = null
 }) {
   let targetUrl = webAppUrl;
-  if (!targetUrl) {
+  let tabName = sheetName;
+  if (!targetUrl || !tabName) {
     const masterCfg = await getMasterSheetConfig();
-    targetUrl = masterCfg?.webAppUrl;
+    if (!targetUrl) targetUrl = masterCfg?.webAppUrl;
+    if (!tabName && masterCfg?.sheetTabs?.[activityId]) {
+      tabName = masterCfg.sheetTabs[activityId];
+    }
   }
   if (!targetUrl) {
     return { success: false, skipped: true, error: 'Web App URL not configured' };
   }
 
-  const tab = sheetName || DEFAULT_SHEET_TABS[activityId] || activityId;
+  const tab = tabName || DEFAULT_SHEET_TABS[activityId] || activityId;
   const payload = {
     action: 'BATCH_ADD_PARTICIPANTS',
     sheetName: tab,

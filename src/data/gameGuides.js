@@ -35,11 +35,11 @@ export const GAME_GUIDES = {
       {
         roundNumber: 'Round 1',
         name: 'Rapid Fire Technical Trivia',
-        duration: '20 Minutes',
+        duration: '25 Minutes',
         objective: 'Test fundamental technical breadth across foundational computer science and AI concepts.',
         procedure: [
           'All participants answer a series of rapid-fire questions displayed on the main projector screen.',
-          'Each question has a strict 30-to-45-second timer.',
+          'Each question has a strict 25-to-30-second timer.',
           'Participants record answers on their official response sheet or digital device.',
           'Top-performing participants qualify for Round 2.'
         ],
@@ -51,23 +51,8 @@ export const GAME_GUIDES = {
       },
       {
         roundNumber: 'Round 2',
-        name: 'Audio-Visual & Code Debugging',
-        duration: '25 Minutes',
-        objective: 'Evaluate technical recognition, architectural understanding, and code comprehension.',
-        procedure: [
-          'Participants identify model architectures, decode obfuscated code snippets, and spot AI-generated visual artifacts.',
-          'Includes clues and progressive hints with decaying point values for faster answers.',
-          'Top scoring finalists advance to the high-stakes Buzzer Round.'
-        ],
-        rules: [
-          'Responses are written and checked at the conclusion of each segment.',
-          'Points are awarded based on accuracy and speed of identification.'
-        ]
-      },
-      {
-        roundNumber: 'Round 3',
         name: 'Buzzer & Deductive Problem Solving',
-        duration: '25 Minutes',
+        duration: '15 Minutes',
         objective: 'High-stakes buzzer round testing deductive speed, poise, and deep AI problem-solving.',
         procedure: [
           'Finalists compete simultaneously using a live buzzer system.',
@@ -76,7 +61,7 @@ export const GAME_GUIDES = {
         ],
         rules: [
           'Buzzing before the question is fully read carries a negative marking risk for incorrect answers.',
-          'Answers must be spoken clearly and immediately upon buzzing.'
+          'Answers must be marked immediately upon buzzing.'
         ]
       }
     ],
@@ -96,14 +81,14 @@ export const GAME_GUIDES = {
   },
 
   'reverse-prompt': {
-    eventName: 'PROMPT DECODE',
+    eventName: 'Reverse Prompt Engineering',
     theme: 'Reverse Prompt Engineering – AI Image Recreation Challenge',
     category: 'Technical',
     eventType: 'Technical Competition',
     participation: 'Individual',
-    totalDuration: '90 Minutes',
+    totalDuration: '30 Minutes',
     roundsCount: '2 Rounds (Round 1: Visual Analysis; Round 2: Prompt Engineering & Generation)',
-    description: 'PROMPT DECODE is an AI-based competition that challenges participants to recreate a given reference image using carefully constructed text prompts. Participants are shown a reference image and must analyse its visual elements, understand its composition, and write a detailed prompt that makes an approved AI image-generation platform produce a visually similar image. The competition evaluates observation skills, prompt engineering ability, creativity, analytical thinking and practical understanding of generative AI.',
+    description: 'Reverse Prompt Engineering is an AI-based competition that challenges participants to recreate a given reference image using carefully constructed text prompts. Participants are shown a reference image and must analyse its visual elements, understand its composition, and write a detailed prompt that makes an approved AI image-generation platform produce a visually similar image. The competition evaluates observation skills, prompt engineering ability, creativity, analytical thinking and practical understanding of generative AI.',
     objectives: [
       'Develop practical knowledge of reverse prompt engineering.',
       'Improve visual observation and analytical thinking.',
@@ -125,7 +110,7 @@ export const GAME_GUIDES = {
       {
         roundNumber: 'Round 1',
         name: 'Visual Analysis',
-        duration: '15 Minutes',
+        duration: '5 Minutes',
         objective: 'Observe the reference image displayed on the projector and printed at the desk, identify key elements, and take handwritten notes.',
         procedure: [
           'A high-resolution reference image is displayed on the venue projector and a physical reference is provided.',
@@ -140,21 +125,12 @@ export const GAME_GUIDES = {
       {
         roundNumber: 'Round 2',
         name: 'Prompt Engineering & AI Image Generation',
-        duration: '60 Minutes (3 Stages)',
+        duration: '25 Minutes',
         objective: 'Construct, submit, generate, and iteratively refine prompts using the approved AI generation platform.',
-        stages: [
-          {
-            stageName: 'Stage 1 – Prompt Creation & Submission (25 Mins)',
-            desc: 'Participants write a comprehensive prompt describing the image elements and submit their initial prompt through the official submission form.'
-          },
-          {
-            stageName: 'Stage 2 – Image Generation & Refinement (25 Mins)',
-            desc: 'Participants generate images on the approved AI platform. A maximum of THREE generation attempts is permitted (1 attempt = 1 click of Generate). Prompts may be modified between attempts.'
-          },
-          {
-            stageName: 'Stage 3 – Final Submission (15 Mins)',
-            desc: 'Submit initial prompt, modified versions, final generated image, and platform history screenshot verifying attempt counts.'
-          }
+        procedure: [
+          'Participants have 25 minutes to create, submit, generate, and refine prompts for the reference image.',
+          'A maximum of THREE image-generation attempts is permitted (1 attempt = 1 click of Generate).',
+          'All outputs must be submitted by the 25-minute deadline.'
         ],
         rules: [
           'Maximum of THREE image-generation attempts per participant.',
@@ -179,7 +155,7 @@ export const GAME_GUIDES = {
       'Develop disciplined observational skills and compositional awareness.',
       'Master prompt refinement within constrained generation budgets.'
     ],
-    eventSummary: 'PROMPT DECODE – OBSERVE. ANALYSE. PROMPT. CREATE. A challenge testing the boundary between visual perception and precise machine prompting.'
+    eventSummary: 'Reverse Prompt Engineering – OBSERVE. ANALYSE. PROMPT. CREATE. A challenge testing the boundary between visual perception and precise machine prompting.'
   },
 
   'ui-ux-makeover': {
@@ -188,7 +164,7 @@ export const GAME_GUIDES = {
     category: 'Technical',
     eventType: 'Technical Competition',
     participation: 'Individual (one participant per entry)',
-    totalDuration: '90 Minutes',
+    totalDuration: '60 Minutes',
     roundsCount: '3 Rounds (Investigation, Makeover, Presentation)',
     description: 'The UI/UX Makeover Challenge is a design competition in which participants are given an existing website interface and must identify its usability, navigation, accessibility and functionality problems. Participants then redesign the webpage to make it more intuitive, accessible, visually appealing and comfortable for everyone to use. The focus is on improving the user experience rather than simply making the webpage look attractive.',
     objectives: [
@@ -199,14 +175,7 @@ export const GAME_GUIDES = {
       'Learn to present, articulate, and justify design decisions clearly.'
     ],
     challengeBrief: {
-      summary: 'Participants receive a reference website and a specific user scenario to diagnose and redesign.',
-      exampleReferenceSites: [
-        'National Scholarship Portal (NSP)',
-        'DigiLocker Services Portal',
-        'UMANG Citizen Portal',
-        'India.gov.in Services Directory'
-      ],
-      scenarioExample: 'A student wants to find a government scholarship, verify eligibility criteria, understand mandatory documentation, and submit an application. Redesign the portal interface to make this entire journey simple, organized, and error-free.',
+      summary: 'Participants receive a problem statement and a specific user scenario to design a solution.',
       keyImprovementAreas: [
         'Confusing navigation and buried critical links.',
         'Poor layout hierarchy and cramped readability.',
@@ -219,46 +188,43 @@ export const GAME_GUIDES = {
       {
         roundNumber: 'Round 1',
         name: 'UX Investigation',
-        duration: '15 Minutes',
-        objective: 'Explore the assigned reference website and audit existing usability and accessibility friction points.',
+        duration: '10 Minutes',
+        objective: 'Explore the assigned problem statement and identify usability and accessibility issues.',
         procedure: [
-          'Participants access the target reference website on their laptops.',
+          'Participants access the target problem statement on their laptops.',
           'Review the provided user scenario and trace the end-to-end user journey.',
-          'Document friction points in navigation, visual hierarchy, clarity, and accessibility.'
+          'Note down the issues in navigation, visual hierarchy, clarity, and accessibility.'
         ],
         rules: [
-          'Investigation notes must guide the subsequent redesign phase.',
-          'All participants work on the same reference website.'
+          'Investigation notes must guide the subsequent design phase.',
+          'All participants work on the same problem statement.'
         ]
       },
       {
         roundNumber: 'Round 2',
-        name: 'Design Makeover',
-        duration: '35 Minutes',
-        objective: 'Redesign the webpage to make it intuitive, accessible, visually coherent, and practical.',
+        name: 'UI/UX Design',
+        duration: '25 Minutes',
+        objective: 'Design the interface to make it intuitive, accessible, visually coherent, and practical.',
         procedure: [
-          'Design using tools such as Figma, Canva, Penpot, or other UI software.',
+          'Design the interface using Figma',
           'Focus on clear visual hierarchy, accessible typography/contrast, simplified forms, and intuitive navigation.',
           'Create responsive layouts tailored for modern desktop and mobile viewports.'
         ],
         rules: [
-          'Participants must create original redesigns; template copying is prohibited.',
+          'Participants must create original designs; template copying is prohibited.',
           'A coded website is NOT required; design exports and interactive prototypes are expected.'
         ]
       },
       {
         roundNumber: 'Round 3',
         name: 'Design Presentation & Final Submission',
-        duration: '30 Minutes (20 Mins Presentation + 10 Mins Submission)',
-        objective: 'Present redesign rationale to judges and submit final interface deliverables.',
+        duration: '15 Minutes',
+        objective: 'Submit final interface deliverables.',
         procedure: [
-          'Each participant receives 3–4 minutes to pitch their redesign.',
-          'Explain problems identified, key design interventions, and accessibility benefits.',
-          'Submit final Figma/Canva link, design screenshots, and summary of improvements.'
+          'Submit final Figma link, design screenshots.'
         ],
         rules: [
-          'Adhere strictly to individual presentation timers.',
-          'Focus pitch on usability advantages rather than visual embellishments.'
+          'Focus on usability advantages over mere visual changes.'
         ]
       }
     ],

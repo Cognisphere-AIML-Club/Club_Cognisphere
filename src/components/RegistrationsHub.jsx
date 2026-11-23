@@ -38,6 +38,7 @@ import {
   Download,
   Trash2,
   ArrowUpDown,
+  FileSpreadsheet,
   X
 } from 'lucide-react';
 import {
@@ -45,6 +46,7 @@ import {
   queueBulkApprovalsForSheetsSync,
   useSheetsBatchSync
 } from '../services/sheetsBatchSyncService';
+import { pushBulkParticipantsToGoogleSheet } from '../services/googleSheetsService';
 
 // Format scan timestamp for display
 function formatAttendanceTime(timestamp) {
@@ -310,6 +312,59 @@ export default function RegistrationsHub({
       setSyncingToSheets(false);
     }
   };
+
+  // Staff action: Force sync all approved pass requests from Firestore to Google Sheets
+  const handleForceSyncAllApproved = async () => {
+    const approvedList = allRequests.filter(r => r.status === 'approved');
+    if (approvedList.length === 0) {
+      alert('No approved participants found to sync.');
+      return;
+    }
+
+    if (!window.confirm(`Force sync all ${approvedList.length} approved participants across event tabs in Google Sheets?`)) {
+      return;
+    }
+
+    try {
+      setSyncingToSheets(true);
+      const byActivity = {};
+      for (const item of approvedList) {
+        if (!byActivity[item.activityId]) byActivity[item.activityId] = [];
+        byActivity[item.activityId].push({
+          participantName: item.participantName,
+          participantUsn: item.participantUsn
+        });
+      }
+
+      let totalSynced = 0;
+      const actIds = Object.keys(byActivity);
+      for (const actId of actIds) {
+        const res = await pushBulkParticipantsToGoogleSheet({
+          activityId: actId,
+          participants: byActivity[actId]
+        });
+        if (res.success) {
+          totalSynced += (res.count || byActivity[actId].length);
+        }
+      }
+
+      setSuccessBanner(
+        `Successfully synced ${totalSynced} approved participants to Google Sheets across ${actIds.length} event tabs!`
+      );
+    } catch (err) {
+      alert(`Google Sheet Sync Error: ${err.message}`);
+    } finally {
+      setSyncingToSheets(false);
+    }
+  };
+
+  // Attach manual sync helper to window for quick console debugging/execution
+  useEffect(() => {
+    window.syncApprovedToSheets = handleForceSyncAllApproved;
+    return () => {
+      delete window.syncApprovedToSheets;
+    };
+  }, [allRequests]);
 
   // Filtered requests for Staff Approvals Desk
   const filteredRequests = useMemo(() => {
@@ -695,22 +750,33 @@ export default function RegistrationsHub({
 
               {/* Actions: Sheets Batch Status & Bulk Approve Button */}
               <div className="flex items-center gap-2 flex-wrap sm:shrink-0 w-full sm:w-auto justify-end">
-                {hasBatch && (
+                {hasBatch ? (
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-semibold shadow-xs">
-                    <Clock className={`w-3.5 h-3.5 text-amber-600 dark:text-amber-400 ${batchSyncing ? 'animate-spin' : ''}`} />
+                    <Clock className={`w-3.5 h-3.5 text-amber-600 dark:text-amber-400 ${batchSyncing || syncingToSheets ? 'animate-spin' : ''}`} />
                     <span>
                       Sheets: <strong>{batchQueueCount}</strong> &bull; <strong className="font-mono">{batchRemainingFormatted}</strong>
                     </span>
                     <button
                       type="button"
                       onClick={handleFlushBatchToSheets}
-                      disabled={batchSyncing}
+                      disabled={batchSyncing || syncingToSheets}
                       className="ml-1 px-2 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50"
                       title="Sync queued approvals to Google Sheets immediately"
                     >
-                      {batchSyncing ? 'Syncing...' : 'Sync Now'}
+                      {batchSyncing || syncingToSheets ? 'Syncing...' : 'Sync Now'}
                     </button>
                   </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleForceSyncAllApproved}
+                    disabled={syncingToSheets}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50"
+                    title="Force sync all approved participants across all events to Google Sheets"
+                  >
+                    <FileSpreadsheet className={`w-3.5 h-3.5 ${syncingToSheets ? 'animate-spin' : ''}`} />
+                    <span>{syncingToSheets ? 'Syncing to Sheets...' : 'Sync Approved to Sheets'}</span>
+                  </button>
                 )}
 
                 {selectedStatusFilter === 'pending' && filteredRequests.filter(r => r.status === 'pending').length > 0 && (

@@ -132,8 +132,10 @@ export async function generateCertificateDataUrl({
 
   if (eventText) {
     ctx.font = `italic 300 ${eventLineFontSize}px "Glacial Indifference", sans-serif`;
+    ctx.letterSpacing = '2px';
     let prefixWidth = ctx.measureText(prefixText).width;
     ctx.font = `italic 700 ${eventLineFontSize}px "Glacial Indifference", sans-serif`;
+    ctx.letterSpacing = '6px';
     let eventWidth = ctx.measureText(eventText).width + (eventLineFontSize * 0.05);
     let totalLineWidth = prefixWidth + eventWidth;
 
@@ -141,8 +143,10 @@ export async function generateCertificateDataUrl({
     while (totalLineWidth > maxLineContentWidth && eventLineFontSize > 24) {
       eventLineFontSize -= 1;
       ctx.font = `italic 300 ${eventLineFontSize}px "Glacial Indifference", sans-serif`;
+      ctx.letterSpacing = '2px';
       prefixWidth = ctx.measureText(prefixText).width;
       ctx.font = `italic 700 ${eventLineFontSize}px "Glacial Indifference", sans-serif`;
+      ctx.letterSpacing = '6px';
       eventWidth = ctx.measureText(eventText).width + (eventLineFontSize * 0.05);
       totalLineWidth = prefixWidth + eventWidth;
     }
@@ -150,16 +154,17 @@ export async function generateCertificateDataUrl({
     // Centered start X for the entire composite line
     const lineStartX = (width - totalLineWidth) / 2;
 
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#16224b';
-
     // Draw prefix in Italic 400
+    ctx.textAlign = 'left';
+    ctx.letterSpacing = '2px';
+    ctx.fillStyle = '#16224b';
     ctx.font = `italic 300 ${eventLineFontSize}px "Glacial Indifference", sans-serif`;
     ctx.fillText(prefixText, lineStartX, eventBaselineY);
 
     // Draw Event Name in Italic Bold 700
     ctx.font = `italic 700 ${eventLineFontSize}px "Glacial Indifference", sans-serif`;
     ctx.lineWidth = eventLineFontSize * 0.035;
+    ctx.letterSpacing = '6px';
     ctx.strokeStyle = '#0b091f';
     ctx.strokeText(eventText, lineStartX + prefixWidth, eventBaselineY);
     ctx.fillText(eventText, lineStartX + prefixWidth, eventBaselineY);

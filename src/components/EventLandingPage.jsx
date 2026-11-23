@@ -157,9 +157,16 @@ function InlineAnnouncementEditor({ initialData = null, onSave, onCancel }) {
 }
 
 const VENUE_ROOM_OPTIONS = [
+  'Room 101',
+  'Room 102',
+  'Room 103',
+  'Room 201',
+  'Room 202',
   'Room A107',
   'Room A108',
   'AIML Lab',
+  'Seminar Hall',
+  'Auditorium'
 ];
 
 function parseTimeRange(str) {
@@ -253,6 +260,7 @@ function InlineActivityCardEditor({ activity, onSave, onCancel }) {
   return (
     <form
       onSubmit={handleSubmit}
+      onClick={(e) => e.stopPropagation()}
       className="bg-surface-container-low border-2 border-primary/50 rounded-3xl p-5 sm:p-6 shadow-md flex flex-col justify-between space-y-4 animate-fadeIn"
     >
       <div className="space-y-3">
@@ -985,8 +993,13 @@ export default function EventLandingPage({
 
                         {isAdmin && (
                           <button
-                            onClick={() => setEditingActivityId(act.id)}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingActivityId(act.id);
+                            }}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-surface-container hover:bg-surface-container-high text-primary transition-all border border-surface-container-high"
+                            title="Edit Activity Schedule & Venue"
                           >
                             <Edit3 className="w-3 h-3 text-primary" />
                             <span>Edit</span>

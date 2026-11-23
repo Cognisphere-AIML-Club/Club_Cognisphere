@@ -143,6 +143,22 @@ function CertificateCard({ item, participantName, user }) {
     }
   };
 
+  const handleShareLinkedIn = () => {
+    if (typeof window === 'undefined') return;
+    const origin = window.location.origin;
+    const shareUrl = verifyUrl || `${origin}/verify`;
+    const eventName = item.activity?.name ? `${item.activity.name} at IGNITE 2026` : 'IGNITE 2026';
+
+    let leadText = `I participated in ${eventName} organized by Cognisphere, Sambhram Institute of Technology.`;
+    if (isWinner && rankLabel) {
+      leadText = `Excited to share that I achieved ${rankLabel} in ${item.activity?.name || 'IGNITE 2026'} organized by Cognisphere, Sambhram Institute of Technology!`;
+    }
+
+    const postText = `${leadText} Here is my verified certificate:\n${shareUrl}\n\n#Cognisphere #IGNITE2026 #Achievement #TechEvent`;
+    const linkedinUrl = `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(postText)}&linkOrigin=DEEPLINK`;
+    window.open(linkedinUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const attendanceDate = item.attendance.timestamp?.toLocaleDateString
     ? item.attendance.timestamp.toLocaleDateString()
     : '24-25 Nov 2026';
@@ -229,11 +245,28 @@ function CertificateCard({ item, participantName, user }) {
             {<a href={verifyUrl} target="_blank">{verifyUrl}</a>}
           </button>
         </div>
-        <button
-          onClick={handleCopyLink}
-          className="text-primary hover:underline font-bold text-xs flex items-center gap-1 self-start sm:self-auto">
-          {copied ? <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Copied!</span> : <span className="flex items-center gap-1"><Copy className="w-3.5 h-3.5" /> Copy Link</span>}
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={handleCopyLink}
+            className="text-primary hover:underline font-bold text-xs flex items-center gap-1">
+            {copied ? <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Copied!</span> : <span className="flex items-center gap-1"><Copy className="w-3.5 h-3.5" /> Copy Link</span>}
+          </button>
+          <button
+            type="button"
+            onClick={handleShareLinkedIn}
+            className="p-1 hover:opacity-90 active:scale-95 transition-transform rounded"
+            title="Share certificate on LinkedIn feed"
+            aria-label="Share certificate on LinkedIn feed"
+          >
+            <svg className="w-4 h-4 rounded-[3px]" viewBox="0 0 24 24" fill="none">
+              <rect width="24" height="24" rx="4" fill="#0A66C2" />
+              <path
+                d="M7.4 9.5H5V17.5H7.4V9.5ZM6.2 8.4C7 8.4 7.6 7.8 7.6 7C7.6 6.2 7 5.6 6.2 5.6C5.4 5.6 4.8 6.2 4.8 7C4.8 7.8 5.4 8.4 6.2 8.4ZM11.6 17.5V13.3C11.6 12.1 12.3 11.3 13.5 11.3C14.7 11.3 15.3 12.2 15.3 13.4V17.5H17.7V13C17.7 10.6 16.3 9.4 14.4 9.4C13 9.4 12.1 10.2 11.6 11.1V9.5H9.3V17.5H11.6Z"
+                fill="white"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -104,8 +104,8 @@ export default function App() {
   const [selectedPassGameId, setSelectedPassGameId] = useState(null);
   const [selectedLeaderboardGameId, setSelectedLeaderboardGameId] = useState(() => searchParams.get('game') || null);
 
-  // Certificate Verification Deep-Link State (?id=... or /verify?id=... or /verify/...)
-  const [verifyCertId, setVerifyCertId] = useState(() => {
+  // Certificate Verification Deep-Link Helper & State (?id=... or /verify?id=... or /verify/...)
+  const getVerifyIdFromUrl = () => {
     if (typeof window === 'undefined') return null;
     const sp = new URLSearchParams(window.location.search);
     const fromQuery = sp.get('id') || sp.get('verify') || sp.get('cert');
@@ -113,8 +113,21 @@ export default function App() {
     const pn = window.location.pathname.replace(/\/+$/, '');
     if (pn.startsWith('/verify/')) return pn.split('/verify/')[1];
     if (pn === '/verify' && sp.get('id')) return sp.get('id');
+    const hash = window.location.hash.replace(/^#\/?/, '');
+    if (hash.startsWith('verify/')) return hash.split('verify/')[1];
     return null;
-  });
+  };
+
+  const isVerifyRoute = () => {
+    if (typeof window === 'undefined') return false;
+    const pn = window.location.pathname.replace(/\/+$/, '');
+    const hash = window.location.hash.replace(/^#\/?/, '');
+    const sp = new URLSearchParams(window.location.search);
+    return pn === '/verify' || pn.startsWith('/verify/') || hash === 'verify' || hash.startsWith('verify/') || sp.has('verify') || sp.has('cert');
+  };
+
+  const [showVerifyView, setShowVerifyView] = useState(() => isVerifyRoute() || Boolean(getVerifyIdFromUrl()));
+  const [verifyCertId, setVerifyCertId] = useState(getVerifyIdFromUrl);
 
   // Helper to safely get window scroll position
   const getWindowScrollY = () => {
@@ -409,6 +422,9 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  // Competition Leaderboard is always active & accessible for Admins regardless of public toggle
+  const isLeaderboardVisibleForUser = Boolean(isAdmin || effectiveIsAdmin || showLeaderboard);
+
   const handleOpenBigScreen = (mode = 'hall', activityId = null) => {
     const isRestrictedCoordinator = !effectiveIsAdmin && Boolean(coordinatorAssignedActivityId);
     const targetMode = isRestrictedCoordinator ? 'room' : mode;
@@ -559,12 +575,12 @@ export default function App() {
     });
   };
 
-  // Automatically navigate away from leaderboard if it gets hidden by an admin
+  // Automatically navigate away from leaderboard if it gets hidden for participants
   useEffect(() => {
-    if (!showLeaderboard && activeTab === 'leaderboard') {
+    if (!isLeaderboardVisibleForUser && activeTab === 'leaderboard') {
       navigateToTab('home');
     }
-  }, [showLeaderboard, activeTab]);
+  }, [isLeaderboardVisibleForUser, activeTab]);
 
   // Back Navigation: Moves back along the layer stack, restoring the remembered scroll position
   const triggerBackAction = () => {
@@ -733,6 +749,13 @@ export default function App() {
       }
 
       // Check current browser pathname directly
+      if (isVerifyRoute()) {
+        setShowVerifyView(true);
+        setVerifyCertId(getVerifyIdFromUrl());
+      } else {
+        setShowVerifyView(false);
+        setVerifyCertId(null);
+      }
       const currentTab = getTabFromPath();
 
       // If at root with no modals and no subview, trap and prompt leave confirmation
@@ -861,7 +884,7 @@ export default function App() {
         theme={theme}
         onToggleAdminTheme={toggleTheme}
         onToggleTheme={toggleTheme}
-        showLeaderboard={showLeaderboard}
+        showLeaderboard={isLeaderboardVisibleForUser}
         enableThemeToggle={enableThemeToggle && !isCoordinatorUser}
         canScan={effectiveIsAdmin || canCoordinatorScan}
         canTimers={effectiveIsAdmin || canCoordinatorTimers || effectiveIsJudge}
@@ -970,7 +993,7 @@ export default function App() {
           onLaunchBigScreen={(mode, actId) => handleOpenBigScreen(mode, actId)}
           theme={theme}
           onToggleTheme={toggleTheme}
-          showLeaderboard={showLeaderboard}
+          showLeaderboard={isLeaderboardVisibleForUser}
           canScan={effectiveIsAdmin || canCoordinatorScan}
           canTimers={effectiveIsAdmin || canCoordinatorTimers || effectiveIsJudge}
           canDesk={effectiveIsAdmin || canCoordinatorDesk}
@@ -1002,13 +1025,14 @@ export default function App() {
 
           {/* Hardware-Accelerated Navigation Stage & Page Layers (Safari Compositor Stack) */}
           <div className="nav-layer-stage">
-            <div className="nav-page-layer" key={verifyCertId ? `verify_${verifyCertId}` : `layer_${stackIndex}_${activeTab}_${selectedGame?.id || 'main'}`}>
+            <div className="nav-page-layer" key={(showVerifyView || verifyCertId) ? `verify_${verifyCertId || 'search'}` : `layer_${stackIndex}_${activeTab}_${selectedGame?.id || 'main'}`}>
               {/* Public Certificate Verification View */}
-              {verifyCertId ? (
+              {(showVerifyView || verifyCertId) ? (
                 <CertificateVerificationView
-                  certId={verifyCertId}
+                  certId={verifyCertId || ''}
                   onBack={() => {
                     setVerifyCertId(null);
+                    setShowVerifyView(false);
                     if (typeof window !== 'undefined') {
                       window.history.pushState({}, '', '/');
                     }
@@ -1034,7 +1058,7 @@ export default function App() {
                 selectedGame ? (
                   <GameDetailPage
                     activity={activities.find(a => a.id === selectedGame.id) || selectedGame}
-                    isAdmin={effectiveIsAdmin}
+                    isAdmin={isAdmin || effectiveIsAdmin}
                     isStaff={effectiveIsStaff}
                     isCoordinator={effectiveIsCoordinator}
                     role={effectiveRole}
@@ -1043,16 +1067,16 @@ export default function App() {
                     profile={profile}
                     onBack={triggerBackAction}
                     onOpenPass={handleOpenPassForGame}
-                    onOpenLeaderboard={showLeaderboard ? handleOpenLeaderboardForGame : null}
+                    onOpenLeaderboard={isLeaderboardVisibleForUser ? handleOpenLeaderboardForGame : null}
                     onUpdateActivity={updateActivity}
                     onOpenBigScreen={(actId) => handleOpenBigScreen('room', actId)}
                     onSignIn={signInWithGoogle}
-                    showLeaderboard={showLeaderboard}
+                    showLeaderboard={isLeaderboardVisibleForUser}
                   />
                 ) : (
                   <EventLandingPage
                     activities={activities}
-                    isAdmin={effectiveIsAdmin}
+                    isAdmin={isAdmin || effectiveIsAdmin}
                     user={user}
                     profile={profile}
                     onViewPass={handleOpenPassForGame}
@@ -1065,15 +1089,15 @@ export default function App() {
 
               {/* Tab: Dedicated Leaderboard Page with Multi-Event Selector */}
               {activeTab === 'leaderboard' && (
-                showLeaderboard ? (
+                isLeaderboardVisibleForUser ? (
                   <LeaderboardPage
                     activities={activities}
                     initialActivityId={selectedLeaderboardGameId}
                     user={user}
-                    isAdmin={effectiveIsAdmin}
+                    isAdmin={isAdmin || effectiveIsAdmin}
                     isCoordinator={effectiveIsCoordinator}
                     isStaff={effectiveIsStaff}
-                    canEditLeaderboard={effectiveIsAdmin || canCoordinatorLeaderboard}
+                    canEditLeaderboard={isAdmin || effectiveIsAdmin || canCoordinatorLeaderboard}
                     onBack={triggerBackAction}
                     onNavigateToEvent={(actId) => {
                       const act = activities.find(a => a.id === actId);

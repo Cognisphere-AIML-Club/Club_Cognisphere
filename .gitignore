@@ -29,3 +29,4 @@ dist-ssr
 *.pem
 serviceAccountKey.json
 *.md
+!README.md

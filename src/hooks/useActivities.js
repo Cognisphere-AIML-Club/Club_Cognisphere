@@ -46,6 +46,19 @@ export function useActivities() {
   }, []);
 
   const updateActivity = async (activityId, fields) => {
+    // 1. Optimistic update to immediately reflect edits in local state & single source of truth
+    setActivities(prev => {
+      const updated = prev.map(def => {
+        if (def.id === activityId) {
+          return { ...def, ...fields };
+        }
+        return def;
+      });
+      setCurrentActivities(updated);
+      return updated;
+    });
+
+    // 2. Persist to Firestore activities collection
     const docRef = doc(db, 'activities', activityId);
     await setDoc(docRef, {
       ...fields,

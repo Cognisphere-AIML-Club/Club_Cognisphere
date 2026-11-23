@@ -395,15 +395,14 @@ export default function GameDetailPage({
             )}
 
             {/* Dynamic Status Pill: Calculated based on time & date */}
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-              statusInfo.isLive
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusInfo.isLive
                 ? 'bg-tertiary-container border-tertiary/30 text-on-tertiary-container'
                 : statusInfo.status === 'Completed'
                   ? 'bg-surface-container border-surface-container-high text-secondary'
                   : statusInfo.isCountdown
                     ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 font-extrabold'
                     : 'bg-surface-container-low border-surface-container text-on-surface'
-            }`}>
+              }`}>
               {statusInfo.isLive && (
                 <span className="w-1.5 h-1.5 rounded-full bg-on-tertiary-container animate-pulse" />
               )}

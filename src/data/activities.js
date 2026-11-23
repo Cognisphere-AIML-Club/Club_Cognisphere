@@ -8,58 +8,56 @@ export const ACTIVITIES = [
     name: 'Tech Quiz',
     theme: 'Test Your Mind. Beat the Clock.',
     category: 'Technical',
-    room: 'Room 103',
-    eventDate: '2026-11-25',
+    room: 'Room A108',
+    eventDate: '2026-11-24',
     defaultDuration: 60, // 1 min per question/round
-    scheduledTime: '10:00 AM – 11:30 AM (90 Mins Total)',
+    scheduledTime: '12:00 PM – 1:00 PM',
     description: 'Fast-paced technical trivia testing foundational and modern knowledge across Artificial Intelligence, Machine Learning, Computer Science, and emerging technologies.',
-    totalDuration: '90 Minutes',
+    totalDuration: '60 Minutes',
     scheduleTimeline: [
       { time: '0:00 – 0:10', stage: 'Introduction and Rules Briefing', duration: '10 Minutes', durationSeconds: 600 },
-      { time: '0:10 – 0:30', stage: 'Round 1 – Rapid Fire Technical Trivia', duration: '20 Minutes', durationSeconds: 1200 },
-      { time: '0:30 – 0:55', stage: 'Round 2 – Audio-Visual & Code Debugging', duration: '25 Minutes', durationSeconds: 1500 },
-      { time: '0:55 – 1:20', stage: 'Round 3 – Buzzer & Deductive Problem Solving', duration: '25 Minutes', durationSeconds: 1500 },
-      { time: '1:20 – 1:30', stage: 'Tie-Breaker, Score Verification & Closing', duration: '10 Minutes', durationSeconds: 600 }
+      { time: '0:10 – 0:35', stage: 'Round 1 – Rapid Fire Technical Trivia', duration: '25 Minutes', durationSeconds: 1500 },
+      { time: '0:35 – 0:50', stage: 'Round 2 – Buzzer & Deductive Problem Solving', duration: '15 Minutes', durationSeconds: 900 },
+      { time: '0:50 – 1:00', stage: 'Score Verification & Closing', duration: '10 Minutes', durationSeconds: 600 }
     ],
     guide: GAME_GUIDES['tech-quiz']
   },
   {
     id: 'reverse-prompt',
-    name: 'PROMPT DECODE',
+    name: 'Reverse Prompt Engineering',
     theme: 'Reverse Prompt Engineering – AI Image Recreation Challenge',
     category: 'Technical',
-    room: 'Room 101',
+    room: 'Room A108',
     eventDate: '2026-11-24',
-    defaultDuration: 900, // 15 mins
-    scheduledTime: '10:00 AM – 11:30 AM (90 Mins Total)',
+    defaultDuration: 1500, // 25 mins
+    scheduledTime: '1:00 PM – 1:30 PM',
     description: 'Deconstruct generated outputs to deduce original prompts through visual analysis and iterative AI prompt refinement.',
-    totalDuration: '90 Minutes',
+    totalDuration: '45 Minutes',
     scheduleTimeline: [
       { time: '0:00 – 0:10', stage: 'Introduction, rules and platform login check', duration: '10 Minutes', durationSeconds: 600 },
-      { time: '0:10 – 0:25', stage: 'Round 1 – Visual Analysis', duration: '15 Minutes', durationSeconds: 900 },
-      { time: '0:25 – 0:50', stage: 'Round 2, Stage 1 – Prompt Creation and Submission', duration: '25 Minutes', durationSeconds: 1500 },
-      { time: '0:50 – 1:15', stage: 'Round 2, Stage 2 – Image Generation and Refinement', duration: '25 Minutes', durationSeconds: 1500 },
-      { time: '1:15 – 1:30', stage: 'Round 2, Stage 3 – Final Submission', duration: '15 Minutes', durationSeconds: 900 }
+      { time: '0:10 – 0:15', stage: 'Round 1 – Visual Analysis', duration: '5 Minutes', durationSeconds: 300 },
+      { time: '0:15 – 0:40', stage: 'Round 2 – Prompt Creation and Submission', duration: '25 Minutes', durationSeconds: 1500 },
+      { time: '0:40 – 0:45', stage: 'Score Verification & Closing', duration: '5 Minutes', durationSeconds: 300 }
     ],
     guide: GAME_GUIDES['reverse-prompt']
   },
   {
     id: 'ui-ux-makeover',
-    name: 'UI/UX Makeover Challenge',
-    theme: 'From Complicated to Convenient',
+    name: 'UI/UX Design Challenge',
+    theme: 'Reinventing Interfaces with Purpose',
     category: 'Technical',
-    room: 'Room 102',
+    room: 'Room A108',
     eventDate: '2026-11-24',
     defaultDuration: 900, // 15 mins
-    scheduledTime: '1:30 PM – 3:00 PM (90 Mins Total)',
+    scheduledTime: '2:15 PM – 3:25 PM',
     description: 'Identify usability, navigation, and accessibility flaws on real-world website interfaces and craft modern, user-friendly redesigns.',
-    totalDuration: '90 Minutes',
+    totalDuration: '70 Minutes',
     scheduleTimeline: [
       { time: '0:00 – 0:10', stage: 'Introduction and Challenge Briefing', duration: '10 Minutes', durationSeconds: 600 },
-      { time: '0:10 – 0:25', stage: 'Round 1 – UX Investigation', duration: '15 Minutes', durationSeconds: 900 },
-      { time: '0:25 – 1:00', stage: 'Round 2 – Design Makeover', duration: '35 Minutes', durationSeconds: 2100 },
-      { time: '1:00 – 1:20', stage: 'Round 3 – Design Presentation', duration: '20 Minutes', durationSeconds: 1200 },
-      { time: '1:20 – 1:30', stage: 'Final Submission and Closing', duration: '10 Minutes', durationSeconds: 600 }
+      { time: '0:10 – 0:20', stage: 'Round 1 – UX Investigation', duration: '10 Minutes', durationSeconds: 600 },
+      { time: '0:20 – 0:45', stage: 'Round 2 – UI/UX Design', duration: '25 Minutes', durationSeconds: 1500 },
+      { time: '0:45 – 1:00', stage: 'Round 3 – Design Presentation', duration: '15 Minutes', durationSeconds: 900 },
+      { time: '1:00 – 1:10', stage: 'Final Submission and Closing', duration: '10 Minutes', durationSeconds: 600 }
     ],
     guide: GAME_GUIDES['ui-ux-makeover']
   },

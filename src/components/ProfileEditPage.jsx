@@ -1423,7 +1423,7 @@ export default function ProfileEditPage({
                     </span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${showLeaderboard ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-surface-container text-secondary'
                       }`}>
-                      {showLeaderboard ? 'Active (Visible)' : 'Hidden (App & Big Screen)'}
+                      {showLeaderboard ? 'Active (Publicly Visible)' : 'Hidden for Participants (Always Active for Admin)'}
                     </span>
                   </div>
                 </div>

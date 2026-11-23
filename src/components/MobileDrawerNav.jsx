@@ -107,7 +107,7 @@ export default function MobileDrawerNav({
       id: 'leaderboard',
       label: 'Leaderboard',
       icon: Trophy,
-      show: Boolean(showLeaderboard),
+      show: Boolean(showLeaderboard || isAdmin || isAdminUser),
       badge: null
     },
     {

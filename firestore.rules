@@ -11,11 +11,14 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
-    // Role check: email must exist in the 'roles' collection with role == 'admin'
+    // Role check: email or uid must exist in the 'roles' collection with role == 'admin'
     function isAdmin() {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/roles/$(userEmail())) &&
-        get(/databases/$(database)/documents/roles/$(userEmail())).data.role == 'admin';
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/roles/$(userEmail())) &&
+         get(/databases/$(database)/documents/roles/$(userEmail())).data.role == 'admin') ||
+        (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     // Coordinator check: role is 'coordinator' or user is admin
@@ -100,7 +103,7 @@ service cloud.firestore {
     // Doc ID: {activityId}_{participantId}
     // Students can request access for a game; only coordinators and admins can approve or reject.
     match /passRequests/{requestId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() && request.resource.data.participantId == request.auth.uid;
       allow update: if isCoordinator() || isAdmin();
       allow delete: if isAdmin();
@@ -110,7 +113,7 @@ service cloud.firestore {
     // All participants can view event activities, room numbers, descriptions, and times.
     // Only admins can edit or update activity information.
     match /activities/{activityId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
