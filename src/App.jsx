@@ -1030,6 +1030,7 @@ export default function App() {
               {(showVerifyView || verifyCertId) ? (
                 <CertificateVerificationView
                   certId={verifyCertId || ''}
+                  activities={activities}
                   onBack={() => {
                     setVerifyCertId(null);
                     setShowVerifyView(false);
@@ -1168,6 +1169,8 @@ export default function App() {
                   user={user}
                   profile={profile}
                   isAdmin={isAdmin || effectiveIsAdmin}
+                  isCoordinator={isCoordinatorUser}
+                  roleData={roleData}
                   isStaff={effectiveIsStaff}
                   activities={activities}
                 />

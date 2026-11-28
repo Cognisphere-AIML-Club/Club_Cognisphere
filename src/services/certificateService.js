@@ -2,6 +2,7 @@ import {
   doc, 
   onSnapshot, 
   setDoc, 
+  deleteField,
   collection, 
   query, 
   where, 
@@ -9,6 +10,72 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../firebase';
+
+/**
+ * Deterministic short hash helper for email/name based IDs
+ */
+function shortStableHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36).toUpperCase().padStart(6, '0').slice(0, 6);
+}
+
+/**
+ * Deterministic Certificate ID builder shared across participation, winner, and coordinator certificates.
+ */
+export function buildCertificateId({
+  activityId = 'EVT',
+  attendanceId = '',
+  participantId = '',
+  certId = '',
+  certType = 'participation',
+  email = '',
+  usn = ''
+}) {
+  if (certId && typeof certId === 'string' && certId.trim()) {
+    return certId.trim();
+  }
+  if (certType === 'coordinator') {
+    const cleanUsn = (usn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const seed = (email || participantId || attendanceId || 'COORD').trim().toLowerCase();
+    const suffix = cleanUsn ? cleanUsn.slice(-6).padStart(6, '0') : shortStableHash(seed);
+    return `IGNITE26-COORD-${suffix}`;
+  }
+  const actCode = (activityId || 'EVT').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5) || 'EVT';
+  if (certType === 'winner') {
+    const cleanUsn = (usn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const seed = `${activityId}_${participantId || attendanceId || email || 'WIN'}`.trim().toLowerCase();
+    const suffix = cleanUsn ? cleanUsn.slice(-6).padStart(6, '0') : shortStableHash(seed);
+    return `IGNITE26-WIN-${actCode}-${suffix}`;
+  }
+  const rawId = attendanceId || participantId || usn || email || 'USER';
+  const userSuffix = rawId.replace(/[^A-Za-z0-9]/g, '').slice(-6).toUpperCase() || shortStableHash(String(rawId));
+  return `IGNITE26-${actCode}-${userSuffix}`;
+}
+
+/**
+ * Build an "Add to LinkedIn Profile" (Licenses & Certifications) URL
+ */
+export function buildAddToLinkedInProfileUrl({
+  certName,
+  certId,
+  verifyUrl,
+  issueYear = 2026,
+  issueMonth = 11
+}) {
+  const params = new URLSearchParams({
+    startTask: 'CERTIFICATION_NAME',
+    name: certName || 'IGNITE 2026 Official Certificate',
+    organizationName: 'Cognisphere - AI & ML Club, Sambhram Institute of Technology',
+    issueYear: String(issueYear),
+    issueMonth: String(issueMonth),
+    ...(verifyUrl ? { certUrl: verifyUrl } : {}),
+    ...(certId ? { certId } : {})
+  });
+  return `https://www.linkedin.com/profile/add?${params.toString()}`;
+}
 
 /**
  * Subscribe to the real-time certificate release switch in Firestore (settings/certificates)
@@ -49,6 +116,86 @@ export async function toggleCertificateRelease(enabled, adminEmail = 'admin') {
     updatedAt: serverTimestamp(),
     updatedBy: adminEmail
   }, { merge: true });
+}
+
+/**
+ * Generate a 32-character cryptographically strong API secret key for Apps Script
+ */
+export function generateMailerApiKey() {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  }
+  return `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`.slice(0, 32);
+}
+
+/**
+ * Subscribe to private Club Gmail Apps Script credentials (Admin/Coordinator only in Firestore rules)
+ */
+export function subscribePrivateMailerConfig(callback) {
+  try {
+    const docRef = doc(db, 'privateSettings', 'mailer');
+    return onSnapshot(
+      docRef,
+      (snap) => {
+        callback(snap.exists() ? snap.data() : {});
+      },
+      (err) => {
+        console.warn('Private mailer config notice:', err?.message);
+        callback({});
+      }
+    );
+  } catch (err) {
+    callback({});
+    return () => {};
+  }
+}
+
+/**
+ * Save Club Official Gmail Apps Script Web App URL, Secret API Key & Public Site Domain in privateSettings/mailer
+ */
+export async function savePrivateMailerConfig({ mailerWebAppUrl, mailerApiKey, publicBaseUrl = '' }, adminEmail = 'admin') {
+  const cleanUrl = (mailerWebAppUrl || '').trim();
+  const cleanKey = (mailerApiKey || '').trim();
+  const cleanSiteUrl = (publicBaseUrl || '').trim().replace(/\/+$/, '');
+  if (!cleanKey) {
+    throw new Error('API Secret Key is required.');
+  }
+
+  const privateRef = doc(db, 'privateSettings', 'mailer');
+  await setDoc(privateRef, {
+    mailerWebAppUrl: cleanUrl,
+    mailerApiKey: cleanKey,
+    ...(cleanSiteUrl ? { publicBaseUrl: cleanSiteUrl } : {}),
+    updatedAt: serverTimestamp(),
+    updatedBy: adminEmail
+  }, { merge: true });
+
+  // Clean up any legacy unauthenticated URL stored in public settings/certificates
+  try {
+    await setDoc(doc(db, 'settings', 'certificates'), {
+      mailerWebAppUrl: deleteField()
+    }, { merge: true });
+  } catch (_) {}
+
+  return { mailerWebAppUrl: cleanUrl, mailerApiKey: cleanKey, publicBaseUrl: cleanSiteUrl };
+}
+
+/**
+ * Mark a certificate record as emailed in Firestore
+ */
+export async function markCertificateEmailSent(certId, sentToEmail = '') {
+  if (!certId) return;
+  try {
+    const certRef = doc(db, 'certificates', certId);
+    await setDoc(certRef, {
+      emailSentAt: serverTimestamp(),
+      ...(sentToEmail ? { emailSentTo: sentToEmail.trim().toLowerCase() } : {})
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Email sent status update notice:', err?.message);
+  }
 }
 
 /**
@@ -116,31 +263,33 @@ export function subscribeUserAttendance(userId, userUsn, callback) {
     }
   }
 
-  // 2. Query by participantUsn (if available)
+  // 2. Query by participantUsn across both attendance & unregisteredParticipants (if available)
   const cleanUsn = userUsn ? userUsn.trim().toUpperCase() : null;
   if (cleanUsn) {
-    try {
-      const qUsn = query(
-        collection(db, 'attendance'),
-        where('participantUsn', '==', cleanUsn)
-      );
-      const unsubUsn = onSnapshot(qUsn, (snap) => {
-        snap.docs.forEach(d => {
-          const data = d.data();
-          attendanceMap.set(d.id, {
-            id: d.id,
-            ...data,
-            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.scannedAt || Date.now())
+    ['attendance', 'unregisteredParticipants'].forEach((colName) => {
+      try {
+        const qUsn = query(
+          collection(db, colName),
+          where('participantUsn', '==', cleanUsn)
+        );
+        const unsubUsn = onSnapshot(qUsn, (snap) => {
+          snap.docs.forEach(d => {
+            const data = d.data();
+            attendanceMap.set(`${colName}_${d.id}`, {
+              id: d.id,
+              ...data,
+              timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.scannedAt || Date.now())
+            });
           });
+          updateCallback();
+        }, (err) => {
+          console.warn(`${colName} subscription (USN) error:`, err.message);
         });
-        updateCallback();
-      }, (err) => {
-        console.warn('Attendance subscription (USN) error:', err.message);
-      });
-      unsubs.push(unsubUsn);
-    } catch (e) {
-      console.warn('Failed to listen to attendance by USN:', e);
-    }
+        unsubs.push(unsubUsn);
+      } catch (e) {
+        console.warn(`Failed to listen to ${colName} by USN:`, e);
+      }
+    });
   }
 
   return () => {
@@ -222,21 +371,24 @@ export async function fetchUserAttendance(userId, userUsn = null) {
     }
 
     if (userUsn) {
-      const q2 = query(
-        collection(db, 'attendance'),
-        where('participantUsn', '==', userUsn.trim().toUpperCase())
-      );
-      const snap2 = await getDocs(q2);
-      snap2.docs.forEach(d => {
-        if (!seen.has(d.id)) {
-          seen.add(d.id);
-          list.push({
-            id: d.id,
-            ...d.data(),
-            timestamp: d.data().timestamp?.toDate ? d.data().timestamp.toDate() : new Date(d.data().scannedAt || Date.now())
-          });
-        }
-      });
+      const cleanUsn = userUsn.trim().toUpperCase();
+      for (const colName of ['attendance', 'unregisteredParticipants']) {
+        const q2 = query(
+          collection(db, colName),
+          where('participantUsn', '==', cleanUsn)
+        );
+        const snap2 = await getDocs(q2);
+        snap2.docs.forEach(d => {
+          if (!seen.has(d.id)) {
+            seen.add(d.id);
+            list.push({
+              id: d.id,
+              ...d.data(),
+              timestamp: d.data().timestamp?.toDate ? d.data().timestamp.toDate() : new Date(d.data().scannedAt || Date.now())
+            });
+          }
+        });
+      }
     }
 
     return list;
@@ -296,19 +448,29 @@ export async function recordCertificateIssuance({
   certId,
   participantId,
   participantName,
-  activityId,
-  activityName,
-  verifyUrl
+  participantUsn = '',
+  participantEmail = '',
+  activityId = '',
+  activityName = '',
+  verifyUrl = '',
+  certType = 'participation',
+  rank = null,
+  rankLabel = ''
 }) {
   if (!certId || !participantId) return null;
   try {
     const certRef = doc(db, 'certificates', certId);
     const dataToSave = {
       certId,
+      certType: certType || 'participation',
       participantId,
       participantName: (participantName || 'Participant').trim(),
+      ...(participantUsn ? { participantUsn: participantUsn.trim().toUpperCase() } : {}),
+      ...(participantEmail ? { participantEmail: participantEmail.trim().toLowerCase() } : {}),
       activityId: activityId || '',
       activityName: activityName || '',
+      ...(rank ? { rank } : {}),
+      ...(rankLabel ? { rankLabel } : {}),
       verifyUrl: verifyUrl || '',
       event: 'IGNITE-2026',
       issuer: 'Cognisphere - AI & ML Club, Sambhram Institute of Technology',
@@ -321,6 +483,77 @@ export async function recordCertificateIssuance({
   } catch (err) {
     console.warn('Certificate issuance tracking notice:', err.message);
     return null;
+  }
+}
+
+/**
+ * Real-time subscription to Coordinator certificates issued for the logged-in user
+ * Matches by participantId (UID), participantEmail, or participantUsn.
+ */
+export function subscribeUserCoordinatorCertificates({ userId, userEmail, userUsn } = {}, callback) {
+  const cleanUid = (userId || '').trim();
+  const cleanEmail = (userEmail || '').trim().toLowerCase();
+  const cleanUsn = (userUsn || '').trim().toUpperCase();
+
+  if (!cleanUid && !cleanEmail && !cleanUsn) {
+    callback([]);
+    return () => {};
+  }
+
+  const certMap = new Map();
+  const emit = () => callback(Array.from(certMap.values()));
+  const unsubs = [];
+
+  const attachQuery = (field, value) => {
+    try {
+      const q = query(collection(db, 'certificates'), where(field, '==', value));
+      const unsub = onSnapshot(q, (snap) => {
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data.certType === 'coordinator') {
+            certMap.set(d.id, {
+              id: d.id,
+              ...data,
+              issuedAt: data.issuedAt?.toDate ? data.issuedAt.toDate() : null
+            });
+          }
+        });
+        emit();
+      }, (err) => console.warn(`Coordinator cert subscription (${field}) notice:`, err?.message));
+      unsubs.push(unsub);
+    } catch (_) {}
+  };
+
+  if (cleanUid) attachQuery('participantId', cleanUid);
+  if (cleanEmail) attachQuery('participantEmail', cleanEmail);
+  if (cleanUsn) attachQuery('participantUsn', cleanUsn);
+
+  return () => {
+    unsubs.forEach((u) => {
+      try { u(); } catch (_) {}
+    });
+  };
+}
+
+/**
+ * Subscribe to all issued certificates in the registry (Admin / Staff lookup)
+ */
+export function subscribeAllIssuedCertificates(callback) {
+  try {
+    const colRef = collection(db, 'certificates');
+    return onSnapshot(colRef, (snap) => {
+      const map = {};
+      snap.docs.forEach(d => {
+        map[d.id] = { id: d.id, ...d.data() };
+      });
+      callback(map);
+    }, (err) => {
+      console.warn('All certificates subscription notice:', err?.message);
+      callback({});
+    });
+  } catch (err) {
+    callback({});
+    return () => {};
   }
 }
 

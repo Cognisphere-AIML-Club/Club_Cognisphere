@@ -43,6 +43,7 @@ import {
 import { validateUSN } from '../hooks/useParticipantProfile';
 import { subscribeToPassConfig, updatePassConfig } from '../services/passApprovalService';
 import { subscribeCertificateSettings, toggleCertificateRelease } from '../services/certificateService';
+import CertificateEmailsModal from './CertificateEmailsModal';
 import { ACTIVITIES } from '../data/activities';
 import {
   subscribeToCoordinatorConfig,
@@ -156,6 +157,7 @@ export default function ProfileEditPage({
   }, [effectiveIsAdmin]);
 
   const isCertEnabled = Boolean(certSettings.enabled);
+  const [showEmailsModal, setShowEmailsModal] = useState(false);
 
   const handleToggleCertificates = async () => {
     if (!effectiveIsAdmin) return;
@@ -1338,20 +1340,32 @@ export default function ProfileEditPage({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleToggleCertificates}
-                  disabled={togglingCert}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isCertEnabled ? 'bg-primary' : 'bg-surface-container-high'
-                    }`}
-                  role="switch"
-                  aria-checked={isCertEnabled}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${isCertEnabled ? 'translate-x-5' : 'translate-x-0'
+                <div className="flex items-center gap-3 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmailsModal(true)}
+                    className="py-1.5 px-3 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-xs"
+                    title="Generate certificate links & club email templates for Participants, Winners & Coordinators"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-primary" />
+                    <span>Emails &amp; Links</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleCertificates}
+                    disabled={togglingCert}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isCertEnabled ? 'bg-primary' : 'bg-surface-container-high'
                       }`}
-                  />
-                </button>
+                    role="switch"
+                    aria-checked={isCertEnabled}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${isCertEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                    />
+                  </button>
+                </div>
               </div>
               {/* Control 1: Hide QR Pass After Attendance Marked */}
               <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2281,6 +2295,15 @@ export default function ProfileEditPage({
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Certificate Links & Official Email Studio Modal */}
+      {effectiveIsAdmin && (
+        <CertificateEmailsModal
+          isOpen={showEmailsModal}
+          onClose={() => setShowEmailsModal(false)}
+          activities={allActivities}
+        />
       )}
     </div>
   );

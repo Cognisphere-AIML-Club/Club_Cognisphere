@@ -21,8 +21,9 @@ import {
 } from 'lucide-react';
 import { verifyCertificateById } from '../services/certificateService';
 import { generateCertificateDataUrl, downloadCertificateImage, printCertificate } from '../utils/certificateGenerator';
+import { getCurrentActivities } from '../data/activities';
 
-export default function CertificateVerificationView({ certId = '', onBack }) {
+export default function CertificateVerificationView({ certId = '', activities = null, onBack }) {
   const [searchQuery, setSearchQuery] = useState(certId ? certId.trim() : '');
   const [activeCertId, setActiveCertId] = useState(certId ? certId.trim() : '');
   const [loading, setLoading] = useState(Boolean(certId && certId.trim()));
@@ -43,7 +44,7 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
     }
   }, [certId]);
 
-  // Lookup verification data and generate WebP preview
+  // Lookup verification data
   useEffect(() => {
     let isMounted = true;
     if (!activeCertId) {
@@ -64,27 +65,6 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
         if (!isMounted) return;
         if (result.exists && result.data) {
           setCertData(result.data);
-
-          // Fast lightweight WebP preview generation (does not load heavy original image)
-          setPreviewLoading(true);
-          const origin = typeof window !== 'undefined' ? window.location.origin : '';
-          const currentVerifyUrl = `${origin}/verify?id=${encodeURIComponent(activeCertId)}`;
-          generateCertificateDataUrl({
-            participantName: result.data.participantName || 'Participant',
-            activityName: result.data.activityName || '',
-            certificateId: result.data.certId || activeCertId,
-            verifyUrl: currentVerifyUrl,
-            format: 'image/webp',
-            useOriginalTemplate: false
-          }).then((url) => {
-            if (isMounted) {
-              setPreviewUrl(url);
-              setPreviewLoading(false);
-            }
-          }).catch((err) => {
-            console.warn('WebP preview generation error:', err);
-            if (isMounted) setPreviewLoading(false);
-          });
         } else {
           setError(result.error || 'Certificate could not be verified in the Cognisphere registry.');
         }
@@ -98,6 +78,55 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
     checkVerification();
     return () => { isMounted = false; };
   }, [activeCertId]);
+
+  const resolvedEventDate = React.useMemo(() => {
+    if (!certData) return '';
+    const list = activities && activities.length > 0 ? activities : getCurrentActivities();
+    const actId = String(certData.activityId || '').trim().toLowerCase();
+    const actName = String(certData.activityName || '').trim().toLowerCase();
+    const matched =
+      (actId && list.find((a) => String(a.id || '').trim().toLowerCase() === actId)) ||
+      (actName && list.find((a) => String(a.name || '').trim().toLowerCase() === actName)) ||
+      null;
+    return matched?.eventDate || certData.eventDate || '';
+  }, [certData, activities]);
+
+  // Generate lightweight WebP preview (refreshes cleanly when Event Hub dates load)
+  useEffect(() => {
+    if (!certData) return;
+    const isCustomTemplatePending = certData.certType === 'winner';
+    if (isCustomTemplatePending) {
+      setPreviewLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    setPreviewLoading(true);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const currentVerifyUrl = `${origin}/verify?id=${encodeURIComponent(activeCertId)}`;
+
+    generateCertificateDataUrl({
+      participantName: certData.participantName || 'Participant',
+      certType: certData.certType || 'participation',
+      activityId: certData.activityId || '',
+      activityName: certData.activityName || '',
+      eventDate: resolvedEventDate,
+      certificateId: certData.certId || activeCertId,
+      verifyUrl: currentVerifyUrl,
+      format: 'image/webp',
+      useOriginalTemplate: false
+    }).then((url) => {
+      if (isMounted) {
+        setPreviewUrl(url);
+        setPreviewLoading(false);
+      }
+    }).catch((err) => {
+      console.warn('WebP preview generation error:', err);
+      if (isMounted) setPreviewLoading(false);
+    });
+
+    return () => { isMounted = false; };
+  }, [certData, activeCertId, resolvedEventDate]);
 
   const handleSearchSubmit = (e) => {
     if (e) e.preventDefault();
@@ -130,7 +159,10 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
       const currentVerifyUrl = `${origin}/verify?id=${encodeURIComponent(certData.certId || activeCertId)}`;
       const url = await generateCertificateDataUrl({
         participantName: certData.participantName,
+        certType: certData.certType || 'participation',
+        activityId: certData.activityId || '',
         activityName: certData.activityName,
+        eventDate: resolvedEventDate,
         certificateId: certData.certId || activeCertId,
         verifyUrl: currentVerifyUrl,
         format: 'image/png',
@@ -154,7 +186,10 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
       const currentVerifyUrl = `${origin}/verify?id=${encodeURIComponent(certData.certId || activeCertId)}`;
       const url = await generateCertificateDataUrl({
         participantName: certData.participantName,
+        certType: certData.certType || 'participation',
+        activityId: certData.activityId || '',
         activityName: certData.activityName,
+        eventDate: resolvedEventDate,
         certificateId: certData.certId || activeCertId,
         verifyUrl: currentVerifyUrl,
         format: 'image/png',
@@ -187,7 +222,12 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
     const shareUrl = `${origin}/verify?id=${encodeURIComponent(certId)}`;
     const eventName = certData?.activityName ? `${certData.activityName} at IGNITE 2026` : 'IGNITE 2026';
 
-    const postText = `I participated in ${eventName} organized by Cognisphere, Sambhram Institute of Technology. Here is my verified certificate:\n${shareUrl}\n\n#Cognisphere #IGNITE2026 #Achievement #TechEvent`;
+    let postText = `I participated in ${eventName} organized by Cognisphere, Sambhram Institute of Technology. Here is my verified certificate:\n${shareUrl}\n\n#Cognisphere #IGNITE2026 #Achievement #TechEvent`;
+    if (certData?.certType === 'coordinator') {
+      postText = `I served as an Event Coordinator during IGNITE 2026 organized by Cognisphere, Sambhram Institute of Technology. Here is my verified certificate:\n${shareUrl}\n\n#Cognisphere #IGNITE2026 #Leadership #TechEvent`;
+    } else if (certData?.certType === 'winner' && certData?.rankLabel) {
+      postText = `Excited to share that I achieved ${certData.rankLabel} in ${certData.activityName || 'IGNITE 2026'} organized by Cognisphere, Sambhram Institute of Technology! Here is my verified certificate:\n${shareUrl}\n\n#Cognisphere #IGNITE2026 #Achievement #TechEvent`;
+    }
 
     const linkedinUrl = `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(postText)}&linkOrigin=DEEPLINK`;
     window.open(linkedinUrl, '_blank', 'noopener,noreferrer');
@@ -313,10 +353,17 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
           {/* Official Verification Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-surface-container">
             <div>
-              <div className="flex flex-row justify-center items-center gap-1.5 px-3 py-1 rounded-full bg-tertiary-container/20 border border-tertiary/30 text-tertiary text-xs font-bold uppercase tracking-wider">                <CheckCircle2 className="w-3.5 h-3.5 text-tertiary" />
-                <span>Verified Authentic Certificate</span>
+              <div className="flex flex-row justify-center items-center gap-1.5 px-3 py-1 rounded-full bg-tertiary-container/20 border border-tertiary/30 text-tertiary text-xs font-bold uppercase tracking-wider">
+                <CheckCircle2 className="w-3.5 h-3.5 text-tertiary" />
+                <span>
+                  {certData.certType === 'coordinator'
+                    ? 'Verified Coordinator Certificate'
+                    : certData.certType === 'winner'
+                    ? `Verified Winner Certificate${certData.rankLabel ? ` • ${certData.rankLabel}` : ''}`
+                    : 'Verified Authentic Certificate'}
+                </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight text-center mt-2">
                 Sambhram Institute of Technology
               </h2>
               <p className="text-xs text-secondary text-center">
@@ -336,13 +383,25 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
               </h3>
             </div>
 
-            {certData.activityName && (
+            {(certData.activityName || certData.certType === 'coordinator') && (
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-wider text-secondary">
                   In Recognition Of
                 </p>
                 <p className="text-sm sm:text-base font-bold text-on-surface">
-                  {certData.activityName}
+                  {(() => {
+                    const cleanAct = String(certData.activityName || '')
+                      .replace(/\s*\(\s*Room\b[^)]*\)/gi, '')
+                      .replace(/\s*[-–—•,]*\s*\bRoom\s+[A-Za-z0-9-]+\b/gi, '')
+                      .trim();
+                    if (certData.certType === 'coordinator') {
+                      return `Active Presence, Event Coordination & Monitoring${cleanAct ? ` — ${cleanAct}` : ''}`;
+                    }
+                    if (certData.certType === 'winner' && certData.rankLabel) {
+                      return `${certData.rankLabel} — ${cleanAct}`;
+                    }
+                    return cleanAct;
+                  })()}
                 </p>
               </div>
             )}
@@ -363,27 +422,43 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
             </div>
           </div>
 
-          {/* WebP Visual Certificate Preview */}
-          <div className="space-y-2">
-            {previewLoading ? (
-              <div className="w-full aspect-[3507/2480] bg-surface-container-low rounded-2xl border border-surface-container flex flex-col items-center justify-center gap-2 p-6">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                <span className="text-xs text-secondary font-medium">Rendering certificate WebP preview...</span>
+          {/* WebP Visual Certificate Preview (or Custom Template Pending Card for Winner) */}
+          {certData.certType === 'winner' ? (
+            <div className="w-full rounded-2xl border border-primary/20 bg-gradient-to-br from-surface-container-low via-surface-container-lowest to-primary/5 p-6 text-center space-y-2.5">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                <Award className="w-6 h-6" />
               </div>
-            ) : previewUrl ? (
-              <div className="relative rounded-2xl overflow-hidden border border-surface-container bg-surface-container-low shadow-sm group">
-                <img
-                  src={previewUrl}
-                  alt={`Certificate for ${certData.participantName}`}
-                  className="w-full h-auto object-contain transition-transform duration-300 group-hover:scale-[1.005]"
-                />
+              <h4 className="text-sm font-extrabold text-on-surface">
+                {`Official Merit Achievement (${certData.rankLabel || 'Winner'})`}
+              </h4>
+              <p className="text-xs text-secondary max-w-md mx-auto leading-relaxed">
+                This credential link is active and cryptographically verified. The downloadable printable design template will appear here shortly once finalized by Team Cognisphere.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2 w-full">
+                {previewLoading ? (
+                  <div className="w-full aspect-[3507/2480] bg-surface-container-low rounded-2xl border border-surface-container flex flex-col items-center justify-center gap-2 p-6">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    <span className="text-xs text-secondary font-medium">Rendering certificate WebP preview...</span>
+                  </div>
+                ) : previewUrl ? (
+                  <div className="relative rounded-2xl overflow-hidden border border-surface-container bg-surface-container-low shadow-sm group">
+                    <img
+                      src={previewUrl}
+                      alt={`Certificate for ${certData.participantName}`}
+                      className="w-full h-auto object-contain transition-transform duration-300 group-hover:scale-[1.005]"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full aspect-[3507/2480] bg-surface-container-low rounded-2xl border border-surface-container flex items-center justify-center p-6 text-xs text-secondary">
+                    <span>Preview currently unavailable</span>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="w-full aspect-[3507/2480] bg-surface-container-low rounded-2xl border border-surface-container flex items-center justify-center p-6 text-xs text-secondary">
-                <span>Preview currently unavailable</span>
-              </div>
-            )}
-          </div>
+            </>
+          )}
 
           {/* Cryptographic Registry Footnote */}
           <div className="text-[11px] text-secondary space-y-1 text-center border-t border-surface-container pt-3">
@@ -395,25 +470,27 @@ export default function CertificateVerificationView({ certId = '', onBack }) {
           </div>
 
           {/* Action Buttons: Download PNG & Download PDF */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <button
-              onClick={handleDownloadPng}
-              disabled={downloading || exportingPdf}
-              className="w-full py-3 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-2xl text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 active:scale-95"
-            >
-              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <span>Download Official PNG</span>
-            </button>
+          {certData.certType !== 'winner' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 w-full">
+              <button
+                onClick={handleDownloadPng}
+                disabled={downloading || exportingPdf}
+                className="w-full py-3 px-4 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-2xl text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 active:scale-95"
+              >
+                {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                <span>Download Official PNG</span>
+              </button>
 
-            <button
-              onClick={handleDownloadPdf}
-              disabled={downloading || exportingPdf}
-              className="w-full py-3 px-4 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-2xl text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-xs whitespace-nowrap active:scale-95"
-            >
-              {exportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-              <span>Download PDF</span>
-            </button>
-          </div>
+              <button
+                onClick={handleDownloadPdf}
+                disabled={downloading || exportingPdf}
+                className="w-full py-3 px-4 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-semibold rounded-2xl text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-xs whitespace-nowrap active:scale-95"
+              >
+                {exportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                <span>Download PDF</span>
+              </button>
+            </div>
+          )}
 
           {/* Dedicated Share Row on the Next Line: certificate.share with Copy and LinkedIn */}
           <div className="flex items-center justify-between p-3.5 sm:p-4 gap-4">

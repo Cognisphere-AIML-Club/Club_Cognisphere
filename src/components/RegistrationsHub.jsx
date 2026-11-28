@@ -10,13 +10,23 @@ import {
 } from '../services/passApprovalService';
 import {
   subscribeToAllAttendance,
+  subscribeToUnregisteredParticipants,
+  addUnregisteredParticipant,
+  addBulkUnregisteredParticipants,
   deleteAttendanceRecord,
+  deleteUnregisteredParticipant,
   getOfflineQueue,
   syncOfflineQueue
 } from '../services/attendanceService';
+import { buildCertificateId } from '../services/certificateService';
+import {
+  subscribeToParticipantsCollection,
+  lookupParticipantProfile
+} from '../services/coordinatorConfigService';
 import { 
   ClipboardCheck, 
   UserCheck, 
+  UserPlus,
   Clock, 
   CheckCircle2, 
   XCircle, 
@@ -39,6 +49,9 @@ import {
   Trash2,
   ArrowUpDown,
   FileSpreadsheet,
+  Award,
+  ExternalLink,
+  Mail,
   X
 } from 'lucide-react';
 import {
@@ -47,6 +60,7 @@ import {
   useSheetsBatchSync
 } from '../services/sheetsBatchSyncService';
 import { pushBulkParticipantsToGoogleSheet } from '../services/googleSheetsService';
+import CertificateEmailsModal from './CertificateEmailsModal';
 
 // Format scan timestamp for display
 function formatAttendanceTime(timestamp) {
@@ -93,8 +107,10 @@ export default function RegistrationsHub({
   // Staff view mode toggle: 'desk' (Approvals queue) or 'attendance' (Activity attendance records)
   const [activeStaffMode, setActiveStaffMode] = useState('desk');
 
-  // Attendance records state (Staff / Admin)
-  const [allAttendance, setAllAttendance] = useState([]);
+  // Attendance records state (Staff / Admin): combines registered QR attendance + unregistered walk-ins
+  const [registeredAttendance, setRegisteredAttendance] = useState([]);
+  const [unregisteredAttendance, setUnregisteredAttendance] = useState([]);
+  const [participantsMap, setParticipantsMap] = useState({});
   const [loadingAttendance, setLoadingAttendance] = useState(true);
   const [selectedAttendanceActivity, setSelectedAttendanceActivity] = useState('all');
   const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
@@ -102,6 +118,41 @@ export default function RegistrationsHub({
   const [deletingAttendanceId, setDeletingAttendanceId] = useState(null);
   const [offlineQueueCount, setOfflineQueueCount] = useState(() => getOfflineQueue().length);
   const [syncingOffline, setSyncingOffline] = useState(false);
+
+  // Add Unregistered (Walk-In) Participant modal state
+  const [showWalkInModal, setShowWalkInModal] = useState(false);
+  const [walkInMode, setWalkInMode] = useState('single'); // 'single' | 'bulk'
+  const [walkInActivityId, setWalkInActivityId] = useState(() => allActivities[0]?.id || '');
+  const [walkInName, setWalkInName] = useState('');
+  const [walkInUsn, setWalkInUsn] = useState('');
+  const [walkInEmail, setWalkInEmail] = useState('');
+  const [walkInBulkText, setWalkInBulkText] = useState('');
+  const [addingWalkIn, setAddingWalkIn] = useState(false);
+  const [walkInFeedback, setWalkInFeedback] = useState(null);
+  const [showEmailsModal, setShowEmailsModal] = useState(false);
+
+  const allAttendance = useMemo(() => {
+    const merged = [...registeredAttendance, ...unregisteredAttendance].map((rec) => {
+      const prof = lookupParticipantProfile(participantsMap, {
+        participantId: rec.participantId,
+        usn: rec.participantUsn,
+        email: rec.participantEmail,
+        name: rec.participantName
+      });
+      if (!prof) return rec;
+      return {
+        ...rec,
+        participantUsn: rec.participantUsn || prof.usn || '',
+        participantEmail: rec.participantEmail || prof.email || ''
+      };
+    });
+    merged.sort((a, b) => {
+      const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+      const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+      return timeB - timeA;
+    });
+    return merged;
+  }, [registeredAttendance, unregisteredAttendance, participantsMap]);
 
   // Participant state
   const [userRequests, setUserRequests] = useState({});
@@ -142,7 +193,7 @@ export default function RegistrationsHub({
     return () => unsub();
   }, [effectiveIsStaff]);
 
-  // Subscribe to all door attendance records if user is staff (Admin or Coordinator)
+  // Subscribe to registered attendance & unregistered walk-in records if user is staff (Admin or Coordinator)
   useEffect(() => {
     if (!effectiveIsStaff) {
       setLoadingAttendance(false);
@@ -150,12 +201,134 @@ export default function RegistrationsHub({
     }
 
     setLoadingAttendance(true);
-    const unsub = subscribeToAllAttendance((list) => {
-      setAllAttendance(list);
-      setLoadingAttendance(false);
+    let regLoaded = false;
+    let unregLoaded = false;
+
+    const checkLoaded = () => {
+      if (regLoaded && unregLoaded) setLoadingAttendance(false);
+    };
+
+    const unsubReg = subscribeToAllAttendance((list) => {
+      setRegisteredAttendance(list);
+      regLoaded = true;
+      checkLoaded();
     });
-    return () => unsub();
+
+    const unsubUnreg = subscribeToUnregisteredParticipants((list) => {
+      setUnregisteredAttendance(list);
+      unregLoaded = true;
+      checkLoaded();
+    });
+
+    const unsubParticipants = subscribeToParticipantsCollection(setParticipantsMap);
+
+    return () => {
+      unsubReg();
+      unsubUnreg();
+      unsubParticipants();
+    };
   }, [effectiveIsStaff]);
+
+  // Parse bulk lines ("Name, USN" or "Name | USN" or "Name")
+  const parsedBulkWalkIns = useMemo(() => {
+    if (!walkInBulkText.trim()) return [];
+    return walkInBulkText
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const parts = line.split(/[,|\t]+/).map(s => s.trim()).filter(Boolean);
+        return {
+          participantName: parts[0] || '',
+          participantUsn: (parts[1] || '').toUpperCase(),
+          participantEmail: parts[2] || ''
+        };
+      })
+      .filter(p => p.participantName.length > 0);
+  }, [walkInBulkText]);
+
+  // Add unregistered participant(s) handler
+  const handleAddWalkInSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!walkInActivityId) {
+      alert('Please select an activity.');
+      return;
+    }
+
+    const actObj = getActivity(walkInActivityId);
+    const addedByEmail = user?.email || 'staff';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+    try {
+      setAddingWalkIn(true);
+      setWalkInFeedback(null);
+
+      if (walkInMode === 'single') {
+        if (!walkInName.trim()) {
+          alert('Please enter the participant full name.');
+          return;
+        }
+        const res = await addUnregisteredParticipant({
+          activityId: walkInActivityId,
+          activityName: actObj?.name || walkInActivityId,
+          participantName: walkInName,
+          participantUsn: walkInUsn,
+          participantEmail: walkInEmail,
+          addedBy: addedByEmail,
+          origin,
+          participantsMap
+        });
+
+        setWalkInFeedback({
+          type: res.status === 'added' ? 'success' : 'info',
+          message: res.message,
+          certId: res.certId,
+          verifyUrl: res.verifyUrl
+        });
+
+        if (res.status === 'added') {
+          setWalkInName('');
+          setWalkInUsn('');
+          setWalkInEmail('');
+          setSuccessBanner(`Added ${res.record?.participantName} & issued certificate ${res.certId}!`);
+        }
+      } else {
+        if (parsedBulkWalkIns.length === 0) {
+          alert('Please enter at least one participant name.');
+          return;
+        }
+        const summary = await addBulkUnregisteredParticipants({
+          activityId: walkInActivityId,
+          activityName: actObj?.name || walkInActivityId,
+          participants: parsedBulkWalkIns,
+          addedBy: addedByEmail,
+          origin,
+          participantsMap
+        });
+
+        const addedCount = summary.added.length;
+        const skippedCount = summary.alreadyMarked.length;
+        const failedCount = summary.failed.length;
+
+        setWalkInFeedback({
+          type: addedCount > 0 ? 'success' : 'info',
+          message: `Processed ${parsedBulkWalkIns.length}: ${addedCount} added & certificates issued${skippedCount ? `, ${skippedCount} already recorded` : ''}${failedCount ? `, ${failedCount} failed` : ''}.`
+        });
+
+        if (addedCount > 0) {
+          setWalkInBulkText('');
+          setSuccessBanner(`Added ${addedCount} unregistered participant(s) & issued participation certificates!`);
+        }
+      }
+    } catch (err) {
+      const msg = err?.code === 'permission-denied' || (err?.message || '').toLowerCase().includes('permission')
+        ? 'Permission denied: Please publish the updated firestore.rules in Firebase Console to allow writing to unregisteredParticipants.'
+        : (err?.message || 'Failed to add unregistered participant');
+      setWalkInFeedback({ type: 'error', message: msg });
+    } finally {
+      setAddingWalkIn(false);
+    }
+  };
 
   // Sync offline queue handler
   const handleSyncOfflineAttendance = async () => {
@@ -175,18 +348,23 @@ export default function RegistrationsHub({
     }
   };
 
-  // Remove attendance record handler (Admin only)
-  const handleDeleteAttendance = async (attendanceId, studentName, eventName) => {
-    if (!isAdmin) {
-      alert('Only administrators can remove attendance records.');
+  // Remove attendance record handler (Admin for registered, Admin/Staff for walk-in)
+  const handleDeleteAttendance = async (rec, studentName, eventName) => {
+    const canDeleteThis = rec?.isUnregistered ? effectiveIsStaff : isAdmin;
+    if (!canDeleteThis) {
+      alert('Only administrators can remove registered attendance records.');
       return;
     }
     if (!window.confirm(`Are you sure you want to remove the attendance record for ${studentName || 'this student'} in ${eventName || 'this event'}?`)) {
       return;
     }
     try {
-      setDeletingAttendanceId(attendanceId);
-      await deleteAttendanceRecord(attendanceId);
+      setDeletingAttendanceId(rec.id);
+      if (rec.isUnregistered) {
+        await deleteUnregisteredParticipant(rec.id);
+      } else {
+        await deleteAttendanceRecord(rec.id);
+      }
       setSuccessBanner(`Attendance record for ${studentName || 'student'} removed.`);
     } catch (err) {
       alert(err.message || 'Failed to remove attendance record');
@@ -497,9 +675,15 @@ export default function RegistrationsHub({
       return;
     }
 
-    const headers = ['#', 'Participant Name', 'USN', 'Activity Name', 'Room', 'Category', 'Check-In Time', 'Scanned By', 'Status'];
+    const headers = ['#', 'Participant Name', 'USN', 'Email', 'Type', 'Certificate ID', 'Activity Name', 'Room', 'Category', 'Check-In Time', 'Added / Scanned By', 'Status'];
     const rows = filteredAttendance.map((rec, idx) => {
       const act = getActivity(rec.activityId);
+      const certId = buildCertificateId({
+        activityId: rec.activityId,
+        attendanceId: rec.id,
+        participantId: rec.participantId,
+        certId: rec.certId
+      });
       const timeStr = rec.timestamp instanceof Date
         ? rec.timestamp.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
         : (rec.scannedAt || '');
@@ -507,6 +691,9 @@ export default function RegistrationsHub({
         idx + 1,
         `"${(rec.participantName || 'Participant').replace(/"/g, '""')}"`,
         `"${(rec.participantUsn || '').replace(/"/g, '""')}"`,
+        `"${(rec.participantEmail || '').replace(/"/g, '""')}"`,
+        `"${rec.isUnregistered ? 'Unregistered' : 'Registered'}"`,
+        `"${certId.replace(/"/g, '""')}"`,
         `"${(act?.name || rec.activityId).replace(/"/g, '""')}"`,
         `"${(act?.room || '').replace(/"/g, '""')}"`,
         `"${(act?.category || '').replace(/"/g, '""')}"`,
@@ -1182,6 +1369,34 @@ export default function RegistrationsHub({
                   </button>
                 )}
 
+                {/* Add Unregistered / Walk-In Participant Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWalkInFeedback(null);
+                    if (selectedAttendanceActivity && selectedAttendanceActivity !== 'all') {
+                      setWalkInActivityId(selectedAttendanceActivity);
+                    }
+                    setShowWalkInModal(true);
+                  }}
+                  className="py-2 px-3.5 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95"
+                  title="Add unregistered walk-in participants & issue participation certificates"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Add Unregistered</span>
+                </button>
+
+                {/* Certificate Emails & Links Studio Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowEmailsModal(true)}
+                  className="py-2 px-3.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-xs active:scale-95"
+                  title="Generate certificate links & club email templates for Participants, Winners & Coordinators"
+                >
+                  <Mail className="w-3.5 h-3.5 text-primary" />
+                  <span>Emails &amp; Links</span>
+                </button>
+
                 {/* Export to CSV Button */}
                 <button
                   type="button"
@@ -1239,8 +1454,8 @@ export default function RegistrationsHub({
                   <div className="col-span-4">Participant &amp; USN</div>
                   <div className="col-span-3">Activity &amp; Room</div>
                   <div className="col-span-2">Check-In Time</div>
-                  <div className="col-span-2">Scanned By</div>
-                  <div className="col-span-1 text-right">Status</div>
+                  <div className="col-span-1">By</div>
+                  <div className="col-span-2 text-right">Status &amp; Cert</div>
                 </div>
 
                 {/* Records List */}
@@ -1248,6 +1463,14 @@ export default function RegistrationsHub({
                   const act = getActivity(rec.activityId);
                   const isDeleting = deletingAttendanceId === rec.id;
                   const initial = (rec.participantName || 'P').charAt(0).toUpperCase();
+                  const certId = buildCertificateId({
+                    activityId: rec.activityId,
+                    attendanceId: rec.id,
+                    participantId: rec.participantId,
+                    certId: rec.certId
+                  });
+                  const certVerifyPath = `/verify?id=${encodeURIComponent(certId)}`;
+                  const canDeleteRow = rec.isUnregistered ? effectiveIsStaff : isAdmin;
 
                   return (
                     <div
@@ -1256,15 +1479,32 @@ export default function RegistrationsHub({
                     >
                       {/* Col 1: Participant */}
                       <div className="col-span-4 flex items-center gap-3 w-full min-w-0">
-                        <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary border border-primary/20 font-black text-xs flex items-center justify-center shrink-0">
+                        <div className={`w-9 h-9 rounded-xl font-black text-xs flex items-center justify-center shrink-0 border ${
+                          rec.isUnregistered
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                            : 'bg-primary/10 text-primary border-primary/20'
+                        }`}>
                           {initial}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-xs sm:text-sm font-extrabold text-on-surface truncate">
-                            {rec.participantName || 'Participant'}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs sm:text-sm font-extrabold text-on-surface truncate">
+                              {rec.participantName || 'Participant'}
+                            </span>
+                            {rec.isUnregistered && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 shrink-0">
+                                Unregistered
+                              </span>
+                            )}
                           </div>
-                          <div className="text-[11px] font-mono text-secondary truncate flex items-center gap-2">
-                            <span>{rec.participantUsn || 'No USN'}</span>
+                          <div className="text-[11px] font-mono text-secondary truncate flex items-center gap-1.5">
+                            <span>{rec.participantUsn || 'Walk-In / No USN'}</span>
+                            {rec.participantEmail && (
+                              <>
+                                <span>&bull;</span>
+                                <span className="truncate font-sans">{rec.participantEmail}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1295,27 +1535,37 @@ export default function RegistrationsHub({
                         </div>
                       </div>
 
-                      {/* Col 4: Scanned By */}
-                      <div className="col-span-2 text-[11px] text-secondary min-w-0 w-full truncate">
+                      {/* Col 4: Scanned / Added By */}
+                      <div className="col-span-1 text-[11px] text-secondary min-w-0 w-full truncate">
                         <span className="px-2 py-0.5 rounded-lg bg-surface-container border border-surface-container-high font-mono text-[10px] text-on-surface inline-block truncate max-w-full" title={rec.scannedBy || 'coordinator'}>
                           {rec.scannedBy || 'coordinator'}
                         </span>
                       </div>
 
-                      {/* Col 5: Status Badge & Admin Action */}
-                      <div className="col-span-1 flex items-center justify-between md:justify-end gap-2 w-full">
+                      {/* Col 5: Status Badge, Certificate Link & Admin Action */}
+                      <div className="col-span-2 flex items-center justify-between md:justify-end gap-1.5 w-full">
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Present</span>
                         </span>
 
-                        {isAdmin && (
+                        <a
+                          href={certVerifyPath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold"
+                          title={`Open Participation Certificate (${certId})`}
+                        >
+                          <Award className="w-3.5 h-3.5" />
+                        </a>
+
+                        {canDeleteRow && (
                           <button
                             type="button"
-                            onClick={() => handleDeleteAttendance(rec.id, rec.participantName, act?.name)}
+                            onClick={() => handleDeleteAttendance(rec, rec.participantName, act?.name)}
                             disabled={isDeleting}
-                            className="p-1.5 text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-colors ml-1"
-                            title="Remove attendance record (Admin only)"
+                            className="p-1.5 text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-colors"
+                            title="Remove attendance record"
                           >
                             {isDeleting ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1525,6 +1775,213 @@ export default function RegistrationsHub({
         </div>
       )}
     </div>
+
+      {/* Add Unregistered / Walk-In Participant Modal */}
+      {showWalkInModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-surface-container-lowest border border-surface-container-high rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-fadeIn">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-surface-container bg-surface-container-low">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-on-surface">Add Unregistered Participant</h3>
+                  <p className="text-[11px] text-secondary">
+                    Saves to <code className="font-mono text-primary">unregisteredParticipants</code> &amp; issues participation certificate
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWalkInModal(false)}
+                className="p-1.5 rounded-xl text-secondary hover:text-on-surface hover:bg-surface-container transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddWalkInSubmit} className="p-6 space-y-4">
+              {/* Mode Toggle */}
+              <div className="flex items-center bg-surface-container p-1 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => { setWalkInMode('single'); setWalkInFeedback(null); }}
+                  className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    walkInMode === 'single'
+                      ? 'bg-surface-container-lowest text-primary shadow-xs'
+                      : 'text-secondary hover:text-on-surface'
+                  }`}
+                >
+                  Single Entry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setWalkInMode('bulk'); setWalkInFeedback(null); }}
+                  className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    walkInMode === 'bulk'
+                      ? 'bg-surface-container-lowest text-primary shadow-xs'
+                      : 'text-secondary hover:text-on-surface'
+                  }`}
+                >
+                  Bulk Paste ({parsedBulkWalkIns.length})
+                </button>
+              </div>
+
+              {/* Event Selector */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-on-surface">
+                  Competition / Activity <span className="text-error">*</span>
+                </label>
+                <select
+                  value={walkInActivityId}
+                  onChange={(e) => setWalkInActivityId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container border border-surface-container-high text-on-surface text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                  required
+                >
+                  {allActivities.map(act => (
+                    <option key={act.id} value={act.id}>
+                      {act.name} ({act.room})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {walkInMode === 'single' ? (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-on-surface">
+                      Full Name (for Certificate) <span className="text-error">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={walkInName}
+                      onChange={(e) => setWalkInName(e.target.value)}
+                      placeholder="e.g. Aarav Sharma"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container border border-surface-container-high text-on-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-on-surface">
+                        USN <span className="text-secondary font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={walkInUsn}
+                        onChange={(e) => setWalkInUsn(e.target.value.toUpperCase())}
+                        placeholder="e.g. 1ST23AI001"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container border border-surface-container-high text-on-surface text-xs font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-on-surface">
+                        Email <span className="text-secondary font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={walkInEmail}
+                        onChange={(e) => setWalkInEmail(e.target.value)}
+                        placeholder="student@college.edu"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container border border-surface-container-high text-on-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-on-surface">
+                    Paste Participants <span className="text-secondary font-normal">(one per line: Name, USN)</span>
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={walkInBulkText}
+                    onChange={(e) => setWalkInBulkText(e.target.value)}
+                    placeholder={"Aarav Sharma, 1ST23AI001\nDiya Rao, 1ST23CS042\nRohan Mehta"}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container border border-surface-container-high text-on-surface text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  />
+                  <p className="text-[11px] text-secondary">
+                    Detected <strong>{parsedBulkWalkIns.length}</strong> participant{parsedBulkWalkIns.length === 1 ? '' : 's'}. Separate Name and USN with a comma, tab, or pipe (|).
+                  </p>
+                </div>
+              )}
+
+              {/* Result / Feedback Box */}
+              {walkInFeedback && (
+                <div className={`p-3 rounded-2xl border text-xs space-y-2 ${
+                  walkInFeedback.type === 'error'
+                    ? 'bg-error/10 border-error/30 text-error'
+                    : walkInFeedback.type === 'success'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-200'
+                }`}>
+                  <div className="font-semibold">{walkInFeedback.message}</div>
+                  {walkInFeedback.certId && (
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-current/15">
+                      <span className="font-mono text-[11px]">ID: {walkInFeedback.certId}</span>
+                      <a
+                        href={`/verify?id=${encodeURIComponent(walkInFeedback.certId)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-bold underline underline-offset-2"
+                      >
+                        <span>Open Certificate</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Footer Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-surface-container">
+                <button
+                  type="button"
+                  onClick={() => setShowWalkInModal(false)}
+                  className="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-secondary hover:text-on-surface font-bold text-xs transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingWalkIn}
+                  className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                >
+                  {addingWalkIn ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Adding &amp; Issuing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Award className="w-3.5 h-3.5" />
+                      <span>
+                        {walkInMode === 'bulk'
+                          ? `Add ${parsedBulkWalkIns.length || ''} & Issue Certificates`
+                          : 'Add & Issue Certificate'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Certificate Links & Official Email Studio Modal */}
+      {effectiveIsStaff && (
+        <CertificateEmailsModal
+          isOpen={showEmailsModal}
+          onClose={() => setShowEmailsModal(false)}
+          activities={allActivities}
+        />
+      )}
     </>
   );
 }

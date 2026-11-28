@@ -25,7 +25,9 @@ import {
   subscribeCertificateSettings,
   subscribeUserAttendance,
   subscribeUserScores,
-  recordCertificateIssuance
+  subscribeUserCoordinatorCertificates,
+  recordCertificateIssuance,
+  buildCertificateId
 } from '../services/certificateService';
 import { markAttendance } from '../services/attendanceService';
 import {
@@ -38,21 +40,28 @@ import { ACTIVITIES } from '../data/activities';
 /**
  * Individual Certificate Item Card
  */
-function CertificateCard({ item, participantName, user }) {
+function CertificateCard({ item, participantName, user, profile }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [pngDataUrl, setPngDataUrl] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const isWinner = item.scoreData && item.scoreData.rank <= 3;
+  const certType = item.certType || 'participation';
+  const isCoordinatorCert = certType === 'coordinator';
+  const isWinner = !isCoordinatorCert && item.scoreData && item.scoreData.rank <= 3;
   const rankLabel = item.scoreData?.rankLabel || (isWinner ? `Rank #${item.scoreData.rank}` : '');
 
   // Clean short certificate identification code
-  const rawId = item.attendance?.id || item.attendance?.participantId || user?.uid || 'USER';
-  const actCode = (item.activity?.id || 'EVT').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
-  const userSuffix = rawId.replace(/[^A-Za-z0-9]/g, '').slice(-6).toUpperCase();
-  const certId = `IGNITE26-${actCode}-${userSuffix}`;
+  const certId = item.certId || buildCertificateId({
+    certType,
+    activityId: item.activity?.id,
+    attendanceId: item.attendance?.id,
+    participantId: item.attendance?.participantId || user?.uid,
+    certId: item.attendance?.certId,
+    email: user?.email || profile?.email || '',
+    usn: profile?.usn || ''
+  });
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const verifyUrl = `${origin}/verify?id=${certId}`;
@@ -63,7 +72,10 @@ function CertificateCard({ item, participantName, user }) {
     // Fast lightweight WebP preview on page load (0 heavy memory, does not load original image)
     generateCertificateDataUrl({
       participantName: participantName || 'Participant',
+      certType,
+      activityId: item.activity.id,
       activityName: item.activity.name,
+      eventDate: item.activity.eventDate || '',
       certificateId: certId,
       verifyUrl,
       format: 'image/webp',
@@ -75,11 +87,14 @@ function CertificateCard({ item, participantName, user }) {
     });
 
     // Save lightweight verification record to Firestore without calling heavy server scripts
-    if (user?.uid) {
+    if (user?.uid && !item.coordRecord) {
       recordCertificateIssuance({
         certId,
+        certType,
         participantId: user.uid,
         participantName,
+        participantUsn: profile?.usn || '',
+        participantEmail: user?.email || profile?.email || '',
         activityId: item.activity.id,
         activityName: item.activity.name,
         verifyUrl
@@ -87,14 +102,17 @@ function CertificateCard({ item, participantName, user }) {
     }
 
     return () => { isMounted = false; };
-  }, [item, participantName, certId, verifyUrl, user?.uid]);
+  }, [item, participantName, certType, certId, verifyUrl, user?.uid, user?.email, profile?.email, profile?.usn]);
 
   // Render original high-resolution PNG on-demand only when downloading or exporting PDF
   const getOrRenderOriginalPng = async () => {
     if (pngDataUrl) return pngDataUrl;
     const url = await generateCertificateDataUrl({
       participantName: participantName || 'Participant',
+      certType,
+      activityId: item.activity.id,
       activityName: item.activity.name,
+      eventDate: item.activity.eventDate || '',
       certificateId: certId,
       verifyUrl,
       format: 'image/png',
@@ -109,7 +127,8 @@ function CertificateCard({ item, participantName, user }) {
       setDownloading(true);
       const originalPng = await getOrRenderOriginalPng();
       const cleanCertName = (participantName || 'Participant').replace(/[^a-zA-Z0-9]/g, '_');
-      const filename = `IGNITE2026_${item.activity.id}_${cleanCertName}.png`;
+      const slug = isCoordinatorCert ? 'Coordinator' : item.activity.id;
+      const filename = `IGNITE2026_${slug}_${cleanCertName}.png`;
       downloadCertificateImage(originalPng, filename);
     } catch (err) {
       console.error('Download error:', err);
@@ -125,7 +144,8 @@ function CertificateCard({ item, participantName, user }) {
       // Converts the exact PNG to PDF with 1:1 dimensions (3507x2480 pt)
       const originalPng = await getOrRenderOriginalPng();
       const cleanCertName = (participantName || 'Participant').replace(/[^a-zA-Z0-9]/g, '_');
-      const filename = `IGNITE2026_${item.activity.id}_${cleanCertName}.pdf`;
+      const slug = isCoordinatorCert ? 'Coordinator' : item.activity.id;
+      const filename = `IGNITE2026_${slug}_${cleanCertName}.pdf`;
       await printCertificate(originalPng, `IGNITE 2026 - ${item.activity.name}`, filename);
     } catch (err) {
       console.error('PDF export error:', err);
@@ -150,7 +170,9 @@ function CertificateCard({ item, participantName, user }) {
     const eventName = item.activity?.name ? `${item.activity.name} at IGNITE 2026` : 'IGNITE 2026';
 
     let leadText = `I participated in ${eventName} organized by Cognisphere, Sambhram Institute of Technology.`;
-    if (isWinner && rankLabel) {
+    if (isCoordinatorCert) {
+      leadText = `I served as an Event Coordinator during IGNITE 2026 organized by Cognisphere, Sambhram Institute of Technology.`;
+    } else if (isWinner && rankLabel) {
       leadText = `Excited to share that I achieved ${rankLabel} in ${item.activity?.name || 'IGNITE 2026'} organized by Cognisphere, Sambhram Institute of Technology!`;
     }
 
@@ -159,37 +181,51 @@ function CertificateCard({ item, participantName, user }) {
     window.open(linkedinUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const attendanceDate = item.attendance.timestamp?.toLocaleDateString
+  const attendanceDate = isCoordinatorCert
+    ? '24-25 Nov 2026'
+    : item.attendance.timestamp?.toLocaleDateString
     ? item.attendance.timestamp.toLocaleDateString()
     : '24-25 Nov 2026';
 
   return (
     <div className="rounded-3xl border border-surface-container bg-surface-container-lowest p-5 sm:p-7 shadow-xs transition-all space-y-5 relative overflow-hidden">
       {/* Top Banner Accent */}
-      <div className={`absolute top-0 inset-x-0 h-1.5 ${isWinner ? 'bg-primary' : 'bg-tertiary'
+      <div className={`absolute top-0 inset-x-0 h-1.5 ${isCoordinatorCert || isWinner ? 'bg-primary' : 'bg-tertiary'
         }`} />
 
       {/* Header Info */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-surface-container">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border flex items-center gap-1 ${isWinner
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border flex items-center gap-1 ${isCoordinatorCert || isWinner
               ? 'bg-surface-container border-surface-container-high text-primary'
               : 'bg-tertiary-container border-tertiary/30 text-on-tertiary-container'
               }`}>
-              {isWinner ? <Trophy className="w-3 h-3 text-primary" /> : <CheckCircle2 className="w-3 h-3 text-on-tertiary-container" />}
-              <span>{isWinner ? `Winner • ${rankLabel}` : 'Verified Participation'}</span>
+              {isCoordinatorCert ? (
+                <ShieldCheck className="w-3 h-3 text-primary" />
+              ) : isWinner ? (
+                <Trophy className="w-3 h-3 text-primary" />
+              ) : (
+                <CheckCircle2 className="w-3 h-3 text-on-tertiary-container" />
+              )}
+              <span>
+                {isCoordinatorCert
+                  ? 'Verified Coordinator'
+                  : isWinner
+                  ? `Winner • ${rankLabel}`
+                  : 'Verified Participation'}
+              </span>
             </span>
           </div>
 
           <h3 className="text-lg sm:text-xl font-extrabold text-on-surface tracking-tight">
-            {item.activity.name}
+            {isCoordinatorCert ? 'Certificate of Coordination' : item.activity.name}
           </h3>
           <p className="text-xs text-secondary flex items-center gap-2 mt-0.5">
             <MapPin className="w-3 h-3 text-primary" />
-            <span className="text-on-surface font-medium">{item.activity.room || 'Campus Arena'}</span>
+            <span className="text-on-surface font-medium">Sambhram Institute of Technology</span>
             <span>&bull;</span>
-            <span>Attended: {attendanceDate}</span>
+            <span>{isCoordinatorCert ? `Event Dates: ${attendanceDate}` : `Attended: ${attendanceDate}`}</span>
           </p>
         </div>
 
@@ -279,6 +315,8 @@ export default function CertificatesView({
   user,
   profile,
   isAdmin = false,
+  isCoordinator = false,
+  roleData = null,
   activities = ACTIVITIES
 }) {
   const allActivities = activities && activities.length > 0 ? activities : ACTIVITIES;
@@ -286,6 +324,7 @@ export default function CertificatesView({
   const [loadingSettings, setLoadingSettings] = useState(true);
 
   const [attendedItems, setAttendedItems] = useState([]);
+  const [coordinatorCerts, setCoordinatorCerts] = useState([]);
   const [loadingRecords, setLoadingRecords] = useState(true);
 
   // Quick self check-in testing state for Admin/Staff
@@ -374,6 +413,78 @@ export default function CertificatesView({
     };
   }, [user?.uid, profile?.usn, allActivities]);
 
+  // 2.5 Subscribe to Coordinator certificates issued for this user
+  useEffect(() => {
+    const email = user?.email || profile?.email || roleData?.email || '';
+    const usn = profile?.usn || roleData?.usn || '';
+    if (!user?.uid && !email && !usn) {
+      setCoordinatorCerts([]);
+      return;
+    }
+    const unsubCoord = subscribeUserCoordinatorCertificates(
+      { userId: user?.uid, userEmail: email, userUsn: usn },
+      setCoordinatorCerts
+    );
+    return () => unsubCoord();
+  }, [user?.uid, user?.email, profile?.email, profile?.usn, roleData?.email, roleData?.usn]);
+
+  const coordinatorCards = React.useMemo(() => {
+    const list = [];
+    const seenIds = new Set();
+
+    coordinatorCerts.forEach((docRec) => {
+      const cid = docRec.certId || docRec.id;
+      if (!cid || seenIds.has(cid)) return;
+      seenIds.add(cid);
+      list.push({
+        certType: 'coordinator',
+        certId: cid,
+        activity: {
+          id: docRec.activityId || 'coordinator',
+          name: docRec.activityName || 'Event Coordination & Monitoring'
+        },
+        attendance: {
+          id: `coord_${cid}`,
+          participantId: docRec.participantId || user?.uid,
+          certId: cid,
+          timestamp: docRec.issuedAt || null
+        },
+        scoreData: null,
+        coordRecord: docRec
+      });
+    });
+
+    if (isCoordinator && list.length === 0 && user?.uid) {
+      const cid = buildCertificateId({
+        certType: 'coordinator',
+        email: user?.email || profile?.email || roleData?.email || '',
+        usn: profile?.usn || roleData?.usn || '',
+        participantId: user.uid
+      });
+      const actName = (roleData?.assignedEvent || 'Event Coordination & Monitoring')
+        .replace(/\s*\(\s*Room\b[^)]*\)/gi, '')
+        .trim();
+      list.push({
+        certType: 'coordinator',
+        certId: cid,
+        activity: {
+          id: roleData?.activityId || 'coordinator',
+          name: actName
+        },
+        attendance: {
+          id: `coord_${cid}`,
+          participantId: user.uid,
+          certId: cid,
+          timestamp: null
+        },
+        scoreData: null,
+        coordRecord: null
+      });
+    }
+
+    return list;
+  }, [coordinatorCerts, isCoordinator, user?.uid, user?.email, profile?.email, profile?.usn, roleData]);
+
   // Quick self-check-in helper for Admin / Staff testing
   const handleTestSelfCheckIn = async () => {
     if (!user?.uid) return;
@@ -398,6 +509,11 @@ export default function CertificatesView({
 
   const isEnabled = Boolean(settings.enabled);
   const canPreview = Boolean(isAdmin);
+  const visibleCoordinatorCards = (isEnabled || canPreview || isCoordinator || coordinatorCards.length > 0)
+    ? coordinatorCards
+    : [];
+  const visibleParticipantCards = (isEnabled || canPreview) ? attendedItems : [];
+  const displayCards = [...visibleCoordinatorCards, ...visibleParticipantCards];
 
   // Strictly prioritize certificateName from profile editing, fallback to name, user displayName
   const participantName = profile?.certificateName || profile?.name || user?.displayName || 'Participant';
@@ -405,7 +521,7 @@ export default function CertificatesView({
   return (
     <div className="space-y-6 max-w-4xl mx-auto w-full animate-fadeIn">
       {/* Main Content: Locked Banner vs Released / Preview Mode */}
-      {!isEnabled && !canPreview ? (
+      {!isEnabled && !canPreview && visibleCoordinatorCards.length === 0 ? (
         /* State 1: Locked Vault Banner for General Participants */
         <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs">
           <div className="w-16 h-16 rounded-3xl bg-surface-container border border-surface-container-high text-primary flex items-center justify-center mx-auto shadow-xs">
@@ -444,24 +560,25 @@ export default function CertificatesView({
             </div>
 
             <span className="text-xs font-mono text-primary bg-surface-container border border-surface-container-high px-3 py-1 rounded-xl self-start sm:self-auto font-bold">
-              {attendedItems.length} {attendedItems.length === 1 ? 'Credential Earned' : 'Credentials Earned'}
+              {displayCards.length} {displayCards.length === 1 ? 'Credential Earned' : 'Credentials Earned'}
             </span>
           </div>
 
           {/* Cards List */}
-          {loadingRecords ? (
+          {loadingRecords && visibleCoordinatorCards.length === 0 ? (
             <div className="py-12 text-center text-xs text-secondary flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-primary" />
               <span>Checking real-time attendance and credentials...</span>
             </div>
-          ) : attendedItems.length > 0 ? (
+          ) : displayCards.length > 0 ? (
             <div className="space-y-6">
-              {attendedItems.map((item) => (
+              {displayCards.map((item) => (
                 <CertificateCard
-                  key={item.attendance.id}
+                  key={item.certId || item.attendance.id}
                   item={item}
                   participantName={participantName}
                   user={user}
+                  profile={profile}
                 />
               ))}
             </div>

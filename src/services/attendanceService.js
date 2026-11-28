@@ -13,6 +13,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ACTIVITIES } from '../data/activities';
+import { buildCertificateId, recordCertificateIssuance } from './certificateService';
+import { getParticipantDetails, lookupParticipantProfile } from './coordinatorConfigService';
 
 const QUEUE_STORAGE_KEY = 'club_games_offline_attendance_queue';
 
@@ -407,10 +409,10 @@ export function subscribeToUserAttendance(participantId, callback) {
 }
 
 /**
- * Real-time listener for all attendance records across all activities (for Admin/Staff attendance hub)
+ * Shared real-time snapshot helper for attendance collections
  */
-export function subscribeToAllAttendance(callback) {
-  const colRef = collection(db, 'attendance');
+function subscribeAttendanceCollection(colName, callback, extraFields = {}) {
+  const colRef = collection(db, colName);
   return onSnapshot(colRef, (snapshot) => {
     const list = [];
     snapshot.forEach((docSnap) => {
@@ -429,11 +431,11 @@ export function subscribeToAllAttendance(callback) {
       list.push({
         id: docSnap.id,
         ...data,
+        ...extraFields,
         timestamp: ts
       });
     });
 
-    // Sort descending by scan timestamp (newest scans first)
     list.sort((a, b) => {
       const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
       const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
@@ -442,9 +444,216 @@ export function subscribeToAllAttendance(callback) {
 
     callback(list);
   }, (err) => {
-    console.warn('subscribeToAllAttendance notice:', err);
+    console.warn(`subscribe(${colName}) notice:`, err);
     callback([]);
   });
+}
+
+/**
+ * Real-time listener for all registered attendance records across all activities
+ */
+export function subscribeToAllAttendance(callback) {
+  return subscribeAttendanceCollection('attendance', callback);
+}
+
+/**
+ * Real-time listener for all unregistered / walk-in participant records
+ */
+export function subscribeToUnregisteredParticipants(callback) {
+  return subscribeAttendanceCollection('unregisteredParticipants', callback, {
+    isUnregistered: true
+  });
+}
+
+/**
+ * Deterministic short hash for walk-in names lacking a USN
+ */
+function shortNameHash(text) {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36).toUpperCase().padStart(4, '0').slice(0, 4);
+}
+
+/**
+ * Add an unregistered (walk-in) participant to the separate `unregisteredParticipants`
+ * collection AND immediately issue their verifiable certificate record.
+ */
+export async function addUnregisteredParticipant({
+  activityId,
+  activityName = '',
+  participantName,
+  participantUsn = '',
+  participantEmail = '',
+  addedBy = 'admin',
+  origin = '',
+  participantsMap = null
+}) {
+  const cleanName = (participantName || '').trim();
+  let cleanUsn = (participantUsn || '').trim().toUpperCase();
+  let cleanEmail = (participantEmail || '').trim().toLowerCase();
+
+  if (!activityId) throw new Error('Activity selection is required.');
+  if (!cleanName) throw new Error('Participant name is required.');
+
+  // Pull missing USN or email from `participents` / `participants` collections if available
+  if (!cleanUsn || !cleanEmail) {
+    let matched = lookupParticipantProfile(participantsMap, {
+      usn: cleanUsn,
+      email: cleanEmail,
+      name: cleanName
+    });
+    if (!matched || (!matched.usn && !cleanUsn) || (!matched.email && !cleanEmail)) {
+      const dbMatch = await getParticipantDetails({
+        usn: cleanUsn || matched?.usn || '',
+        email: cleanEmail || matched?.email || '',
+        name: cleanName
+      });
+      if (dbMatch) {
+        matched = {
+          ...(matched || {}),
+          ...dbMatch,
+          usn: matched?.usn || dbMatch.usn || '',
+          email: matched?.email || dbMatch.email || ''
+        };
+      }
+    }
+    if (matched) {
+      if (!cleanUsn && matched.usn) cleanUsn = String(matched.usn).trim().toUpperCase();
+      if (!cleanEmail && matched.email) cleanEmail = String(matched.email).trim().toLowerCase();
+    }
+  }
+
+  const actObj = ACTIVITIES.find(a => a.id === activityId);
+  const resolvedActivityName = (activityName || actObj?.name || activityId).trim();
+
+  const key = cleanUsn
+    ? cleanUsn.replace(/[^A-Z0-9]/g, '')
+    : `${cleanName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'WALKIN'}${shortNameHash(cleanName.toUpperCase())}`;
+
+  const docId = `${activityId}_WALKIN_${key}`;
+  const participantId = `walkin_${key}`;
+  const docRef = doc(db, 'unregisteredParticipants', docId);
+
+  // Check if already recorded in unregisteredParticipants
+  const existingUnregSnap = await getDoc(docRef);
+  if (existingUnregSnap.exists()) {
+    const existing = existingUnregSnap.data();
+    return {
+      status: 'already_marked',
+      message: `${cleanName} (${cleanUsn || 'Walk-In'}) is already recorded for ${resolvedActivityName}.`,
+      record: existing,
+      certId: existing.certId
+    };
+  }
+
+  // Also check if already checked in as a registered participant (when USN is provided)
+  if (cleanUsn) {
+    const qReg = query(
+      collection(db, 'attendance'),
+      where('activityId', '==', activityId),
+      where('participantUsn', '==', cleanUsn),
+      limit(1)
+    );
+    const regSnap = await getDocs(qReg);
+    if (!regSnap.empty) {
+      const regData = regSnap.docs[0].data();
+      return {
+        status: 'already_marked',
+        message: `${cleanUsn} is already present in registered attendance for ${resolvedActivityName}.`,
+        record: regData
+      };
+    }
+  }
+
+  const certId = buildCertificateId({
+    activityId,
+    attendanceId: docId,
+    participantId
+  });
+  const baseOrigin = origin || (typeof window !== 'undefined' ? window.location.origin : '');
+  const verifyUrl = `${baseOrigin}/verify?id=${encodeURIComponent(certId)}`;
+
+  const newRecord = {
+    id: docId,
+    activityId,
+    activityName: resolvedActivityName,
+    participantId,
+    participantName: cleanName,
+    participantUsn: cleanUsn,
+    participantEmail: cleanEmail,
+    scannedBy: addedBy || 'admin',
+    passActivityId: activityId,
+    isUnregistered: true,
+    source: 'unregistered',
+    certId,
+    verifyUrl,
+    timestamp: serverTimestamp(),
+    scannedAt: new Date().toISOString()
+  };
+
+  await setDoc(docRef, newRecord);
+
+  // Immediately record verifiable certificate document so /verify?id=... & PNG/PDF download work right away
+  await recordCertificateIssuance({
+    certId,
+    participantId,
+    participantName: cleanName,
+    participantUsn: cleanUsn,
+    participantEmail: cleanEmail,
+    activityId,
+    activityName: resolvedActivityName,
+    verifyUrl
+  });
+
+  return {
+    status: 'added',
+    message: `Added ${cleanName} and issued certificate ${certId}.`,
+    record: newRecord,
+    certId,
+    verifyUrl
+  };
+}
+
+/**
+ * Bulk add multiple unregistered participants for an activity
+ */
+export async function addBulkUnregisteredParticipants({
+  activityId,
+  activityName = '',
+  participants = [],
+  addedBy = 'admin',
+  origin = '',
+  participantsMap = null
+}) {
+  const results = { added: [], alreadyMarked: [], failed: [] };
+
+  for (const p of participants) {
+    const name = (p.participantName || p.name || '').trim();
+    if (!name) continue;
+    try {
+      const res = await addUnregisteredParticipant({
+        activityId,
+        activityName,
+        participantName: name,
+        participantUsn: p.participantUsn || p.usn || '',
+        participantEmail: p.participantEmail || p.email || '',
+        addedBy,
+        origin,
+        participantsMap
+      });
+      if (res.status === 'added') {
+        results.added.push(res);
+      } else {
+        results.alreadyMarked.push(res);
+      }
+    } catch (err) {
+      results.failed.push({ participantName: name, error: err.message });
+    }
+  }
+
+  return results;
 }
 
 /**
@@ -453,6 +662,15 @@ export function subscribeToAllAttendance(callback) {
 export async function deleteAttendanceRecord(attendanceId) {
   if (!attendanceId) return;
   const docRef = doc(db, 'attendance', attendanceId);
+  await deleteDoc(docRef);
+}
+
+/**
+ * Delete an unregistered / walk-in participant record (Admin/Coordinator)
+ */
+export async function deleteUnregisteredParticipant(docId) {
+  if (!docId) return;
+  const docRef = doc(db, 'unregisteredParticipants', docId);
   await deleteDoc(docRef);
 }
 

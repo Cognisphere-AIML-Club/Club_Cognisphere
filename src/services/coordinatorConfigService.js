@@ -115,10 +115,65 @@ export function subscribeToRolesCollection(callback) {
   }
 }
 
+function normalizePersonName(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function indexNameLookup(map, rawName, item) {
+  const norm = normalizePersonName(rawName);
+  if (!norm) return;
+  const nameKey = `name::${norm}`;
+  const existing = map[nameKey];
+  if (!existing) {
+    map[nameKey] = { ...item };
+    return;
+  }
+  const sameUid = Boolean(existing.uid && item.uid && existing.uid === item.uid);
+  const sameEmail = Boolean(existing.email && item.email && existing.email === item.email);
+  const sameUsn = Boolean(existing.usn && item.usn && existing.usn === item.usn);
+  const diffEmail = Boolean(existing.email && item.email && existing.email !== item.email);
+  const diffUsn = Boolean(existing.usn && item.usn && existing.usn !== item.usn);
+
+  if (sameUid || sameEmail || sameUsn || (!diffEmail && !diffUsn)) {
+    map[nameKey] = {
+      ...existing,
+      uid: existing.uid || item.uid || '',
+      name: existing.name || item.name || '',
+      usn: existing.usn || item.usn || '',
+      email: existing.email || item.email || '',
+      mobile: existing.mobile || item.mobile || '',
+      qrId: existing.qrId || item.qrId || '',
+      ambiguous: existing.ambiguous || false
+    };
+  } else {
+    map[nameKey] = { ...existing, ambiguous: true };
+  }
+}
+
+/**
+ * Resolve a participant profile from participantsMap by email, UID, USN, or unambiguous full name.
+ */
+export function lookupParticipantProfile(participantsMap, { participantId, usn, email, name } = {}) {
+  if (!participantsMap) return null;
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanUsn = (usn || '').trim().toUpperCase();
+  const cleanUid = (participantId || '').trim();
+  const normName = normalizePersonName(name);
+  const byName = normName ? participantsMap[`name::${normName}`] : null;
+
+  return (
+    (cleanEmail && participantsMap[cleanEmail]) ||
+    (cleanUid && (participantsMap[cleanUid] || participantsMap[cleanUid.toLowerCase()])) ||
+    (cleanUsn && participantsMap[cleanUsn]) ||
+    (byName && !byName.ambiguous ? byName : null) ||
+    null
+  );
+}
+
 /**
  * Real-time listener for Firestore participants collections.
- * Pulls participant profiles mapped by UID (document ID), lowercase email, and USN
- * so Name and USN are always fresh and fully resolved from the database.
+ * Pulls participant profiles mapped by UID (document ID), lowercase email, USN, and normalized name
+ * so Name, USN, and Email are always fresh and fully resolved from the database.
  * Supports both 'participants' and 'participents' collections, as well as 'registeredUsns' and 'qrPasses'.
  */
 export function subscribeToParticipantsCollection(callback) {
@@ -127,22 +182,29 @@ export function subscribeToParticipantsCollection(callback) {
   const processParticipantDoc = (d) => {
     const data = d.data();
     const uid = d.id; // The document ID in participants is the user's Auth UID
-    const resolvedName = 
-      data.name || 
-      `${data.firstName || ''} ${data.lastName || ''}`.trim() || 
-      data.displayName || 
-      data.certificateName || 
+    const resolvedName =
+      data.name ||
+      data.participantName ||
+      `${data.firstName || ''} ${data.lastName || ''}`.trim() ||
+      data.displayName ||
+      data.certificateName ||
       '';
-    const resolvedUsn = (data.usn || '').trim().toUpperCase();
-    const em = (data.email || data.userEmail || '').trim().toLowerCase();
+    const resolvedUsn = (data.usn || data.participantUsn || '').trim().toUpperCase();
+    const em = (data.email || data.userEmail || data.participantEmail || '').trim().toLowerCase();
+
+    const prev =
+      (uid && map[uid]) ||
+      (em && map[em]) ||
+      (resolvedUsn && map[resolvedUsn]) ||
+      {};
 
     const item = {
-      uid,
-      name: resolvedName,
-      usn: resolvedUsn,
-      email: em,
-      mobile: data.mobile || '',
-      qrId: data.qrId || ''
+      uid: uid || prev.uid || '',
+      name: resolvedName || prev.name || '',
+      usn: resolvedUsn || prev.usn || '',
+      email: em || prev.email || '',
+      mobile: data.mobile || prev.mobile || '',
+      qrId: data.qrId || prev.qrId || ''
     };
 
     // Index by UID (both exact case and lower)
@@ -151,13 +213,17 @@ export function subscribeToParticipantsCollection(callback) {
       map[uid.toLowerCase()] = item;
     }
     // Index by email
-    if (em) {
-      map[em] = item;
+    if (item.email) {
+      map[item.email] = item;
     }
     // Index by USN
-    if (resolvedUsn) {
-      map[resolvedUsn] = item;
+    if (item.usn) {
+      map[item.usn] = item;
     }
+    // Index by unambiguous name variants (helps match walk-in / unregistered records)
+    [resolvedName, data.name, data.certificateName, data.displayName].forEach((n) => {
+      if (n) indexNameLookup(map, n, item);
+    });
   };
 
   const handleSnapshot = (snapshot) => {
@@ -209,6 +275,7 @@ export function subscribeToParticipantsCollection(callback) {
             if (uid) map[uid] = { ...(map[uid] || {}), ...merged };
             if (em) map[em] = { ...(map[em] || {}), ...merged };
             if (usn) map[usn] = { ...(map[usn] || {}), ...merged };
+            if (merged.name) indexNameLookup(map, merged.name, merged);
           }
         });
         callback({ ...map });
@@ -240,6 +307,7 @@ export function subscribeToParticipantsCollection(callback) {
             map[uid] = updated;
             if (updated.email) map[updated.email] = updated;
             if (usn) map[usn] = updated;
+            if (updated.name) indexNameLookup(map, updated.name, updated);
           }
         });
         callback({ ...map });
@@ -263,10 +331,11 @@ export function subscribeToParticipantsCollection(callback) {
  * Supports direct document lookup by UID (document ID in participants / participents)
  * as well as by Email or USN across collections.
  */
-export async function getParticipantDetails({ email, uid, usn } = {}) {
+export async function getParticipantDetails({ email, uid, usn, name } = {}) {
   const cleanEmail = email ? email.trim().toLowerCase() : '';
   const cleanUid = uid ? uid.trim() : '';
   const cleanUsn = usn ? usn.trim().toUpperCase() : '';
+  const cleanNormName = normalizePersonName(name);
 
   // 1. Direct fetch by UID (the document ID in participants / participents)
   if (cleanUid) {
@@ -275,17 +344,18 @@ export async function getParticipantDetails({ email, uid, usn } = {}) {
         const docSnap = await getDoc(doc(db, colName, cleanUid));
         if (docSnap.exists()) {
           const d = docSnap.data();
-          const resolvedName = 
-            d.name || 
-            `${d.firstName || ''} ${d.lastName || ''}`.trim() || 
-            d.displayName || 
-            d.certificateName || 
+          const resolvedName =
+            d.name ||
+            d.participantName ||
+            `${d.firstName || ''} ${d.lastName || ''}`.trim() ||
+            d.displayName ||
+            d.certificateName ||
             '';
           return {
             uid: cleanUid,
             name: resolvedName,
-            usn: (d.usn || '').trim().toUpperCase(),
-            email: (d.email || d.userEmail || cleanEmail).trim().toLowerCase(),
+            usn: (d.usn || d.participantUsn || '').trim().toUpperCase(),
+            email: (d.email || d.userEmail || d.participantEmail || cleanEmail).trim().toLowerCase(),
             mobile: d.mobile || ''
           };
         }
@@ -293,7 +363,31 @@ export async function getParticipantDetails({ email, uid, usn } = {}) {
     }
   }
 
-  // 2. Query registeredUsns (links email to UID & USN)
+  // 2. Direct lookup by USN in registeredUsns (fast 1-read link from USN -> Email & UID)
+  if (cleanUsn) {
+    try {
+      const regUsnSnap = await getDoc(doc(db, 'registeredUsns', cleanUsn));
+      if (regUsnSnap.exists()) {
+        const d = regUsnSnap.data();
+        const foundUid = d.uid || '';
+        const foundEmail = (d.email || cleanEmail || '').trim().toLowerCase();
+        if (foundUid) {
+          const detailed = await getParticipantDetails({ uid: foundUid, email: foundEmail, usn: cleanUsn });
+          if (detailed && (detailed.email || detailed.usn)) return detailed;
+        }
+        if (foundEmail) {
+          return {
+            uid: foundUid,
+            name: name || foundEmail.split('@')[0],
+            usn: cleanUsn,
+            email: foundEmail
+          };
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. Query registeredUsns by email (links email to UID & USN)
   if (cleanEmail) {
     try {
       const q = query(collection(db, 'registeredUsns'), where('email', '==', cleanEmail));
@@ -362,25 +456,71 @@ export async function getParticipantDetails({ email, uid, usn } = {}) {
     } catch (e) {}
   }
 
-  // 5. In-memory case-insensitive scan of participants and participents collections
+  // 5. In-memory case-insensitive scan of participents and participants collections (Email, USN, or unique Name)
+  let nameMatch = null;
+  let nameAmbiguous = false;
+
   for (const colName of ['participents', 'participants']) {
     try {
       const allSnap = await getDocs(collection(db, colName));
       for (const d of allSnap.docs) {
         const data = d.data();
-        const em = (data.email || data.userEmail || '').trim().toLowerCase();
-        const docUsn = (data.usn || '').trim().toUpperCase();
+        const em = (data.email || data.userEmail || data.participantEmail || '').trim().toLowerCase();
+        const docUsn = (data.usn || data.participantUsn || '').trim().toUpperCase();
+        const docName =
+          data.name ||
+          data.participantName ||
+          `${data.firstName || ''} ${data.lastName || ''}`.trim() ||
+          data.displayName ||
+          data.certificateName ||
+          '';
+
         if ((cleanEmail && em === cleanEmail) || (cleanUsn && docUsn === cleanUsn)) {
           return {
             uid: d.id,
-            name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName || '',
+            name: docName,
             usn: docUsn,
             email: em || cleanEmail,
             mobile: data.mobile || ''
           };
         }
+
+        if (cleanNormName) {
+          const candidateNames = [docName, data.name, data.certificateName, data.displayName]
+            .map(normalizePersonName)
+            .filter(Boolean);
+          if (candidateNames.includes(cleanNormName)) {
+            const candidate = {
+              uid: d.id,
+              name: docName,
+              usn: docUsn,
+              email: em,
+              mobile: data.mobile || ''
+            };
+            if (!nameMatch) {
+              nameMatch = candidate;
+            } else {
+              const diffEmail = Boolean(nameMatch.email && em && nameMatch.email !== em);
+              const diffUsn = Boolean(nameMatch.usn && docUsn && nameMatch.usn !== docUsn);
+              if (diffEmail || diffUsn) {
+                nameAmbiguous = true;
+              } else {
+                nameMatch = {
+                  ...nameMatch,
+                  usn: nameMatch.usn || docUsn,
+                  email: nameMatch.email || em,
+                  name: nameMatch.name || docName
+                };
+              }
+            }
+          }
+        }
       }
     } catch (e) {}
+  }
+
+  if (nameMatch && !nameAmbiguous) {
+    return nameMatch;
   }
 
   return null;

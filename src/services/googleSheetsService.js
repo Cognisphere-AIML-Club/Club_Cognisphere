@@ -965,6 +965,27 @@ function handleRequest(e) {
       return jsonResponse({ success: true, message: 'Score updated and sheet auto-sorted', score });
     }
 
+    // 4. SEND_CERTIFICATE_EMAIL: Send certificate email via authenticated GmailApp
+    if (action === 'SEND_CERTIFICATE_EMAIL') {
+      if (!payload.to || !payload.subject) {
+        return jsonResponse({ success: false, error: 'Recipient email and subject required' });
+      }
+      GmailApp.sendEmail(
+        String(payload.to).trim(),
+        String(payload.subject),
+        String(payload.plainText || ''),
+        {
+          htmlBody: String(payload.html || ''),
+          name: payload.senderName || 'Team Cognisphere'
+        }
+      );
+      return jsonResponse({
+        success: true,
+        to: payload.to,
+        remainingDailyQuota: MailApp.getRemainingDailyQuota()
+      });
+    }
+
     return jsonResponse({ success: false, error: 'Unknown action: ' + action });
   } catch (err) {
     return jsonResponse({ success: false, error: err.toString() });

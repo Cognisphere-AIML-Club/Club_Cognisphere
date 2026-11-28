@@ -127,6 +127,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // === UNREGISTERED / WALK-IN PARTICIPANTS COLLECTION ===
+    // Separate database documents for participants who were not registered beforehand.
+    // Readable by authenticated users (for attendance hub & late login certificate sync).
+    // Writable and deletable by coordinators or admins.
+    match /unregisteredParticipants/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isCoordinator() || isAdmin();
+      allow delete: if isAdmin() || isCoordinator();
+    }
+
     // === TIMERS COLLECTION ===
     // Format doc ID: {activityId}
     // Timers are readable by everyone.
@@ -165,6 +175,12 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin() || isCoordinator();
+    }
+
+    // === PRIVATE STAFF SETTINGS & API CREDENTIALS ===
+    // Strictly restricted to authenticated Admins and Coordinators (never public).
+    match /privateSettings/{settingId} {
+      allow read, write: if isAdmin() || isCoordinator();
     }
 
     // === CERTIFICATES (OFFICIAL VERIFICATION INDEX) ===
