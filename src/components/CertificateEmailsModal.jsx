@@ -31,7 +31,9 @@ import {
 } from '../services/attendanceService';
 import {
   subscribeToRolesCollection,
+  subscribeToIgniteCoordinators,
   subscribeToParticipantsCollection,
+  addCoordinatorToDatabase,
   lookupParticipantProfile
 } from '../services/coordinatorConfigService';
 import {
@@ -65,6 +67,7 @@ export default function CertificateEmailsModal({
   const [regAttendance, setRegAttendance] = useState([]);
   const [unregAttendance, setUnregAttendance] = useState([]);
   const [rolesList, setRolesList] = useState([]);
+  const [igniteCoordinatorsList, setIgniteCoordinatorsList] = useState([]);
   const [participantsMap, setParticipantsMap] = useState({});
   const [issuedCertsMap, setIssuedCertsMap] = useState({});
   const [customCoordinators, setCustomCoordinators] = useState([]);
@@ -114,6 +117,7 @@ export default function CertificateEmailsModal({
       subscribeToAllAttendance(setRegAttendance),
       subscribeToUnregisteredParticipants(setUnregAttendance),
       subscribeToRolesCollection(setRolesList),
+      subscribeToIgniteCoordinators(setIgniteCoordinatorsList),
       subscribeToParticipantsCollection(setParticipantsMap),
       subscribeAllIssuedCertificates(setIssuedCertsMap),
       subscribePrivateMailerConfig((cfg) => {
@@ -227,7 +231,7 @@ export default function CertificateEmailsModal({
   const coordinatorItems = useMemo(() => {
     const coordMap = new Map();
 
-    rolesList
+    [...rolesList, ...igniteCoordinatorsList]
       .filter(r => r.role === 'coordinator' || r.baseRole === 'coordinator')
       .forEach((r) => {
         const prof = lookupParticipantProfile(participantsMap, {
@@ -276,7 +280,7 @@ export default function CertificateEmailsModal({
     });
 
     return Array.from(coordMap.values());
-  }, [rolesList, participantsMap, customCoordinators, issuedCertsMap, origin, allActivities]);
+  }, [rolesList, igniteCoordinatorsList, participantsMap, customCoordinators, issuedCertsMap, origin, allActivities]);
 
   const currentList = useMemo(() => {
     const base =
@@ -484,13 +488,27 @@ export default function CertificateEmailsModal({
     try {
       setIssuingSingle(true);
       await ensureIssued(newItem);
+      // Persist permanently to IGNITE 2026 coordinators database (`igniteCoordinators` + `roles`)
+      try {
+        await addCoordinatorToDatabase({
+          email: cleanEmail,
+          name: cleanName,
+          usn: cleanUsn,
+          activityId: act?.id || 'all',
+          assignedEvent: act?.name || 'All Events',
+          assignedRoom: act ? (act.room || '') : 'All Rooms',
+          addedBy: 'admin'
+        });
+      } catch (coordErr) {
+        console.warn('Coordinator DB save notice:', coordErr?.message);
+      }
       setCustomCoordinators(prev => [newItem, ...prev.filter(x => x.certId !== certId)]);
       setSelectedKey(newItem.key);
       setCustomName('');
       setCustomEmail('');
       setCustomUsn('');
       setShowAddForm(false);
-      setStatusNotice(`Created coordinator certificate link for ${cleanName} (${certId})!`);
+      setStatusNotice(`Saved ${cleanName} as IGNITE Coordinator & created certificate link (${certId})!`);
     } catch (err) {
       alert(err.message || 'Failed to create coordinator certificate link');
     } finally {

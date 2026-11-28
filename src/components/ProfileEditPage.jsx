@@ -38,7 +38,8 @@ import {
   Timer,
   Tv,
   ClipboardCheck,
-  UserPlus
+  UserPlus,
+  Edit3
 } from 'lucide-react';
 import { validateUSN } from '../hooks/useParticipantProfile';
 import { subscribeToPassConfig, updatePassConfig } from '../services/passApprovalService';
@@ -51,11 +52,13 @@ import {
   getCachedCoordinatorConfig,
   DEFAULT_COORDINATOR_CONFIG,
   subscribeToRolesCollection,
+  subscribeToIgniteCoordinators,
   subscribeToParticipantsCollection,
   getParticipantDetails,
   syncCoordinatorDetailsInDatabase,
   setCoordinatorRoleInDatabase,
   addCoordinatorToDatabase,
+  updateCoordinatorInDatabase,
   removeCoordinatorFromDatabase
 } from '../services/coordinatorConfigService';
 
@@ -140,6 +143,7 @@ export default function ProfileEditPage({
   }, [effectiveIsAdmin]);
 
   const hidePassAfterAttendance = passConfig.hidePassAfterAttendance ?? true;
+  const passRegistrationsEnabled = passConfig.passRegistrationsEnabled ?? false;
   const showLeaderboard = passConfig.showLeaderboard ?? true;
   const showVideoShowcase = passConfig.showVideoShowcase ?? false;
   const enableThemeToggle = passConfig.enableThemeToggle ?? false;
@@ -220,8 +224,21 @@ export default function ProfileEditPage({
     }
   };
 
+  const handleTogglePassRegistrations = async () => {
+    const nextVal = !passRegistrationsEnabled;
+    const updated = { ...passConfig, passRegistrationsEnabled: nextVal };
+    setPassConfig(updated);
+    try {
+      localStorage.setItem('cognisphere_pass_config', JSON.stringify(updated));
+      await updatePassConfig(updated, user?.email || 'admin');
+    } catch (err) {
+      console.warn('Failed to update pass registration toggle:', err);
+    }
+  };
+
   const DEFAULT_PASS_CONFIG = {
     passSystemEnabled: true,
+    passRegistrationsEnabled: false,
     showDownloadButton: true,
     hidePassAfterAttendance: true,
     showLeaderboard: true,
@@ -356,6 +373,7 @@ export default function ProfileEditPage({
   const [coordinatorSearchQuery, setCoordinatorSearchQuery] = useState('');
   const [savingCoordinatorConfig, setSavingCoordinatorConfig] = useState(false);
   const [rolesFromDb, setRolesFromDb] = useState([]);
+  const [igniteCoordinatorsFromDb, setIgniteCoordinatorsFromDb] = useState([]);
   const [participantsMap, setParticipantsMap] = useState({});
 
   // Add Coordinator form inputs (Email only, Name and USN pulled automatically from DB)
@@ -363,6 +381,14 @@ export default function ProfileEditPage({
   const [newCoordEmail, setNewCoordEmail] = useState('');
   const [newCoordEvent, setNewCoordEvent] = useState('');
   const [isAddingCoordinator, setIsAddingCoordinator] = useState(false);
+
+  // Edit Coordinator inline row state
+  const [editingCoordId, setEditingCoordId] = useState(null);
+  const [editCoordName, setEditCoordName] = useState('');
+  const [editCoordEmail, setEditCoordEmail] = useState('');
+  const [editCoordUsn, setEditCoordUsn] = useState('');
+  const [editCoordEvent, setEditCoordEvent] = useState('');
+  const [savingCoordEdit, setSavingCoordEdit] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeToCoordinatorConfig((cfg) => {
@@ -373,15 +399,23 @@ export default function ProfileEditPage({
     return () => unsub();
   }, []);
 
-  // Real-time listener for Firestore roles collection (Admin exclusive)
+  // Real-time listener for Firestore roles & IGNITE 2026 coordinators collections (Admin exclusive)
   useEffect(() => {
     if (effectiveIsAdmin) {
-      const unsub = subscribeToRolesCollection((roles) => {
+      const unsubRoles = subscribeToRolesCollection((roles) => {
         if (roles && Array.isArray(roles)) {
           setRolesFromDb(roles);
         }
       });
-      return () => unsub && unsub();
+      const unsubIgnite = subscribeToIgniteCoordinators((coords) => {
+        if (coords && Array.isArray(coords)) {
+          setIgniteCoordinatorsFromDb(coords);
+        }
+      });
+      return () => {
+        unsubRoles && unsubRoles();
+        unsubIgnite && unsubIgnite();
+      };
     }
   }, [effectiveIsAdmin]);
 
@@ -395,20 +429,20 @@ export default function ProfileEditPage({
     }
   }, [effectiveIsAdmin]);
 
-  // Pull all coordinators 100% dynamically from the Firestore 'roles' collection.
+  // Pull all coordinators dynamically from the IGNITE coordinators DB ('igniteCoordinators') & 'roles' collection.
   // Name and USN are automatically pulled from the database 'participants' / 'participents' collections.
   const allCoordinators = useMemo(() => {
-    const list = [];
+    const mergedMap = new Map();
 
-    rolesFromDb.forEach((r) => {
+    [...rolesFromDb, ...igniteCoordinatorsFromDb].forEach((r) => {
       const docEmail = (r.email || (r.id && r.id.includes('@') ? r.id : '')).trim().toLowerCase();
-      const docUid = r.uid || (!r.id?.includes('@') ? r.id : '');
+      const docUid = r.uid || (!r.id?.includes('@') && !r.id?.startsWith('coord_') ? r.id : '');
       const docUsn = (r.usn || '').trim().toUpperCase();
       const rawRole = (r.role || '').toLowerCase();
       const baseRole = (r.baseRole || '').toLowerCase();
       const coordState = r.coordinatorState;
 
-      // Identify whether this role document is a coordinator
+      // Identify whether this record is a coordinator
       const isCoord =
         rawRole === 'coordinator' ||
         baseRole === 'coordinator' ||
@@ -450,24 +484,27 @@ export default function ProfileEditPage({
       const resolvedActivityId = r.activityId || matchAct?.id || '';
       const resolvedEvent = r.assignedEvent || matchAct?.name || '';
       const resolvedRoom = r.assignedRoom || matchAct?.room || '';
+      const dedupKey = resolvedEmail || r.id || docUid || resolvedName;
 
-      list.push({
-        id: r.id || (docEmail ? `role_${docEmail}` : `role_${docUid}`),
-        email: resolvedEmail,
-        uid: docUid,
-        name: resolvedName,
-        usn: resolvedUsn,
-        activityId: resolvedActivityId,
-        assignedEvent: resolvedEvent,
-        assignedRoom: resolvedRoom,
-        firestoreRole: rawRole,
-        coordinatorState: coordState || rawRole,
+      const prev = mergedMap.get(dedupKey) || {};
+      mergedMap.set(dedupKey, {
+        ...prev,
+        id: r.id || prev.id || (resolvedEmail ? `role_${resolvedEmail}` : `role_${docUid}`),
+        email: resolvedEmail || prev.email || '',
+        uid: docUid || prev.uid || '',
+        name: resolvedName || prev.name || 'Coordinator',
+        usn: resolvedUsn || prev.usn || '',
+        activityId: resolvedActivityId || prev.activityId || '',
+        assignedEvent: resolvedEvent || prev.assignedEvent || '',
+        assignedRoom: resolvedRoom || prev.assignedRoom || '',
+        firestoreRole: rawRole || prev.firestoreRole || 'coordinator',
+        coordinatorState: coordState || rawRole || prev.coordinatorState || 'coordinator',
         fromDb: true
       });
     });
 
-    return list;
-  }, [rolesFromDb, participantsMap, activities]);
+    return Array.from(mergedMap.values());
+  }, [rolesFromDb, igniteCoordinatorsFromDb, participantsMap, activities]);
 
   // Auto-sync coordinator Name and USN directly from database if missing or not yet cached
   useEffect(() => {
@@ -571,19 +608,24 @@ export default function ProfileEditPage({
       alert('Please enter a valid email address for the coordinator.');
       return;
     }
-    const selectedAct = activities.find(a => a.id === newCoordEvent);
+    const isAllEvents = newCoordEvent === 'all';
+    const selectedAct = !isAllEvents ? activities.find(a => a.id === newCoordEvent) : null;
     try {
       setIsAddingCoordinator(true);
       const res = await addCoordinatorToDatabase({
         email: newCoordEmail,
-        activityId: selectedAct?.id || '',
-        assignedEvent: selectedAct?.name || '',
-        assignedRoom: selectedAct?.room || '',
+        activityId: isAllEvents ? 'all' : (selectedAct?.id || ''),
+        assignedEvent: isAllEvents ? 'All Events' : (selectedAct?.name || ''),
+        assignedRoom: isAllEvents ? 'All Rooms' : (selectedAct?.room || ''),
         addedBy: user?.email || 'admin'
       });
 
       const nameInfo = res.name ? ` (${res.name})` : '';
-      const roomInfo = selectedAct ? ` for ${selectedAct.room} • ${selectedAct.name}` : '';
+      const roomInfo = isAllEvents
+        ? ' for All Events'
+        : selectedAct
+        ? ` for ${selectedAct.room} • ${selectedAct.name}`
+        : '';
       setSuccessToast(`Coordinator ${newCoordEmail}${nameInfo} registered${roomInfo}!`);
       setTimeout(() => setSuccessToast(''), 4000);
       setNewCoordEmail('');
@@ -597,14 +639,76 @@ export default function ProfileEditPage({
     }
   };
 
+  const handleStartEditCoordinator = (coord) => {
+    const isAllCoord = String(coord.activityId || '').toLowerCase() === 'all' ||
+      String(coord.assignedEvent || '').toLowerCase() === 'all events';
+    const matchedAct = !isAllCoord ? activities.find(
+      a => (coord.activityId && a.id === coord.activityId) ||
+        (coord.assignedEvent && (a.id === coord.assignedEvent || (a.name && a.name.toLowerCase() === String(coord.assignedEvent).toLowerCase())))
+    ) : null;
+
+    setEditingCoordId(coord.id);
+    setEditCoordName(coord.name || '');
+    setEditCoordEmail(coord.email || '');
+    setEditCoordUsn(coord.usn || '');
+    setEditCoordEvent(isAllCoord ? 'all' : (matchedAct?.id || coord.activityId || ''));
+  };
+
+  const handleSaveCoordinatorEdit = async (coord) => {
+    if (!editCoordEmail.trim() && !editCoordName.trim()) {
+      alert('Please enter a coordinator name or email.');
+      return;
+    }
+    const isAllEvents = editCoordEvent === 'all';
+    const selectedAct = !isAllEvents ? activities.find(a => a.id === editCoordEvent) : null;
+    const currentState = getCoordinatorState(coord, coordinatorModalConfig);
+
+    try {
+      setSavingCoordEdit(true);
+      const updated = await updateCoordinatorInDatabase({
+        id: coord.id,
+        prevEmail: coord.email || '',
+        email: editCoordEmail,
+        name: editCoordName,
+        usn: editCoordUsn,
+        activityId: isAllEvents ? 'all' : (selectedAct?.id || ''),
+        assignedEvent: isAllEvents ? 'All Events' : (selectedAct?.name || ''),
+        assignedRoom: isAllEvents ? 'All Rooms' : (selectedAct?.room || ''),
+        coordinatorState: currentState,
+        updatedBy: user?.email || 'admin'
+      });
+
+      setCoordinatorModalConfig(prev => {
+        const nextStates = { ...(prev.activeStates || {}) };
+        const oldEm = (coord.email || '').trim().toLowerCase();
+        if (oldEm && updated.email && oldEm !== updated.email) {
+          delete nextStates[oldEm];
+        }
+        if (updated.email) nextStates[updated.email] = currentState;
+        if (updated.usn) nextStates[updated.usn] = currentState;
+        return { ...prev, activeStates: nextStates };
+      });
+
+      setEditingCoordId(null);
+      setSuccessToast(`Updated coordinator ${updated.name || updated.email}!`);
+      setTimeout(() => setSuccessToast(''), 3500);
+    } catch (err) {
+      console.error('Failed to update coordinator:', err);
+      alert('Error updating coordinator: ' + err.message);
+    } finally {
+      setSavingCoordEdit(false);
+    }
+  };
+
   const handleDeleteCoordinator = async (coord) => {
-    if (!coord?.email) return;
-    if (!window.confirm(`Are you sure you want to remove coordinator access for ${coord.name || coord.email}?`)) {
+    const targetKey = coord?.email || coord?.id;
+    if (!targetKey) return;
+    if (!window.confirm(`Are you sure you want to remove coordinator access for ${coord.name || targetKey}?`)) {
       return;
     }
     try {
-      await removeCoordinatorFromDatabase(coord.email, user?.email || 'admin');
-      setSuccessToast(`${coord.name || coord.email} removed from coordinators.`);
+      await removeCoordinatorFromDatabase(targetKey, user?.email || 'admin');
+      setSuccessToast(`${coord.name || targetKey} removed from coordinators.`);
       setTimeout(() => setSuccessToast(''), 3500);
     } catch (err) {
       console.error('Failed to remove coordinator:', err);
@@ -1367,6 +1471,36 @@ export default function ProfileEditPage({
                   </button>
                 </div>
               </div>
+              {/* Control 0.5: Pass Registrations Open/Closed Switch */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-lg">
+                  <div className="flex items-center gap-2">
+                    <ClipboardCheck className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-on-surface">
+                      Pass Registrations
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${passRegistrationsEnabled ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                      }`}>
+                      {passRegistrationsEnabled ? 'Open' : 'Closed (Disabled)'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleTogglePassRegistrations}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${passRegistrationsEnabled ? 'bg-primary' : 'bg-surface-container-high'
+                    }`}
+                  role="switch"
+                  aria-checked={passRegistrationsEnabled}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${passRegistrationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                  />
+                </button>
+              </div>
+
               {/* Control 1: Hide QR Pass After Attendance Marked */}
               <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1 max-w-lg">
@@ -2099,6 +2233,7 @@ export default function ProfileEditPage({
                           className="w-full px-3 py-1.5 bg-surface-container-lowest border border-surface-container-high rounded-lg text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
                         >
                           <option value="">Select Assigned Event &amp; Room *</option>
+                          <option value="all">All Events (Full Access)</option>
                           {activities.map((act) => (
                             <option key={act.id} value={act.id}>
                               {act.room} &bull; {act.name}
@@ -2108,7 +2243,7 @@ export default function ProfileEditPage({
                       </div>
                       <div className="flex items-center justify-between pt-1">
                         <p className="text-[10px] text-secondary">
-                          Stored directly into Firestore <code className="font-mono text-primary">roles</code> collection
+                          Stored in IGNITE coordinators database (<code className="font-mono text-primary">igniteCoordinators</code>) &amp; <code className="font-mono text-primary">roles</code>
                         </p>
                         <div className="flex items-center gap-2">
                           <button
@@ -2172,14 +2307,105 @@ export default function ProfileEditPage({
                       filteredCoordinators.map((coord) => {
                         const isCoordinatorActive = getCoordinatorState(coord, coordinatorModalConfig) === 'coordinator';
 
-                        const resolvedRoom = coord.assignedRoom || (activities.find(
+                        const isAllCoord = String(coord.activityId || '').toLowerCase() === 'all';
+                        const resolvedRoom = coord.assignedRoom || (isAllCoord ? 'All Rooms' : (activities.find(
                           a => (coord.activityId && a.id === coord.activityId) ||
                             (coord.assignedEvent && (a.id === coord.assignedEvent || (a.name && typeof a.name === 'string' && a.name.toLowerCase() === String(coord.assignedEvent).toLowerCase())))
-                        )?.room) || '';
+                        )?.room)) || '';
 
-                        const resolvedEvent = coord.assignedEvent || (activities.find(
+                        const resolvedEvent = coord.assignedEvent || (isAllCoord ? 'All Events' : (activities.find(
                           a => coord.activityId && a.id === coord.activityId
-                        )?.name) || '';
+                        )?.name)) || '';
+
+                        if (editingCoordId === coord.id) {
+                          return (
+                            <div
+                              key={coord.id}
+                              className="pt-3 first:pt-1 pb-2 space-y-2.5 bg-surface-container/60 p-3 rounded-xl border border-primary/25 text-xs animate-fadeIn"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-primary flex items-center gap-1.5">
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <span>Edit Coordinator</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCoordId(null)}
+                                  className="text-secondary hover:text-on-surface p-0.5 rounded"
+                                  title="Cancel editing"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <input
+                                  type="text"
+                                  value={editCoordName}
+                                  onChange={(e) => setEditCoordName(e.target.value)}
+                                  placeholder="Coordinator Name"
+                                  className="w-full px-2.5 py-1.5 bg-surface-container-lowest border border-surface-container-high rounded-lg text-xs text-on-surface"
+                                />
+                                <input
+                                  type="text"
+                                  value={editCoordUsn}
+                                  onChange={(e) => setEditCoordUsn(e.target.value.toUpperCase())}
+                                  placeholder="USN (Optional)"
+                                  className="w-full px-2.5 py-1.5 bg-surface-container-lowest border border-surface-container-high rounded-lg text-xs font-mono uppercase text-on-surface"
+                                />
+                                <input
+                                  type="email"
+                                  value={editCoordEmail}
+                                  onChange={(e) => setEditCoordEmail(e.target.value)}
+                                  placeholder="Google Email"
+                                  className="w-full px-2.5 py-1.5 bg-surface-container-lowest border border-surface-container-high rounded-lg text-xs text-on-surface"
+                                />
+                                <select
+                                  value={editCoordEvent}
+                                  onChange={(e) => setEditCoordEvent(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-surface-container-lowest border border-surface-container-high rounded-lg text-xs text-on-surface cursor-pointer"
+                                >
+                                  <option value="">Room / Event not assigned</option>
+                                  <option value="all">All Events (Full Access)</option>
+                                  {activities.map((act) => (
+                                    <option key={act.id} value={act.id}>
+                                      {act.room} &bull; {act.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="flex items-center justify-end gap-2 pt-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCoordId(null)}
+                                  disabled={savingCoordEdit}
+                                  className="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-secondary text-xs font-medium"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveCoordinatorEdit(coord)}
+                                  disabled={savingCoordEdit}
+                                  className="px-3 py-1 rounded-lg bg-primary hover:bg-primary-container text-on-primary text-xs font-bold flex items-center gap-1 shadow-xs disabled:opacity-50"
+                                >
+                                  {savingCoordEdit ? (
+                                    <>
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                      <span>Saving...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className="w-3 h-3" />
+                                      <span>Save</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
 
                         return (
                           <div
@@ -2219,6 +2445,16 @@ export default function ProfileEditPage({
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
+                              {/* Edit coordinator button */}
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditCoordinator(coord)}
+                                className="p-1.5 text-secondary hover:text-primary hover:bg-surface-container rounded-lg transition-colors"
+                                title={`Edit ${coord.name || coord.email}`}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+
                               {/* Toggle switch with NO text */}
                               <button
                                 type="button"

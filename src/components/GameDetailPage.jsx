@@ -30,7 +30,7 @@ import {
   Swords,
   ScrollText
 } from 'lucide-react';
-import { requestGamePass, subscribeToUserPassRequests } from '../services/passApprovalService';
+import { requestGamePass, subscribeToUserPassRequests, subscribeToPassConfig } from '../services/passApprovalService';
 import { GAME_GUIDES } from '../data/gameGuides';
 import AdminTimePicker from './AdminTimePicker';
 import AdminDatePicker from './AdminDatePicker';
@@ -302,7 +302,16 @@ export default function GameDetailPage({
 }) {
   const [editing, setEditing] = useState(false);
   const [userRequests, setUserRequests] = useState({});
+  const [passRegistrationsOpen, setPassRegistrationsOpen] = useState(false);
   const [requesting, setRequesting] = useState(false);
+
+  // Subscribe to global pass registration toggle
+  useEffect(() => {
+    const unsubscribe = subscribeToPassConfig((cfg) => {
+      setPassRegistrationsOpen(Boolean(cfg?.passRegistrationsEnabled === true));
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Subscribe to participant's pass requests
   useEffect(() => {
@@ -467,6 +476,11 @@ export default function GameDetailPage({
                 <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-error-container border border-error/30 rounded-2xl text-xs text-on-error-container font-semibold">
                   <AlertCircle className="w-4 h-4 text-error" />
                   <span>Entry Not Approved for this Competition</span>
+                </div>
+              ) : !passRegistrationsOpen ? (
+                <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container border border-surface-container-high rounded-2xl text-xs text-secondary font-semibold">
+                  <AlertCircle className="w-4 h-4 text-secondary" />
+                  <span>Pass Registrations Closed</span>
                 </div>
               ) : (
                 <button

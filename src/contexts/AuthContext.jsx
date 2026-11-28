@@ -34,46 +34,77 @@ export const AuthProvider = ({ children }) => {
     }
 
     let roleUnsubscribe = null;
+    let igniteCoordUnsubscribe = null;
 
     const authUnsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setLoading(true);
       setError(null);
 
-      // Clean up prior role listener
+      // Clean up prior role listeners
       if (roleUnsubscribe) {
         roleUnsubscribe();
         roleUnsubscribe = null;
+      }
+      if (igniteCoordUnsubscribe) {
+        igniteCoordUnsubscribe();
+        igniteCoordUnsubscribe = null;
       }
 
       if (currentUser && currentUser.email) {
         setUser(currentUser);
         const userEmail = currentUser.email.toLowerCase().trim();
         const roleDocRef = doc(db, 'roles', userEmail);
+        const igniteCoordDocRef = doc(db, 'igniteCoordinators', userEmail);
 
-        // Real-time listener on the user's role document
-        // This ensures that as soon as the doc is created/edited in Firebase Console, it updates immediately
+        let roleDocData = null;
+        let igniteCoordData = null;
+        let roleLoaded = false;
+        let igniteLoaded = false;
+
+        const syncResolvedRole = () => {
+          if (!roleLoaded && !igniteLoaded) return;
+          const activeData = roleDocData || igniteCoordData || null;
+          if (activeData) {
+            const rawRole = (activeData.role || '').toLowerCase().trim();
+            setRole(rawRole || 'participant');
+            setRoleData(roleDocData && igniteCoordData ? { ...igniteCoordData, ...roleDocData } : activeData);
+          } else {
+            setRole('participant');
+            setRoleData(null);
+          }
+          setLoading(false);
+        };
+
+        // Real-time listener on roles/{email}
         roleUnsubscribe = onSnapshot(
           roleDocRef,
           (docSnap) => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              const rawRole = (data.role || '').toLowerCase().trim();
-              setRole(rawRole || 'participant');
-              setRoleData(data);
-            } else {
-              setRole('participant');
-              setRoleData(null);
-            }
-            setLoading(false);
+            roleDocData = docSnap.exists() ? docSnap.data() : null;
+            roleLoaded = true;
+            syncResolvedRole();
           },
           (err) => {
-            // If permission denied, the firestore.rules might need to be published in Firebase Console
             if (err.code === 'permission-denied') {
               setError('Firestore Permission Denied: Please check that you published the rules from firestore.rules in the Firebase Console Rules tab.');
             }
-            setRole('participant');
-            setRoleData(null);
-            setLoading(false);
+            roleDocData = null;
+            roleLoaded = true;
+            syncResolvedRole();
+          }
+        );
+
+        // Real-time listener on IGNITE 2026 event coordinators collection (`igniteCoordinators/{email}`)
+        igniteCoordUnsubscribe = onSnapshot(
+          igniteCoordDocRef,
+          (docSnap) => {
+            igniteCoordData = docSnap.exists() ? docSnap.data() : null;
+            igniteLoaded = true;
+            syncResolvedRole();
+          },
+          () => {
+            igniteCoordData = null;
+            igniteLoaded = true;
+            syncResolvedRole();
           }
         );
       } else {
@@ -88,6 +119,9 @@ export const AuthProvider = ({ children }) => {
       authUnsubscribe();
       if (roleUnsubscribe) {
         roleUnsubscribe();
+      }
+      if (igniteCoordUnsubscribe) {
+        igniteCoordUnsubscribe();
       }
     };
   }, []);

@@ -28,6 +28,55 @@ export const DEFAULT_COORDINATOR_CONFIG = {
 };
 
 const STORAGE_KEY = 'cognisphere_coordinator_config';
+const IGNITE_COORDINATORS_COLLECTION = 'igniteCoordinators';
+
+function buildIgniteCoordDocId({ email = '', usn = '', name = '' }) {
+  if (email) return email.trim().toLowerCase();
+  if (usn) return `coord_${usn.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
+  const slug = String(name || 'coord').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  let hash = 0;
+  for (let i = 0; i < String(name || '').length; i++) {
+    hash = ((hash << 5) - hash + String(name).charCodeAt(i)) | 0;
+  }
+  return `coord_${slug || 'member'}_${Math.abs(hash).toString(36).slice(0, 5)}`;
+}
+
+/**
+ * Real-time listener for the dedicated IGNITE event coordinators collection (`igniteCoordinators`).
+ */
+export function subscribeToIgniteCoordinators(callback) {
+  try {
+    const colRef = collection(db, IGNITE_COORDINATORS_COLLECTION);
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        const list = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const docId = docSnap.id;
+          const isEmailId = docId.includes('@');
+          const email = (data.email || (isEmailId ? docId : '')).trim().toLowerCase();
+          const uid = data.uid || (!isEmailId && !docId.startsWith('coord_') ? docId : '');
+          list.push({
+            id: docId,
+            email,
+            uid,
+            ...data
+          });
+        });
+        callback(list);
+      },
+      (err) => {
+        console.warn('igniteCoordinators notice:', err?.message);
+        callback([]);
+      }
+    );
+  } catch (err) {
+    console.warn('Failed to listen to igniteCoordinators:', err);
+    callback([]);
+    return () => {};
+  }
+}
 
 /**
  * Get cached coordinator configuration from localStorage
@@ -563,23 +612,34 @@ export async function setCoordinatorRoleInDatabase({ email, usn, id, name, nextS
   const normUsn = usn ? usn.trim().toUpperCase() : '';
   const state = nextState === 'participant' ? 'participant' : 'coordinator';
 
-  // 1. If email is available, update or merge into Firestore 'roles/{normEmail}'
+  // 1. If email is available, update or merge into Firestore 'roles/{normEmail}' and 'igniteCoordinators/{normEmail}'
   if (normEmail) {
-    const roleDocRef = doc(db, 'roles', normEmail);
-    await setDoc(
-      roleDocRef,
-      {
-        role: state,                 // 'coordinator' or 'participant'
-        coordinatorState: state,    // Explicit coordinator state
-        baseRole: 'coordinator',    // Remembers that this account is fundamentally a coordinator
-        email: normEmail,
-        ...(name ? { name: name.trim() } : {}),
-        ...(normUsn ? { usn: normUsn } : {}),
+    const payload = {
+      role: state,                 // 'coordinator' or 'participant'
+      coordinatorState: state,    // Explicit coordinator state
+      baseRole: 'coordinator',    // Remembers that this account is fundamentally a coordinator
+      email: normEmail,
+      ...(name ? { name: name.trim() } : {}),
+      ...(normUsn ? { usn: normUsn } : {}),
+      updatedAt: serverTimestamp(),
+      updatedBy: updatedBy || 'admin'
+    };
+    await setDoc(doc(db, 'roles', normEmail), payload, { merge: true });
+    await setDoc(doc(db, IGNITE_COORDINATORS_COLLECTION, normEmail), {
+      ...payload,
+      event: 'IGNITE-2026'
+    }, { merge: true });
+  } else if (id) {
+    try {
+      await setDoc(doc(db, IGNITE_COORDINATORS_COLLECTION, id), {
+        role: state,
+        coordinatorState: state,
+        baseRole: 'coordinator',
+        event: 'IGNITE-2026',
         updatedAt: serverTimestamp(),
         updatedBy: updatedBy || 'admin'
-      },
-      { merge: true }
-    );
+      }, { merge: true });
+    } catch (_) {}
   }
 
   // 2. Update 'settings/coordinatorConfig' activeStates with all available keys
@@ -611,100 +671,225 @@ export async function setCoordinatorRoleInDatabase({ email, usn, id, name, nextS
 }
 
 /**
- * Add a new coordinator directly by Email and store it in Firestore 'roles/{email}'.
- * Automatically pulls their Name, USN, and UID from the participants / participents collection in the database.
+ * Add a coordinator for IGNITE 2026 and store in BOTH the dedicated `igniteCoordinators`
+ * collection and Firestore `roles/{email}` (so staff auth/permissions work automatically).
+ * Automatically pulls missing Name, USN, and UID from participants / participents collections.
  */
-export async function addCoordinatorToDatabase({ email, activityId, assignedEvent, assignedRoom, addedBy }) {
-  if (!email || !email.trim()) {
-    throw new Error('Coordinator email address is required');
+export async function addCoordinatorToDatabase({
+  email = '',
+  name = '',
+  usn = '',
+  activityId = '',
+  assignedEvent = '',
+  assignedRoom = '',
+  addedBy = 'admin'
+}) {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const manualName = (name || '').trim();
+  const manualUsn = (usn || '').trim().toUpperCase();
+
+  if (!cleanEmail && !manualName) {
+    throw new Error('Coordinator email address or name is required');
   }
 
-  const cleanEmail = email.trim().toLowerCase();
-
   // Pull name, USN, and UID from the database (participants / participents or registeredUsns)
-  const participant = await getParticipantDetails({ email: cleanEmail });
-  const resolvedName = participant?.name || cleanEmail.split('@')[0];
-  const resolvedUsn = participant?.usn || '';
+  const participant = await getParticipantDetails({
+    email: cleanEmail,
+    usn: manualUsn,
+    name: manualName
+  });
+  const resolvedEmail = cleanEmail || participant?.email || '';
+  const resolvedName = manualName || participant?.name || (resolvedEmail ? resolvedEmail.split('@')[0] : 'Coordinator');
+  const resolvedUsn = manualUsn || participant?.usn || '';
   const resolvedUid = participant?.uid || '';
   const cleanActivityId = activityId && activityId.trim() ? activityId.trim() : '';
   const cleanEvent = assignedEvent && assignedEvent.trim() ? assignedEvent.trim() : '';
   const cleanRoom = assignedRoom && assignedRoom.trim() ? assignedRoom.trim() : '';
 
-  // 1. Create or update roles/{cleanEmail} in database
-  const roleDocRef = doc(db, 'roles', cleanEmail);
-  await setDoc(
-    roleDocRef,
-    {
-      role: 'coordinator',
-      coordinatorState: 'coordinator',
-      baseRole: 'coordinator',
-      email: cleanEmail,
-      name: resolvedName,
-      usn: resolvedUsn,
-      ...(resolvedUid ? { uid: resolvedUid } : {}),
-      ...(cleanActivityId ? { activityId: cleanActivityId } : {}),
-      ...(cleanEvent ? { assignedEvent: cleanEvent } : {}),
-      ...(cleanRoom ? { assignedRoom: cleanRoom } : {}),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: addedBy || 'admin'
-    },
-    { merge: true }
-  );
-
-  // 2. Sync to settings/coordinatorConfig activeStates
-  const activeUpdates = {
-    [cleanEmail]: 'coordinator'
+  const coordRecord = {
+    role: 'coordinator',
+    coordinatorState: 'coordinator',
+    baseRole: 'coordinator',
+    event: 'IGNITE-2026',
+    ...(resolvedEmail ? { email: resolvedEmail } : {}),
+    name: resolvedName,
+    usn: resolvedUsn,
+    ...(resolvedUid ? { uid: resolvedUid } : {}),
+    ...(cleanActivityId ? { activityId: cleanActivityId } : {}),
+    ...(cleanEvent ? { assignedEvent: cleanEvent } : {}),
+    ...(cleanRoom ? { assignedRoom: cleanRoom } : {}),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: addedBy || 'admin'
   };
+
+  // 1. Store in dedicated IGNITE 2026 coordinators database (`igniteCoordinators`)
+  const igniteDocId = buildIgniteCoordDocId({
+    email: resolvedEmail,
+    usn: resolvedUsn,
+    name: resolvedName
+  });
+  await setDoc(doc(db, IGNITE_COORDINATORS_COLLECTION, igniteDocId), coordRecord, { merge: true });
+
+  // 2. Also create/update `roles/{resolvedEmail}` when email is known so login & rules permissions apply
+  if (resolvedEmail) {
+    await setDoc(doc(db, 'roles', resolvedEmail), coordRecord, { merge: true });
+  }
+
+  // 3. Sync to settings/coordinatorConfig activeStates
+  const activeUpdates = {};
+  if (resolvedEmail) activeUpdates[resolvedEmail] = 'coordinator';
   if (resolvedUsn) activeUpdates[resolvedUsn] = 'coordinator';
   if (resolvedUid) activeUpdates[resolvedUid] = 'coordinator';
 
-  const cached = getCachedCoordinatorConfig();
-  const newActiveStates = { ...(cached.activeStates || {}), ...activeUpdates };
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...cached, activeStates: newActiveStates }));
-  } catch (e) {}
+  if (Object.keys(activeUpdates).length > 0) {
+    const cached = getCachedCoordinatorConfig();
+    const newActiveStates = { ...(cached.activeStates || {}), ...activeUpdates };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...cached, activeStates: newActiveStates }));
+    } catch (e) {}
 
-  const configDocRef = doc(db, 'settings', 'coordinatorConfig');
-  await setDoc(
-    configDocRef,
-    {
-      activeStates: newActiveStates,
-      updatedAt: serverTimestamp(),
-      updatedBy: addedBy || 'admin'
-    },
-    { merge: true }
-  );
+    const configDocRef = doc(db, 'settings', 'coordinatorConfig');
+    await setDoc(
+      configDocRef,
+      {
+        activeStates: newActiveStates,
+        updatedAt: serverTimestamp(),
+        updatedBy: addedBy || 'admin'
+      },
+      { merge: true }
+    );
+  }
 
-  return { 
-    email: cleanEmail, 
+  return {
+    id: igniteDocId,
+    email: resolvedEmail,
     uid: resolvedUid,
-    name: resolvedName, 
-    usn: resolvedUsn, 
-    activityId: cleanActivityId, 
-    assignedEvent: cleanEvent, 
-    assignedRoom: cleanRoom 
+    name: resolvedName,
+    usn: resolvedUsn,
+    activityId: cleanActivityId,
+    assignedEvent: cleanEvent,
+    assignedRoom: cleanRoom
   };
 }
 
 /**
- * Automatically syncs resolved participant name, USN, and UID to roles in Firestore
+ * Update an existing coordinator's Name, Email, USN, and Event/Room assignment
+ * across both `igniteCoordinators` and `roles` collections.
+ */
+export async function updateCoordinatorInDatabase({
+  id = '',
+  prevEmail = '',
+  email = '',
+  name = '',
+  usn = '',
+  activityId = '',
+  assignedEvent = '',
+  assignedRoom = '',
+  coordinatorState = 'coordinator',
+  updatedBy = 'admin'
+}) {
+  const newEmail = (email || '').trim().toLowerCase();
+  const oldEmail = (prevEmail || '').trim().toLowerCase();
+  const cleanName = (name || '').trim();
+  const cleanUsn = (usn || '').trim().toUpperCase();
+  const cleanActivityId = (activityId || '').trim();
+  const cleanEvent = (assignedEvent || '').trim();
+  const cleanRoom = (assignedRoom || '').trim();
+  const state = coordinatorState === 'participant' ? 'participant' : 'coordinator';
+
+  if (!newEmail && !cleanName) {
+    throw new Error('Coordinator name or email is required.');
+  }
+
+  const targetIgniteId = newEmail || id || buildIgniteCoordDocId({ email: newEmail, usn: cleanUsn, name: cleanName });
+  const payload = {
+    role: state,
+    coordinatorState: state,
+    baseRole: 'coordinator',
+    event: 'IGNITE-2026',
+    name: cleanName || (newEmail ? newEmail.split('@')[0] : 'Coordinator'),
+    usn: cleanUsn,
+    activityId: cleanActivityId,
+    assignedEvent: cleanEvent,
+    assignedRoom: cleanRoom,
+    ...(newEmail ? { email: newEmail } : {}),
+    updatedAt: serverTimestamp(),
+    updatedBy: updatedBy || 'admin'
+  };
+
+  await setDoc(doc(db, IGNITE_COORDINATORS_COLLECTION, targetIgniteId), payload, { merge: true });
+  if (newEmail) {
+    await setDoc(doc(db, 'roles', newEmail), payload, { merge: true });
+  }
+
+  // Clean up old doc keys if email or doc ID changed
+  if (id && id !== targetIgniteId) {
+    try {
+      await deleteDoc(doc(db, IGNITE_COORDINATORS_COLLECTION, id));
+    } catch (_) {}
+  }
+  if (oldEmail && newEmail && oldEmail !== newEmail) {
+    try {
+      await deleteDoc(doc(db, IGNITE_COORDINATORS_COLLECTION, oldEmail));
+    } catch (_) {}
+    try {
+      await deleteDoc(doc(db, 'roles', oldEmail));
+    } catch (_) {}
+  }
+
+  // Sync activeStates keys if changed
+  const cached = getCachedCoordinatorConfig();
+  const newActiveStates = { ...(cached.activeStates || {}) };
+  if (oldEmail && oldEmail !== newEmail) delete newActiveStates[oldEmail];
+  if (newEmail) newActiveStates[newEmail] = state;
+  if (cleanUsn) newActiveStates[cleanUsn] = state;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...cached, activeStates: newActiveStates }));
+  } catch (_) {}
+  try {
+    await setDoc(doc(db, 'settings', 'coordinatorConfig'), {
+      activeStates: newActiveStates,
+      updatedAt: serverTimestamp(),
+      updatedBy: updatedBy || 'admin'
+    }, { merge: true });
+  } catch (_) {}
+
+  return {
+    id: targetIgniteId,
+    email: newEmail,
+    name: payload.name,
+    usn: cleanUsn,
+    activityId: cleanActivityId,
+    assignedEvent: cleanEvent,
+    assignedRoom: cleanRoom
+  };
+}
+
+/**
+ * Automatically syncs resolved participant name, USN, and UID to roles & igniteCoordinators in Firestore
  */
 export async function syncCoordinatorDetailsInDatabase(coord) {
   const email = (coord.email || (coord.id && coord.id.includes('@') ? coord.id : '')).trim().toLowerCase();
-  const uid = coord.uid || (!coord.id?.includes('@') ? coord.id : '');
+  const uid = coord.uid || (!coord.id?.includes('@') && !coord.id?.startsWith('coord_') ? coord.id : '');
   const docKey = email || uid;
   if (!docKey) return null;
 
   const details = await getParticipantDetails({ email, uid, usn: coord.usn });
   if (details && (details.name || details.usn)) {
+    const syncPatch = {
+      ...(details.name ? { name: details.name } : {}),
+      ...(details.usn ? { usn: details.usn } : {}),
+      ...(details.uid ? { uid: details.uid } : {}),
+      updatedAt: serverTimestamp()
+    };
     try {
-      const roleRef = doc(db, 'roles', docKey);
-      await setDoc(roleRef, {
-        ...(details.name ? { name: details.name } : {}),
-        ...(details.usn ? { usn: details.usn } : {}),
-        ...(details.uid ? { uid: details.uid } : {}),
-        updatedAt: serverTimestamp()
+      await setDoc(doc(db, 'roles', docKey), syncPatch, { merge: true });
+    } catch (e) {}
+    try {
+      await setDoc(doc(db, IGNITE_COORDINATORS_COLLECTION, coord.id || docKey), {
+        ...syncPatch,
+        event: 'IGNITE-2026'
       }, { merge: true });
     } catch (e) {}
     return details;
@@ -713,25 +898,32 @@ export async function syncCoordinatorDetailsInDatabase(coord) {
 }
 
 /**
- * Remove a coordinator from database roles or delete doc
+ * Remove a coordinator from `igniteCoordinators` and `roles`
  */
-export async function removeCoordinatorFromDatabase(email, removedBy) {
-  if (!email) return;
-  const cleanEmail = email.trim().toLowerCase();
-  const roleDocRef = doc(db, 'roles', cleanEmail);
+export async function removeCoordinatorFromDatabase(emailOrId, removedBy) {
+  if (!emailOrId) return;
+  const raw = emailOrId.trim();
+  const cleanKey = raw.includes('@') ? raw.toLowerCase() : raw;
+
   try {
-    await deleteDoc(roleDocRef);
-  } catch (err) {
-    // If delete fails, set role to participant
-    await setDoc(
-      roleDocRef,
-      {
-        role: 'participant',
-        coordinatorState: 'participant',
-        updatedAt: serverTimestamp(),
-        updatedBy: removedBy || 'admin'
-      },
-      { merge: true }
-    );
+    await deleteDoc(doc(db, IGNITE_COORDINATORS_COLLECTION, cleanKey));
+  } catch (_) {}
+
+  if (cleanKey.includes('@')) {
+    const roleDocRef = doc(db, 'roles', cleanKey);
+    try {
+      await deleteDoc(roleDocRef);
+    } catch (err) {
+      await setDoc(
+        roleDocRef,
+        {
+          role: 'participant',
+          coordinatorState: 'participant',
+          updatedAt: serverTimestamp(),
+          updatedBy: removedBy || 'admin'
+        },
+        { merge: true }
+      );
+    }
   }
 }

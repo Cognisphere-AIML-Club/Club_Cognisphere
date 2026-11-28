@@ -17,6 +17,18 @@ import { db } from '../firebase';
 export async function requestGamePass({ activityId, participantId, participantName, participantUsn }) {
   if (!activityId || !participantId) throw new Error('Missing activityId or participantId');
 
+  // Enforce global pass registration switch from settings/passConfig
+  try {
+    const cfgSnap = await getDoc(doc(db, 'settings', 'passConfig'));
+    const isRegistrationsOpen = cfgSnap.exists() && cfgSnap.data()?.passRegistrationsEnabled === true;
+    if (!isRegistrationsOpen) {
+      throw new Error('Pass registrations are currently closed by the organizers.');
+    }
+  } catch (err) {
+    if (err?.message?.includes('closed')) throw err;
+    throw new Error('Pass registrations are currently closed by the organizers.');
+  }
+
   const requestId = `${activityId}_${participantId}`;
   const docRef = doc(db, 'passRequests', requestId);
 

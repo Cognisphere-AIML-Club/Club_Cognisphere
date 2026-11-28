@@ -4,6 +4,7 @@ import { ACTIVITIES, getActivityById } from '../data/activities';
 import { 
   subscribeToAllPassRequests, 
   subscribeToUserPassRequests, 
+  subscribeToPassConfig,
   requestGamePass, 
   reviewPassRequest, 
   bulkReviewPassRequests 
@@ -156,8 +157,16 @@ export default function RegistrationsHub({
 
   // Participant state
   const [userRequests, setUserRequests] = useState({});
+  const [passRegistrationsOpen, setPassRegistrationsOpen] = useState(false);
   const [requestingActivityId, setRequestingActivityId] = useState(null);
   const [participantFilter, setParticipantFilter] = useState('all'); // 'all' | 'approved' | 'pending'
+
+  useEffect(() => {
+    const unsub = subscribeToPassConfig((cfg) => {
+      setPassRegistrationsOpen(Boolean(cfg?.passRegistrationsEnabled === true));
+    });
+    return () => unsub();
+  }, []);
 
   // Staff approvals queue state
   const [allRequests, setAllRequests] = useState([]);
@@ -1635,6 +1644,14 @@ export default function RegistrationsHub({
             </div>
           )}
 
+          {/* Pass Registrations Closed Notice */}
+          {!passRegistrationsOpen && (
+            <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-3.5 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>Pass registrations are currently closed. Existing approved passes remain accessible.</span>
+            </div>
+          )}
+
           {/* Filter Pills for Participant */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {[
@@ -1748,6 +1765,15 @@ export default function RegistrationsHub({
                       <div className="w-full text-center text-xs text-error font-medium p-2 bg-error-container/20 rounded-xl border border-error/20">
                         Registration was declined. Inquire with club coordinators.
                       </div>
+                    ) : !passRegistrationsOpen ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-2.5 px-4 bg-surface-container border border-surface-container-high text-secondary font-bold rounded-xl text-xs flex items-center justify-center gap-2 opacity-75 cursor-not-allowed"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Pass Registrations Closed</span>
+                      </button>
                     ) : (
                       <button
                         onClick={() => handleRequestPass(act.id)}

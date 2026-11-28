@@ -259,8 +259,14 @@ export default function App() {
   const canCoordinatorLeaderboard = effectiveIsCoordinator && Boolean(coordinatorPermissions.leaderboardEntries ?? true);
 
   // Resolve assigned activity ID for the logged-in coordinator from database roleData
+  // Returns null when assigned to 'all' / 'All Events' so coordinator gets full access across all events
   const coordinatorAssignedActivityId = useMemo(() => {
     if (!roleData) return null;
+    const rawActId = String(roleData.activityId || '').trim().toLowerCase();
+    const rawAssigned = String(roleData.assignedEvent || '').trim().toLowerCase();
+    if (rawActId === 'all' || rawActId === 'coordinator' || rawAssigned === 'all events') {
+      return null;
+    }
     if (roleData.activityId) return roleData.activityId;
     if (roleData.assignedEvent) {
       const match = activities.find(

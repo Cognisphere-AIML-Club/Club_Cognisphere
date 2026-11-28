@@ -43,6 +43,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // === IGNITE EVENT COORDINATORS COLLECTION ===
+    // Dedicated database storing coordinators for the current IGNITE 2026 event.
+    // Readable by authenticated users (for coordinator role & certificate sync); writable by admins only.
+    match /igniteCoordinators/{coordId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
     // === PARTICIPANTS COLLECTION ===
     // Sensitive data (email, mobile, uid).
     // Participant can read and write only their own profile doc.
